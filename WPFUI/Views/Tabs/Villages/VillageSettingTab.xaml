@@ -58,8 +58,36 @@
                         <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="NPC Crop exchange settings" VerticalAlignment="Center" FontWeight="Bold" />
                         <CheckBox x:Name="AutoNPCEnable" Content="Enable NPC Crop exchange" />
                         <CheckBox x:Name="AutoNPCOverflow" Content="Despite warehouse overflow" />
+                        <CheckBox x:Name="AutoNPCReverse" Content="Reverse trigger (run when granary is BELOW % instead of above)" />
                         <uc:AmountInputUc x:Name="AutoNPCGranaryPercent" Text="Granary" Unit="%" />
                         <uc:ResourceInputUc x:Name="AutoNPCRatio" Text="Ratio" />
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{DynamicResource Box}">
+                    <StackPanel>
+                        <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Auto send crop between villages" VerticalAlignment="Center" FontWeight="Bold" />
+                        <CheckBox x:Name="AutoSendCropEnable" Content="Receive crop from other villages when this village's granary drops below %" />
+                        <uc:AmountInputUc x:Name="AutoSendCropGranaryPercent" Text="Granary" Unit="%" />
+                        <CheckBox x:Name="AutoSendCropSourceEnable" Content="Allow this village to send crop to other villages that need it" />
+                        <uc:AmountInputUc x:Name="AutoSendCropReservePercent" Text="Keep at least" Unit="%" />
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{DynamicResource Box}">
+                    <StackPanel>
+                        <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Auto balance resources (overflow prevention)" VerticalAlignment="Center" FontWeight="Bold" />
+                        <CheckBox x:Name="AutoBalanceEnable" Content="Enable auto balance for this village (sends away surplus, accepts spare room from others)" />
+                        <uc:AmountInputUc x:Name="AutoBalanceOverflowPercent" Text="Send away surplus once storage reaches" Unit="%" />
+                        <uc:AmountInputUc x:Name="AutoBalanceTargetPercent" Text="Drain down to" Unit="%" />
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{DynamicResource Box}">
+                    <StackPanel>
+                        <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Dodge troops on attack" VerticalAlignment="Center" FontWeight="Bold" />
+                        <CheckBox x:Name="DodgeEnable" Content="When this village is attacked, send the chosen troop slot to the nearest own village" />
+                        <uc:AmountInputUc x:Name="DodgeTroopSlot" Text="Troop slot (1-10, order shown in barracks)" Unit="" />
                     </StackPanel>
                 </Border>
 

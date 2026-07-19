@@ -32,7 +32,15 @@ namespace MainCore.Tasks
                    .FirstOrDefault();
 
                 var autoNPCGranaryPercent = context.ByName(VillageId, VillageSettingEnums.AutoNPCGranaryPercent);
-                if (granaryPercent < autoNPCGranaryPercent) return false;
+                var reverse = context.BooleanByName(VillageId, VillageSettingEnums.AutoNPCReverse);
+                if (reverse)
+                {
+                    if (granaryPercent > autoNPCGranaryPercent) return false;
+                }
+                else
+                {
+                    if (granaryPercent < autoNPCGranaryPercent) return false;
+                }
 
                 return true;
             }

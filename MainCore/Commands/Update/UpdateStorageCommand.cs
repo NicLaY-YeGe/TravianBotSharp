@@ -23,6 +23,18 @@
             {
                 taskManager.Add(task);
             }
+
+            var sendCropTask = new SendCropTask.Task(accountId, villageId);
+            if (sendCropTask.CanStart(context) && !taskManager.IsExist<SendCropTask.Task>(accountId, villageId))
+            {
+                taskManager.Add(sendCropTask);
+            }
+
+            var balanceResourceTask = new BalanceResourceTask.Task(accountId, villageId);
+            if (balanceResourceTask.CanStart(context) && !taskManager.IsExist<BalanceResourceTask.Task>(accountId, villageId))
+            {
+                taskManager.Add(balanceResourceTask);
+            }
         }
 
         private static StorageDto Get(HtmlDocument doc)

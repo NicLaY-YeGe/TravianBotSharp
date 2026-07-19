@@ -23,6 +23,7 @@ namespace MainCore.Commands.UI.Villages.BuildViewModel
             {
                 Plan = type,
                 Level = level,
+                PriorityLowestStock = input.PriorityLowestStock,
             };
         }
     }

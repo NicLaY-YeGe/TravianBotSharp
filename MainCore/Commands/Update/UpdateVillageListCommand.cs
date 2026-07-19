@@ -10,7 +10,8 @@
             IChromeBrowser browser,
             AppDbContext context,
             IRxQueue rxQueue,
-            ITaskManager taskManager)
+            ITaskManager taskManager,
+            ITelegramNotifier telegramNotifier)
         {
             await Task.CompletedTask;
             var accountId = command.AccountId;
@@ -18,7 +19,38 @@
             var dtos = VillagePanelParser.Get(browser.Html);
             if (!dtos.Any()) return;
 
+            var previousAttackedVillageIds = context.Villages
+                .Where(x => x.AccountId == accountId.Value && x.IsUnderAttack)
+                .Select(x => x.Id)
+                .ToHashSet();
+
             context.UpdateToDatabase(accountId, dtos.ToList());
+
+            var newlyAttacked = dtos
+                .Where(x => x.IsUnderAttack && !previousAttackedVillageIds.Contains(x.Id.Value))
+                .ToList();
+
+            if (newlyAttacked.Count > 0)
+            {
+                var telegramSetting = telegramNotifier.Get(accountId);
+                if (telegramSetting.NotifyOnAttack)
+                {
+                    var username = context.Accounts.FirstOrDefault(x => x.Id == accountId.Value)?.Username ?? $"{accountId}";
+                    foreach (var village in newlyAttacked)
+                    {
+                        await telegramNotifier.NotifyAsync(accountId, $"\U0001F6A8 {username} - {village.Name} saldiri altinda!");
+                    }
+                }
+
+                foreach (var village in newlyAttacked)
+                {
+                    var dodgeTask = new DodgeTroopTask.Task(accountId, village.Id);
+                    if (dodgeTask.CanStart(context) && !taskManager.IsExist<DodgeTroopTask.Task>(accountId, village.Id))
+                    {
+                        taskManager.Add(dodgeTask);
+                    }
+                }
+            }
 
             rxQueue.Enqueue(new VillagesModified(accountId));
 

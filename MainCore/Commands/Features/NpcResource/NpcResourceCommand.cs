@@ -102,11 +102,24 @@
             var granaryPercent = (int)(crop * 100f / granary);
 
             var autoNPCGranaryPercent = context.ByName(villageId, VillageSettingEnums.AutoNPCGranaryPercent);
-            if (granaryPercent < autoNPCGranaryPercent)
+            var reverse = context.BooleanByName(villageId, VillageSettingEnums.AutoNPCReverse);
+            if (reverse)
             {
-                browser.Logger.Information("NPC resources not available. Granary percent is too low: {GranaryPercent} < {AutoNPCGranaryPercent}",
-                    granaryPercent, autoNPCGranaryPercent);
-                return false;
+                if (granaryPercent > autoNPCGranaryPercent)
+                {
+                    browser.Logger.Information("NPC resources not available. Granary percent is too high: {GranaryPercent} > {AutoNPCGranaryPercent}",
+                        granaryPercent, autoNPCGranaryPercent);
+                    return false;
+                }
+            }
+            else
+            {
+                if (granaryPercent < autoNPCGranaryPercent)
+                {
+                    browser.Logger.Information("NPC resources not available. Granary percent is too low: {GranaryPercent} < {AutoNPCGranaryPercent}",
+                        granaryPercent, autoNPCGranaryPercent);
+                    return false;
+                }
             }
 
             return true;

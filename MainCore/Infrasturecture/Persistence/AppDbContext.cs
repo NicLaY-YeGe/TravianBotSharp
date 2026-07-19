@@ -134,6 +134,19 @@ namespace MainCore.Infrasturecture.Persistence
             {VillageSettingEnums.AutoNPCClay, 1 },
             {VillageSettingEnums.AutoNPCIron, 1 },
             {VillageSettingEnums.AutoNPCCrop, 0 },
+            {VillageSettingEnums.AutoNPCReverse, 0 },
+
+            {VillageSettingEnums.AutoSendCropEnable, 0 },
+            {VillageSettingEnums.AutoSendCropGranaryPercent, 7 },
+            {VillageSettingEnums.AutoSendCropSourceEnable, 0 },
+            {VillageSettingEnums.AutoSendCropReservePercent, 50 },
+
+            {VillageSettingEnums.AutoBalanceEnable, 0 },
+            {VillageSettingEnums.AutoBalanceOverflowPercent, 90 },
+            {VillageSettingEnums.AutoBalanceTargetPercent, 50 },
+
+            {VillageSettingEnums.DodgeEnable, 0 },
+            {VillageSettingEnums.DodgeTroopSlot, 1 },
 
             {VillageSettingEnums.AutoRefreshEnable, 0 },
             {VillageSettingEnums.AutoRefreshMin, 45 },

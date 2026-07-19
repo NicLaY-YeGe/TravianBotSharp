@@ -15,15 +15,17 @@ namespace MainCore.Services
         private readonly ITaskManager _taskManager;
         private readonly IRxQueue _rxQueue;
         private readonly ICustomServiceScopeFactory _serviceScopeFactory;
+        private readonly ITelegramNotifier _telegramNotifier;
 
         private static ResiliencePropertyKey<ContextData> contextDataKey = new(nameof(ContextData));
         private readonly ResiliencePipeline<Result> _pipeline;
 
-        public TimerManager(ITaskManager taskManager, ICustomServiceScopeFactory serviceScopeFactory, IRxQueue rxQueue)
+        public TimerManager(ITaskManager taskManager, ICustomServiceScopeFactory serviceScopeFactory, IRxQueue rxQueue, ITelegramNotifier telegramNotifier)
         {
             _taskManager = taskManager;
             _serviceScopeFactory = serviceScopeFactory;
             _rxQueue = rxQueue;
+            _telegramNotifier = telegramNotifier;
 
             Func<OnRetryArguments<Result>, ValueTask> OnRetry = async static args =>
             {
@@ -131,6 +133,8 @@ namespace MainCore.Services
                     logger.Information("Screenshot saved as {FileName}", filename);
                     logger.Warning("There is something wrong. Bot is pausing. Last exception is");
                     logger.Error(ex, "{Message}", ex.Message);
+
+                    await NotifyPaused(accountId, scope, $"Unexpected error: {ex.Message}");
                 }
 
                 _taskManager.SetStatus(accountId, StatusEnums.Paused);
@@ -152,6 +156,7 @@ namespace MainCore.Services
                     {
                         var filename = await browser.Screenshot();
                         logger.Information(messageTemplate: "Screenshot saved as {FileName}", filename);
+                        await NotifyPaused(accountId, scope, message);
                         _taskManager.SetStatus(accountId, StatusEnums.Paused);
                     }
                     else if (result.HasError<Skip>())
@@ -168,6 +173,7 @@ namespace MainCore.Services
                     }
                     else if (result.HasError<Cancel>())
                     {
+                        await NotifyPaused(accountId, scope, message);
                         _taskManager.SetStatus(accountId, StatusEnums.Paused);
                     }
                 }
@@ -187,6 +193,27 @@ namespace MainCore.Services
 
             var delayService = scope.ServiceProvider.GetRequiredService<IDelayService>();
             await delayService.DelayTask();
+        }
+
+        private async Task NotifyPaused(AccountId accountId, IServiceScope scope, string reason)
+        {
+            try
+            {
+                var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                var setting = _telegramNotifier.Get(accountId);
+                if (!setting.NotifyOnPause) return;
+
+                var username = context.Accounts.FirstOrDefault(x => x.Id == accountId.Value)?.Username ?? $"{accountId}";
+                var text = string.IsNullOrWhiteSpace(reason)
+                    ? $"\u26D4 {username} duraklatildi, kontrol gerekiyor."
+                    : $"\u26D4 {username} duraklatildi: {reason}";
+
+                await _telegramNotifier.NotifyAsync(accountId, text);
+            }
+            catch
+            {
+                // notification is best-effort, never let it break the bot loop
+            }
         }
 
         public void Shutdown()

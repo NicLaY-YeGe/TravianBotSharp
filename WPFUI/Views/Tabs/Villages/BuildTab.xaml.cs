@@ -52,6 +52,7 @@ namespace WPFUI.Views.Tabs.Villages
                 this.OneWayBind(ViewModel, vm => vm.ResourceBuildInput.Plans, v => v.ResType.ItemsSource).DisposeWith(d);
                 this.Bind(ViewModel, vm => vm.ResourceBuildInput.SelectedPlan, v => v.ResType.SelectedItem).DisposeWith(d);
                 this.Bind(ViewModel, vm => vm.ResourceBuildInput.Level, v => v.ResourceLevel.Text).DisposeWith(d);
+                this.Bind(ViewModel, vm => vm.ResourceBuildInput.PriorityLowestStock, v => v.ResourcePriorityLowestStock.IsChecked).DisposeWith(d);
             });
         }
     }

@@ -15,12 +15,26 @@ namespace MainCore.UI.ViewModels.Tabs
         private readonly IDialogService _dialogService;
         private readonly IValidator<AccountSettingInput> _accountsettingInputValidator;
         private readonly ICustomServiceScopeFactory _serviceScopeFactory;
+        private readonly ITelegramNotifier _telegramNotifier;
 
-        public AccountSettingViewModel(IDialogService dialogService, IValidator<AccountSettingInput> accountsettingInputValidator, ICustomServiceScopeFactory serviceScopeFactory)
+        [Reactive]
+        private string _telegramBotToken = "";
+
+        [Reactive]
+        private string _telegramChatId = "";
+
+        [Reactive]
+        private bool _telegramNotifyOnAttack = true;
+
+        [Reactive]
+        private bool _telegramNotifyOnPause = true;
+
+        public AccountSettingViewModel(IDialogService dialogService, IValidator<AccountSettingInput> accountsettingInputValidator, ICustomServiceScopeFactory serviceScopeFactory, ITelegramNotifier telegramNotifier)
         {
             _dialogService = dialogService;
             _accountsettingInputValidator = accountsettingInputValidator;
             _serviceScopeFactory = serviceScopeFactory;
+            _telegramNotifier = telegramNotifier;
 
             LoadSettingsCommand.Subscribe(AccountSettingInput.Set);
         }
@@ -28,6 +42,27 @@ namespace MainCore.UI.ViewModels.Tabs
         protected override async Task Load(AccountId accountId)
         {
             await LoadSettingsCommand.Execute(accountId);
+
+            var telegramSetting = _telegramNotifier.Get(accountId);
+            TelegramBotToken = telegramSetting.BotToken;
+            TelegramChatId = telegramSetting.ChatId;
+            TelegramNotifyOnAttack = telegramSetting.NotifyOnAttack;
+            TelegramNotifyOnPause = telegramSetting.NotifyOnPause;
+        }
+
+        [ReactiveCommand]
+        private async Task TestTelegram()
+        {
+            _telegramNotifier.Save(AccountId, new TelegramAccountSetting
+            {
+                BotToken = TelegramBotToken,
+                ChatId = TelegramChatId,
+                NotifyOnAttack = TelegramNotifyOnAttack,
+                NotifyOnPause = TelegramNotifyOnPause,
+            });
+
+            await _telegramNotifier.NotifyAsync(AccountId, "\u2705 TravianBotSharp test message.");
+            await _dialogService.MessageBox.Handle(new MessageBoxData("Information", "Test message sent (check your Telegram chat)."));
         }
 
         [ReactiveCommand]
@@ -43,6 +78,14 @@ namespace MainCore.UI.ViewModels.Tabs
             using var scope = _serviceScopeFactory.CreateScope(AccountId);
             var saveAccountSettingCommand = scope.ServiceProvider.GetRequiredService<SaveAccountSettingCommand.Handler>();
             await saveAccountSettingCommand.HandleAsync(new(AccountId, AccountSettingInput.Get()));
+
+            _telegramNotifier.Save(AccountId, new TelegramAccountSetting
+            {
+                BotToken = TelegramBotToken,
+                ChatId = TelegramChatId,
+                NotifyOnAttack = TelegramNotifyOnAttack,
+                NotifyOnPause = TelegramNotifyOnPause,
+            });
 
             await _dialogService.MessageBox.Handle(new MessageBoxData("Information", "Settings saved."));
         }

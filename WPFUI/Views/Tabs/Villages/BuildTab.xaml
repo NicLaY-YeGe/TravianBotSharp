@@ -79,6 +79,7 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="5" />
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
@@ -90,7 +91,8 @@
 
                     <Label Grid.Row="1" Grid.Column="0" VerticalAlignment="Center" HorizontalAlignment="Center" Content="Level" />
                     <TextBox x:Name="ResourceLevel" Grid.Row="1"  Grid.Column="1" />
-                    <Button x:Name="ResourceBuild" Grid.Row="3" Grid.ColumnSpan="2" Style="{DynamicResource MaterialDesignFloatingActionMiniDarkButton}" ToolTip="Build">
+                    <CheckBox x:Name="ResourcePriorityLowestStock" Grid.Row="2" Grid.ColumnSpan="2" Content="Prioritize resource lowest in stock (instead of lowest level)" />
+                    <Button x:Name="ResourceBuild" Grid.Row="4" Grid.ColumnSpan="2" Style="{DynamicResource MaterialDesignFloatingActionMiniDarkButton}" ToolTip="Build">
                         <materialDesign:PackIcon Width="30" Height="30" Kind="Hammer" />
                     </Button>
                 </Grid>

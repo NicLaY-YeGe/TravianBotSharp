@@ -30,5 +30,8 @@ namespace MainCore.UI.Models.Input
 
         [Reactive]
         private int _level;
+
+        [Reactive]
+        private bool _priorityLowestStock;
     }
 }

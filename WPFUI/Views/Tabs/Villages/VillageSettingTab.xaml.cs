@@ -46,8 +46,21 @@ namespace WPFUI.Views.Tabs.Villages
 
                 this.Bind(ViewModel, vm => vm.VillageSettingInput.AutoNPCEnable, v => v.AutoNPCEnable.IsChecked).DisposeWith(d);
                 this.Bind(ViewModel, vm => vm.VillageSettingInput.AutoNPCOverflow, v => v.AutoNPCOverflow.IsChecked).DisposeWith(d);
+                this.Bind(ViewModel, vm => vm.VillageSettingInput.AutoNPCReverse, v => v.AutoNPCReverse.IsChecked).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.AutoNPCGranaryPercent, v => v.AutoNPCGranaryPercent.ViewModel).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.AutoNPCRatio, v => v.AutoNPCRatio.ViewModel).DisposeWith(d);
+
+                this.Bind(ViewModel, vm => vm.VillageSettingInput.AutoSendCropEnable, v => v.AutoSendCropEnable.IsChecked).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.AutoSendCropGranaryPercent, v => v.AutoSendCropGranaryPercent.ViewModel).DisposeWith(d);
+                this.Bind(ViewModel, vm => vm.VillageSettingInput.AutoSendCropSourceEnable, v => v.AutoSendCropSourceEnable.IsChecked).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.AutoSendCropReservePercent, v => v.AutoSendCropReservePercent.ViewModel).DisposeWith(d);
+
+                this.Bind(ViewModel, vm => vm.VillageSettingInput.AutoBalanceEnable, v => v.AutoBalanceEnable.IsChecked).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.AutoBalanceOverflowPercent, v => v.AutoBalanceOverflowPercent.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.AutoBalanceTargetPercent, v => v.AutoBalanceTargetPercent.ViewModel).DisposeWith(d);
+
+                this.Bind(ViewModel, vm => vm.VillageSettingInput.DodgeEnable, v => v.DodgeEnable.IsChecked).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.DodgeTroopSlot, v => v.DodgeTroopSlot.ViewModel).DisposeWith(d);
 
                 this.Bind(ViewModel, vm => vm.VillageSettingInput.AutoRefreshEnable, v => v.AutoRefreshEnable.IsChecked).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.AutoRefreshTime, v => v.AutoRefreshTime.ViewModel).DisposeWith(d);

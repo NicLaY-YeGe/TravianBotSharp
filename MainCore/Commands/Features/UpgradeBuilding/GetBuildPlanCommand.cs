@@ -9,6 +9,7 @@ namespace MainCore.Commands.Features.UpgradeBuilding
 
         private static async ValueTask<Result<NormalBuildPlan>> HandleAsync(
             Command command,
+            AppDbContext context,
             GetJobCommand.Handler getJobQuery,
             ToDorfCommand.Handler toDorfCommand,
             UpdateBuildingCommand.Handler updateBuildingCommand,
@@ -36,7 +37,12 @@ namespace MainCore.Commands.Features.UpgradeBuilding
 
                     var layoutBuildings = await getLayoutBuildingsQuery.HandleAsync(new(villageId, true));
                     var resourceBuildPlan = JsonSerializer.Deserialize<ResourceBuildPlan>(job.Content)!;
-                    var normalBuildPlan = GetNormalBuildPlan(resourceBuildPlan, layoutBuildings);
+
+                    var storage = resourceBuildPlan.PriorityLowestStock
+                        ? context.Storages.AsNoTracking().FirstOrDefault(x => x.VillageId == villageId.Value)
+                        : null;
+
+                    var normalBuildPlan = GetNormalBuildPlan(resourceBuildPlan, layoutBuildings, storage);
                     if (normalBuildPlan is null)
                     {
                         await deleteJobByIdCommand.HandleAsync(new(job.Id), cancellationToken);
@@ -90,7 +96,8 @@ namespace MainCore.Commands.Features.UpgradeBuilding
 
         private static NormalBuildPlan? GetNormalBuildPlan(
             ResourceBuildPlan plan,
-            List<BuildingItem> layoutBuildings
+            List<BuildingItem> layoutBuildings,
+            Storage? storage
         )
         {
             List<BuildingItem> resourceFields;
@@ -119,11 +126,31 @@ namespace MainCore.Commands.Features.UpgradeBuilding
 
             if (resourceFields.Count == 0) return null;
 
-            var minLevel = resourceFields
+            List<BuildingItem> candidates;
+
+            if (plan.PriorityLowestStock && storage is not null)
+            {
+                // among the eligible field types, find the resource that's currently
+                // sitting lowest in the village's warehouse/granary, and only upgrade
+                // fields of that type (still picking the cheapest/lowest level one).
+                var scarcestType = resourceFields
+                    .Select(x => x.Type)
+                    .Distinct()
+                    .OrderBy(x => GetStock(storage, x))
+                    .First();
+
+                candidates = resourceFields.Where(x => x.Type == scarcestType).ToList();
+            }
+            else
+            {
+                candidates = resourceFields;
+            }
+
+            var minLevel = candidates
                 .Select(x => x.Level)
                 .Min();
 
-            var chosenOne = resourceFields
+            var chosenOne = candidates
                 .Where(x => x.Level == minLevel)
                 .OrderBy(x => x.Id.Value + Random.Shared.Next())
                 .FirstOrDefault();
@@ -138,5 +165,14 @@ namespace MainCore.Commands.Features.UpgradeBuilding
             };
             return normalBuildPlan;
         }
+
+        private static long GetStock(Storage storage, BuildingEnums type) => type switch
+        {
+            BuildingEnums.Woodcutter => storage.Wood,
+            BuildingEnums.ClayPit => storage.Clay,
+            BuildingEnums.IronMine => storage.Iron,
+            BuildingEnums.Cropland => storage.Crop,
+            _ => long.MaxValue,
+        };
     }
 }

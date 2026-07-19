@@ -65,6 +65,18 @@
                         <CheckBox x:Name="HeadlessChrome" Content="Use headless chrome" />
                     </StackPanel>
                 </Border>
+                <Border Style="{DynamicResource Box}">
+                    <StackPanel>
+                        <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Telegram notifications" VerticalAlignment="Center" FontWeight="Bold" />
+                        <TextBlock Text="Bot token" Margin="0,4,0,0" />
+                        <TextBox x:Name="TelegramBotToken" Margin="0,0,0,4" />
+                        <TextBlock Text="Chat id" />
+                        <TextBox x:Name="TelegramChatId" Margin="0,0,0,4" />
+                        <CheckBox x:Name="TelegramNotifyOnAttack" Content="Notify when a village is under attack" />
+                        <CheckBox x:Name="TelegramNotifyOnPause" Content="Notify when the bot pauses itself" />
+                        <Button x:Name="TelegramTestButton" Content="Send test message" HorizontalAlignment="Left" Margin="0,4,0,0" />
+                    </StackPanel>
+                </Border>
             </StackPanel>
         </ScrollViewer>
     </Grid>

@@ -44,8 +44,33 @@ namespace MainCore.UI.Models.Input
         [Reactive]
         private bool _autoNPCOverflow;
 
+        [Reactive]
+        private bool _autoNPCReverse;
+
         public AmountInputViewModel AutoNPCGranaryPercent { get; } = new();
         public ResourceInputViewModel AutoNPCRatio { get; } = new();
+
+        [Reactive]
+        private bool _autoSendCropEnable;
+
+        public AmountInputViewModel AutoSendCropGranaryPercent { get; } = new();
+
+        [Reactive]
+        private bool _autoSendCropSourceEnable;
+
+        public AmountInputViewModel AutoSendCropReservePercent { get; } = new();
+
+        [Reactive]
+        private bool _autoBalanceEnable;
+
+        public AmountInputViewModel AutoBalanceOverflowPercent { get; } = new();
+
+        public AmountInputViewModel AutoBalanceTargetPercent { get; } = new();
+
+        [Reactive]
+        private bool _dodgeEnable;
+
+        public AmountInputViewModel DodgeTroopSlot { get; } = new();
 
         [Reactive]
         private bool _autoRefreshEnable;
@@ -101,12 +126,25 @@ namespace MainCore.UI.Models.Input
 
             AutoNPCEnable = settings.GetValueOrDefault(VillageSettingEnums.AutoNPCEnable) == 1;
             AutoNPCOverflow = settings.GetValueOrDefault(VillageSettingEnums.AutoNPCOverflow) == 1;
+            AutoNPCReverse = settings.GetValueOrDefault(VillageSettingEnums.AutoNPCReverse) == 1;
             AutoNPCGranaryPercent.Set(settings.GetValueOrDefault(VillageSettingEnums.AutoNPCGranaryPercent));
             AutoNPCRatio.Set(
                 settings.GetValueOrDefault(VillageSettingEnums.AutoNPCWood),
                 settings.GetValueOrDefault(VillageSettingEnums.AutoNPCClay),
                 settings.GetValueOrDefault(VillageSettingEnums.AutoNPCIron),
                 settings.GetValueOrDefault(VillageSettingEnums.AutoNPCCrop));
+
+            AutoSendCropEnable = settings.GetValueOrDefault(VillageSettingEnums.AutoSendCropEnable) == 1;
+            AutoSendCropGranaryPercent.Set(settings.GetValueOrDefault(VillageSettingEnums.AutoSendCropGranaryPercent));
+            AutoSendCropSourceEnable = settings.GetValueOrDefault(VillageSettingEnums.AutoSendCropSourceEnable) == 1;
+            AutoSendCropReservePercent.Set(settings.GetValueOrDefault(VillageSettingEnums.AutoSendCropReservePercent));
+
+            AutoBalanceEnable = settings.GetValueOrDefault(VillageSettingEnums.AutoBalanceEnable) == 1;
+            AutoBalanceOverflowPercent.Set(settings.GetValueOrDefault(VillageSettingEnums.AutoBalanceOverflowPercent));
+            AutoBalanceTargetPercent.Set(settings.GetValueOrDefault(VillageSettingEnums.AutoBalanceTargetPercent));
+
+            DodgeEnable = settings.GetValueOrDefault(VillageSettingEnums.DodgeEnable) == 1;
+            DodgeTroopSlot.Set(settings.GetValueOrDefault(VillageSettingEnums.DodgeTroopSlot));
 
             AutoRefreshEnable = settings.GetValueOrDefault(VillageSettingEnums.AutoRefreshEnable) == 1;
             AutoRefreshTime.Set(
@@ -142,8 +180,21 @@ namespace MainCore.UI.Models.Input
 
             var autoNPCEnable = AutoNPCEnable ? 1 : 0;
             var autoNPCOverflow = AutoNPCOverflow ? 1 : 0;
+            var autoNPCReverse = AutoNPCReverse ? 1 : 0;
             var autoNPCGranaryPercent = AutoNPCGranaryPercent.Get();
             var (autoNPCWood, autoNPCClay, autoNPCIron, autoNPCCrop) = AutoNPCRatio.Get();
+
+            var autoSendCropEnable = AutoSendCropEnable ? 1 : 0;
+            var autoSendCropGranaryPercent = AutoSendCropGranaryPercent.Get();
+            var autoSendCropSourceEnable = AutoSendCropSourceEnable ? 1 : 0;
+            var autoSendCropReservePercent = AutoSendCropReservePercent.Get();
+
+            var autoBalanceEnable = AutoBalanceEnable ? 1 : 0;
+            var autoBalanceOverflowPercent = AutoBalanceOverflowPercent.Get();
+            var autoBalanceTargetPercent = AutoBalanceTargetPercent.Get();
+
+            var dodgeEnable = DodgeEnable ? 1 : 0;
+            var dodgeTroopSlot = DodgeTroopSlot.Get();
 
             var autoRefreshEnable = AutoRefreshEnable ? 1 : 0;
             var (autoRefreshMin, autoRefreshMax) = AutoRefreshTime.Get();
@@ -179,11 +230,23 @@ namespace MainCore.UI.Models.Input
                 { VillageSettingEnums.WorkshopAmountMax, workshopAmountMax },
                 { VillageSettingEnums.AutoNPCEnable, autoNPCEnable },
                 { VillageSettingEnums.AutoNPCOverflow, autoNPCOverflow },
+                { VillageSettingEnums.AutoNPCReverse, autoNPCReverse },
                 { VillageSettingEnums.AutoNPCGranaryPercent, autoNPCGranaryPercent },
                 { VillageSettingEnums.AutoNPCWood, autoNPCWood },
                 { VillageSettingEnums.AutoNPCClay, autoNPCClay },
                 { VillageSettingEnums.AutoNPCIron, autoNPCIron },
                 { VillageSettingEnums.AutoNPCCrop, autoNPCCrop },
+                { VillageSettingEnums.AutoSendCropEnable, autoSendCropEnable },
+                { VillageSettingEnums.AutoSendCropGranaryPercent, autoSendCropGranaryPercent },
+                { VillageSettingEnums.AutoSendCropSourceEnable, autoSendCropSourceEnable },
+                { VillageSettingEnums.AutoSendCropReservePercent, autoSendCropReservePercent },
+
+                { VillageSettingEnums.AutoBalanceEnable, autoBalanceEnable },
+                { VillageSettingEnums.AutoBalanceOverflowPercent, autoBalanceOverflowPercent },
+                { VillageSettingEnums.AutoBalanceTargetPercent, autoBalanceTargetPercent },
+
+                { VillageSettingEnums.DodgeEnable, dodgeEnable },
+                { VillageSettingEnums.DodgeTroopSlot, dodgeTroopSlot },
                 { VillageSettingEnums.AutoRefreshEnable, autoRefreshEnable },
                 { VillageSettingEnums.AutoRefreshMin, autoRefreshMin },
                 { VillageSettingEnums.AutoRefreshMax, autoRefreshMax },
