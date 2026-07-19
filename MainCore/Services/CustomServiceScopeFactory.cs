@@ -73,6 +73,22 @@ namespace MainCore.Services
                     var npcTaskHandler = scope.GetHandler<NpcTask.Task>();
                     return await npcTaskHandler.HandleAsync(npcTask, cancellationToken);
 
+                case SendCropTask.Task sendCropTask:
+                    var sendCropTaskHandler = scope.GetHandler<SendCropTask.Task>();
+                    return await sendCropTaskHandler.HandleAsync(sendCropTask, cancellationToken);
+
+                case BalanceResourceTask.Task balanceResourceTask:
+                    var balanceResourceTaskHandler = scope.GetHandler<BalanceResourceTask.Task>();
+                    return await balanceResourceTaskHandler.HandleAsync(balanceResourceTask, cancellationToken);
+
+                case DodgeTroopTask.Task dodgeTroopTask:
+                    var dodgeTroopTaskHandler = scope.GetHandler<DodgeTroopTask.Task>();
+                    return await dodgeTroopTaskHandler.HandleAsync(dodgeTroopTask, cancellationToken);
+
+                case RecallTroopTask.Task recallTroopTask:
+                    var recallTroopTaskHandler = scope.GetHandler<RecallTroopTask.Task>();
+                    return await recallTroopTaskHandler.HandleAsync(recallTroopTask, cancellationToken);
+
                 case SleepTask.Task sleepTask:
                     var sleepTaskHandler = scope.GetHandler<SleepTask.Task>();
                     return await sleepTaskHandler.HandleAsync(sleepTask, cancellationToken);
