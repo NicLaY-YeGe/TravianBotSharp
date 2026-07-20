@@ -82,7 +82,7 @@ namespace MainCore.Parsers
             if (button is null) return false;
 
             if (button.HasClass("disabled")) return false;
-            if (button.GetAttributeValue("disabled", null) is not null) return false;
+            if (button.GetAttributeValue("disabled", "__none__") != "__none__") return false;
             if (button.GetAttributeValue("aria-disabled", "") == "true") return false;
 
             return true;
