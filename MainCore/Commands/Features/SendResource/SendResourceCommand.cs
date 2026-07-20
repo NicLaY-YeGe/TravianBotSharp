@@ -127,13 +127,37 @@ namespace MainCore.Commands.Features.SendResource
 
         private static async Task<Result> ClickPlus(IChromeBrowser browser, string resourceType, CancellationToken cancellationToken)
         {
-            var node = SendResourceParser.GetPlusButton(browser.Html, resourceType);
-            if (node is null) return Retry.Error.WithError($"Cannot find the '+' button for '{resourceType}'.");
+            // The page can briefly re-render right after coordinates resolve (or after a
+            // previous click updates the totals), so a single lookup can catch it mid-flicker.
+            // Retry a few times internally before giving up, instead of failing on the first miss.
+            const int maxAttempts = 5;
+            Result lastError = Retry.Error.WithError($"Cannot find the '+' button for '{resourceType}'.");
 
-            var (_, isFailed, element, errors) = await browser.GetElement(By.XPath(node.XPath), cancellationToken);
-            if (isFailed) return Result.Fail(errors);
+            for (var attempt = 1; attempt <= maxAttempts; attempt++)
+            {
+                var node = SendResourceParser.GetPlusButton(browser.Html, resourceType);
+                if (node is not null)
+                {
+                    var (_, isFailed, element, errors) = await browser.GetElement(By.XPath(node.XPath), cancellationToken);
+                    if (!isFailed)
+                    {
+                        var clickResult = await browser.Click(element, cancellationToken);
+                        if (clickResult.IsSuccess) return clickResult;
+                        lastError = clickResult;
+                    }
+                    else
+                    {
+                        lastError = Result.Fail(errors);
+                    }
+                }
 
-            return await browser.Click(element, cancellationToken);
+                if (attempt < maxAttempts)
+                {
+                    await Task.Delay(500, cancellationToken);
+                }
+            }
+
+            return lastError;
         }
 
         private static async Task<Result> WaitSendButtonEnabled(IChromeBrowser browser, CancellationToken cancellationToken)
@@ -158,13 +182,34 @@ namespace MainCore.Commands.Features.SendResource
 
         private static async Task<Result> ClickSend(IChromeBrowser browser, CancellationToken cancellationToken)
         {
-            var node = SendResourceParser.GetSendButton(browser.Html);
-            if (node is null) return Retry.Error.WithError("Cannot find send button.");
+            const int maxAttempts = 5;
+            Result lastError = Retry.Error.WithError("Cannot find send button.");
 
-            var (_, isFailed, element, errors) = await browser.GetElement(By.XPath(node.XPath), cancellationToken);
-            if (isFailed) return Result.Fail(errors);
+            for (var attempt = 1; attempt <= maxAttempts; attempt++)
+            {
+                var node = SendResourceParser.GetSendButton(browser.Html);
+                if (node is not null)
+                {
+                    var (_, isFailed, element, errors) = await browser.GetElement(By.XPath(node.XPath), cancellationToken);
+                    if (!isFailed)
+                    {
+                        var clickResult = await browser.Click(element, cancellationToken);
+                        if (clickResult.IsSuccess) return clickResult;
+                        lastError = clickResult;
+                    }
+                    else
+                    {
+                        lastError = Result.Fail(errors);
+                    }
+                }
 
-            return await browser.Click(element, cancellationToken);
+                if (attempt < maxAttempts)
+                {
+                    await Task.Delay(500, cancellationToken);
+                }
+            }
+
+            return lastError;
         }
     }
 }

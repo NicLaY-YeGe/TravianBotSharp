@@ -80,7 +80,12 @@ namespace MainCore.Parsers
         {
             var button = GetSendButton(doc);
             if (button is null) return false;
-            return !button.HasClass("disabled");
+
+            if (button.HasClass("disabled")) return false;
+            if (button.GetAttributeValue("disabled", null) is not null) return false;
+            if (button.GetAttributeValue("aria-disabled", "") == "true") return false;
+
+            return true;
         }
 
         // Free merchants currently available in THIS village, out of the total merchant slots.
