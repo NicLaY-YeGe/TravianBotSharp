@@ -48,6 +48,18 @@ namespace MainCore.Commands.Features.SendResource
             var result = await InputCoordinates(browser, targetVillage.X, targetVillage.Y, cancellationToken);
             if (result.IsFailed) return Stop.Error.WithErrors(result.Errors);
 
+            // Entering the coordinates triggers an AJAX call that resolves the village name
+            // and re-renders parts of the form. Give it a moment to settle before clicking
+            // anything, otherwise the resource "+" buttons can briefly be missing/stale.
+            var firstResourceType = clicksPerResource.Keys.First();
+            result = await browser.Wait(driver =>
+            {
+                var doc = new HtmlDocument();
+                doc.LoadHtml(driver.PageSource);
+                return SendResourceParser.GetPlusButton(doc, firstResourceType) is not null;
+            }, cancellationToken);
+            if (result.IsFailed) return Stop.Error.WithError("The send-resources form never finished loading after entering coordinates.");
+
             foreach (var (resourceType, clicks) in clicksPerResource)
             {
                 for (var i = 0; i < clicks; i++)
