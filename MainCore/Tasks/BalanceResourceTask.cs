@@ -11,7 +11,9 @@ namespace MainCore.Tasks
         // Every time this village's storage is refreshed, we check if wood/clay/iron
         // (against Warehouse capacity) or crop (against Granary capacity) is close to
         // overflowing; if so, we look for another AutoBalanceEnable village of the same
-        // account with room for that resource and send the surplus over with merchants.
+        // account with room for them, and use every free merchant we have (via the "+"
+        // buttons, one click = one merchant's worth) split across whichever of those
+        // resources are overflowing.
         public sealed class Task : VillageTask
         {
             public Task(AccountId accountId, VillageId villageId) : base(accountId, villageId)
@@ -25,12 +27,13 @@ namespace MainCore.Tasks
                 var enabled = context.BooleanByName(VillageId, VillageSettingEnums.AutoBalanceEnable);
                 if (!enabled) return false;
 
-                var plan = GetPlan(context, AccountId, VillageId);
-                return plan is not null;
+                var overflowing = GetOverflowingResources(context, VillageId);
+                if (overflowing.Count == 0) return false;
+
+                var target = GetBestTarget(context, AccountId, VillageId, overflowing);
+                return target is not null;
             }
         }
-
-        public sealed record Plan(string ResourceType, VillageId TargetVillageId, long Amount);
 
         private static readonly string[] ResourceTypes = ["wood", "clay", "iron", "crop"];
 
@@ -47,17 +50,27 @@ namespace MainCore.Tasks
         private static long GetCapacity(Storage storage, string resourceType) =>
             resourceType == "crop" ? storage.Granary : storage.Warehouse;
 
-        // Shared by CanStart and HandleAsync so the decision is always re-evaluated against
-        // current data (queue delays, other tasks finishing first, etc. can change the numbers).
-        public static Plan? GetPlan(AppDbContext context, AccountId accountId, VillageId sourceVillageId)
+        // Resource types currently at/above the overflow threshold, most-full first.
+        private static List<string> GetOverflowingResources(AppDbContext context, VillageId villageId)
         {
-            var sourceStorage = context.Storages.FirstOrDefault(x => x.VillageId == sourceVillageId.Value);
-            if (sourceStorage is null) return null;
+            var storage = context.Storages.FirstOrDefault(x => x.VillageId == villageId.Value);
+            if (storage is null) return [];
 
-            var overflowPercent = context.ByName(sourceVillageId, VillageSettingEnums.AutoBalanceOverflowPercent);
-            var targetPercent = context.ByName(sourceVillageId, VillageSettingEnums.AutoBalanceTargetPercent);
+            var overflowPercent = context.ByName(villageId, VillageSettingEnums.AutoBalanceOverflowPercent);
 
-            var otherVillageIds = context.Villages
+            return ResourceTypes
+                .Select(r => new { Type = r, Percent = GetCapacity(storage, r) <= 0 ? 0 : GetAmount(storage, r) * 100f / GetCapacity(storage, r) })
+                .Where(x => x.Percent >= overflowPercent)
+                .OrderByDescending(x => x.Percent)
+                .Select(x => x.Type)
+                .ToList();
+        }
+
+        // The AutoBalanceEnable village (other than the source) with the most combined free
+        // room across the resources we're trying to offload.
+        private static VillageId? GetBestTarget(AppDbContext context, AccountId accountId, VillageId sourceVillageId, List<string> resources)
+        {
+            var candidates = context.Villages
                 .Where(x => x.AccountId == accountId.Value)
                 .Where(x => x.Id != sourceVillageId.Value)
                 .Select(x => x.Id)
@@ -66,100 +79,115 @@ namespace MainCore.Tasks
                 .Where(id => context.BooleanByName(id, VillageSettingEnums.AutoBalanceEnable))
                 .ToList();
 
-            if (otherVillageIds.Count == 0) return null;
-
-            string? worstResource = null;
-            float worstPercent = 0;
-            long worstAmount = 0;
-
-            // find the single most-overflowing resource in this village first
-            foreach (var resourceType in ResourceTypes)
-            {
-                var capacity = GetCapacity(sourceStorage, resourceType);
-                if (capacity <= 0) continue;
-
-                var current = GetAmount(sourceStorage, resourceType);
-                var percent = current * 100f / capacity;
-                if (percent < overflowPercent) continue;
-
-                var downTo = capacity * targetPercent / 100;
-                var amount = current - downTo;
-                if (amount <= 0) continue;
-
-                if (worstResource is null || percent > worstPercent)
-                {
-                    worstResource = resourceType;
-                    worstPercent = percent;
-                    worstAmount = amount;
-                }
-            }
-
-            if (worstResource is null) return null;
-
-            // now find the village with the most free room for that specific resource
-            VillageId? bestTargetId = null;
+            VillageId? bestId = null;
             long bestRoom = 0;
 
-            foreach (var targetId in otherVillageIds)
+            foreach (var id in candidates)
             {
-                var storage = context.Storages.FirstOrDefault(s => s.VillageId == targetId.Value);
+                var storage = context.Storages.FirstOrDefault(s => s.VillageId == id.Value);
                 if (storage is null) continue;
 
-                var capacity = GetCapacity(storage, worstResource);
-                if (capacity <= 0) continue;
-
-                var current = GetAmount(storage, worstResource);
-                var room = capacity - current;
+                var room = resources.Sum(r => Math.Max(0, GetCapacity(storage, r) - GetAmount(storage, r)));
                 if (room <= 0) continue;
 
-                if (bestTargetId is null || room > bestRoom)
+                if (bestId is null || room > bestRoom)
                 {
-                    bestTargetId = targetId;
+                    bestId = id;
                     bestRoom = room;
                 }
             }
 
-            if (bestTargetId is null) return null;
+            return bestId;
+        }
 
-            var amountToSend = Math.Min(worstAmount, bestRoom);
-            if (amountToSend <= 0) return null;
+        // Give each resource type one merchant at a time, round-robin, until either the
+        // merchants run out or every resource has hit the most it's useful to send (limited
+        // by how much room the target actually has for it).
+        private static Dictionary<string, int> DistributeClicks(List<string> resources, int freeMerchants, Dictionary<string, int> maxClicksPerResource)
+        {
+            var result = resources.ToDictionary(r => r, r => 0);
+            var remaining = freeMerchants;
 
-            return new Plan(worstResource, bestTargetId.Value, amountToSend);
+            while (remaining > 0)
+            {
+                var progressed = false;
+                foreach (var resource in resources)
+                {
+                    if (remaining <= 0) break;
+                    if (result[resource] < maxClicksPerResource.GetValueOrDefault(resource, 0))
+                    {
+                        result[resource]++;
+                        remaining--;
+                        progressed = true;
+                    }
+                }
+                if (!progressed) break;
+            }
+
+            return result;
         }
 
         private static async ValueTask<Result> HandleAsync(
             Task task,
             AppDbContext context,
+            IChromeBrowser browser,
             ToSendResourcePageCommand.Handler toSendResourcePageCommand,
             SendResourceCommand.Handler sendResourceCommand,
             SaveVillageSettingCommand.Handler saveVillageSettingCommand,
             ILogger logger,
             CancellationToken cancellationToken)
         {
-            var plan = GetPlan(context, task.AccountId, task.VillageId);
-            if (plan is null)
-            {
-                // Nothing to do anymore (storage dropped, or another village already covered it).
-                return Skip.Error;
-            }
+            var overflowing = GetOverflowingResources(context, task.VillageId);
+            if (overflowing.Count == 0) return Skip.Error;
 
-            var result = await toSendResourcePageCommand.HandleAsync(new(task.VillageId), cancellationToken);
-            if (result.IsFailed)
+            var targetId = GetBestTarget(context, task.AccountId, task.VillageId, overflowing);
+            if (targetId is null) return Skip.Error;
+
+            var targetVillage = context.Villages.FirstOrDefault(x => x.Id == targetId.Value.Value);
+            if (targetVillage is null) return Skip.Error;
+
+            var pageResult = await toSendResourcePageCommand.HandleAsync(new(task.VillageId), cancellationToken);
+            if (pageResult.IsFailed)
             {
-                if (result.HasError<MissingBuilding>())
+                if (pageResult.HasError<MissingBuilding>())
                 {
                     var settings = new Dictionary<VillageSettingEnums, int>() {
                         { VillageSettingEnums.AutoBalanceEnable, 0 }
                     };
                     await saveVillageSettingCommand.HandleAsync(new(task.AccountId, task.VillageId, settings), cancellationToken);
                     logger.Warning("No marketplace in this village, disabling auto balance.");
-                    return Skip.Error.WithErrors(result.Errors);
+                    return Skip.Error.WithErrors(pageResult.Errors);
                 }
-                return result;
+                return Stop.Error.WithErrors(pageResult.Errors);
             }
 
-            result = await sendResourceCommand.HandleAsync(new(task.VillageId, plan.TargetVillageId, plan.ResourceType, plan.Amount), cancellationToken);
-            if (result.IsFailed) return result;
+            var freeMerchants = SendResourceParser.GetFreeMerchants(browser.Html);
+            if (freeMerchants <= 0)
+            {
+                // Nothing we can do this cycle - not an error, we'll check again next visit.
+                logger.Information("No free merchants in {VillageId}, skipping balance this time.", task.VillageId);
+                return Result.Ok();
+            }
+
+            var capacity = SendResourceParser.GetMerchantCapacity(browser.Html);
+            if (capacity <= 0) capacity = 1;
+
+            var targetStorage = context.Storages.FirstOrDefault(x => x.VillageId == targetVillage.Id);
+            var maxClicksPerResource = new Dictionary<string, int>();
+            foreach (var resource in overflowing)
+            {
+                var room = targetStorage is null ? long.MaxValue : Math.Max(0, GetCapacity(targetStorage, resource) - GetAmount(targetStorage, resource));
+                var maxClicks = (int)Math.Min(int.MaxValue, room / capacity);
+                if (maxClicks > 0) maxClicksPerResource[resource] = maxClicks;
+            }
+
+            if (maxClicksPerResource.Count == 0) return Skip.Error;
+
+            var clicksPerResource = DistributeClicks(overflowing, freeMerchants, maxClicksPerResource);
+            if (clicksPerResource.Values.Sum() <= 0) return Skip.Error;
+
+            var sendResult = await sendResourceCommand.HandleAsync(new(task.VillageId, targetId.Value, clicksPerResource), cancellationToken);
+            if (sendResult.IsFailed) return Stop.Error.WithErrors(sendResult.Errors);
 
             return Result.Ok();
         }

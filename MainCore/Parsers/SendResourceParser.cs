@@ -12,7 +12,17 @@ namespace MainCore.Parsers
         public static HtmlNode? GetForm(HtmlDocument doc)
         {
             var container = GetContainer(doc);
-            return container?.Descendants("form").FirstOrDefault();
+            var form = container?.Descendants("form").FirstOrDefault();
+            if (form is not null) return form;
+
+            // Fallback: some server/client variants may not use the same container id.
+            // Look for any form that has both an "x" and a "y" coordinate input - that's
+            // specific enough to be the send-resources form and nothing else.
+            return doc.DocumentNode
+                .Descendants("form")
+                .FirstOrDefault(f =>
+                    f.Descendants("input").Any(i => i.GetAttributeValue("name", "") == "x")
+                    && f.Descendants("input").Any(i => i.GetAttributeValue("name", "") == "y"));
         }
 
         public static HtmlNode? GetXInput(HtmlDocument doc)
@@ -32,6 +42,29 @@ namespace MainCore.Parsers
         {
             var form = GetForm(doc);
             return form?.Descendants("input").FirstOrDefault(x => x.GetAttributeValue("name", "") == resourceType);
+        }
+
+        // The "+" button next to a resource's slider. Clicking it once adds exactly one
+        // merchant's worth of that resource - this is the reliable way to fill in amounts,
+        // since it goes through the page's own JS instead of us typing into the input.
+        public static HtmlNode? GetPlusButton(HtmlDocument doc, string resourceType)
+        {
+            var iconClass = resourceType switch
+            {
+                "lumber" => "lumber_medium",
+                "clay" => "clay_medium",
+                "iron" => "iron_medium",
+                "crop" => "crop_medium",
+                _ => null,
+            };
+            if (iconClass is null) return null;
+
+            var selector = doc.DocumentNode
+                .Descendants("div")
+                .FirstOrDefault(x => x.GetAttributeValue("class", "") == "resourceSelector"
+                    && x.Descendants("i").Any(i => i.GetAttributeValue("class", "").Contains(iconClass)));
+
+            return selector?.Descendants("button").FirstOrDefault(x => x.HasClass("plus"));
         }
 
         public static HtmlNode? GetSendButton(HtmlDocument doc)

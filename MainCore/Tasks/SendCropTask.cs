@@ -93,6 +93,7 @@ namespace MainCore.Tasks
         private static async ValueTask<Result> HandleAsync(
             Task task,
             AppDbContext context,
+            IChromeBrowser browser,
             ToSendResourcePageCommand.Handler toSendResourcePageCommand,
             SendResourceCommand.Handler sendResourceCommand,
             SaveVillageSettingCommand.Handler saveVillageSettingCommand,
@@ -106,23 +107,45 @@ namespace MainCore.Tasks
                 return Skip.Error;
             }
 
-            var result = await toSendResourcePageCommand.HandleAsync(new(task.VillageId), cancellationToken);
-            if (result.IsFailed)
+            var pageResult = await toSendResourcePageCommand.HandleAsync(new(task.VillageId), cancellationToken);
+            if (pageResult.IsFailed)
             {
-                if (result.HasError<MissingBuilding>())
+                if (pageResult.HasError<MissingBuilding>())
                 {
                     var settings = new Dictionary<VillageSettingEnums, int>() {
                         { VillageSettingEnums.AutoSendCropSourceEnable, 0 }
                     };
                     await saveVillageSettingCommand.HandleAsync(new(task.AccountId, task.VillageId, settings), cancellationToken);
                     logger.Warning("No marketplace in this village, disabling it as a crop source.");
-                    return Skip.Error.WithErrors(result.Errors);
+                    return Skip.Error.WithErrors(pageResult.Errors);
                 }
-                return result;
+                return Stop.Error.WithErrors(pageResult.Errors);
             }
 
-            result = await sendResourceCommand.HandleAsync(new(task.VillageId, plan.TargetVillageId, "crop", plan.Amount), cancellationToken);
-            if (result.IsFailed) return result;
+            var freeMerchants = SendResourceParser.GetFreeMerchants(browser.Html);
+            if (freeMerchants <= 0)
+            {
+                // Nothing we can do this cycle - not an error, we'll check again next visit.
+                logger.Information("No free merchants in {VillageId}, skipping crop send this time.", task.VillageId);
+                return Result.Ok();
+            }
+
+            var capacity = SendResourceParser.GetMerchantCapacity(browser.Html);
+            if (capacity <= 0) capacity = 1;
+
+            // Use every free merchant we have for crop, capped by how much is actually
+            // spare/needed so we don't send more than makes sense.
+            var maxUsefulClicks = (int)Math.Min(freeMerchants, plan.Amount / capacity);
+            if (maxUsefulClicks <= 0)
+            {
+                // Less than one merchant's worth is spare/needed - not worth a trip yet.
+                return Result.Ok();
+            }
+
+            var clicksPerResource = new Dictionary<string, int> { { "crop", maxUsefulClicks } };
+
+            var sendResult = await sendResourceCommand.HandleAsync(new(task.VillageId, plan.TargetVillageId, clicksPerResource), cancellationToken);
+            if (sendResult.IsFailed) return Stop.Error.WithErrors(sendResult.Errors);
 
             return Result.Ok();
         }

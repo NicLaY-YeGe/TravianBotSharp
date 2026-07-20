@@ -4,8 +4,11 @@ namespace MainCore.Commands.Features.SendResource
     public static partial class SendResourceCommand
     {
         // VillageId here is the SOURCE village (the one whose merchants will travel).
-        // ResourceType is one of: "wood", "clay", "iron", "crop" (matches the game's own input names).
-        public sealed record Command(VillageId VillageId, VillageId TargetVillageId, string ResourceType, long Amount) : IVillageCommand;
+        // ClicksPerResource maps resource name ("wood"/"clay"/"iron"/"crop") to how many times
+        // to click that resource's "+" button - each click sends exactly one merchant's worth.
+        // This mirrors using the page by hand instead of typing raw numbers into the inputs,
+        // which is more reliable because it goes through the site's own JS validation.
+        public sealed record Command(VillageId VillageId, VillageId TargetVillageId, Dictionary<string, int> ClicksPerResource) : IVillageCommand;
 
         private static async ValueTask<Result> HandleAsync(
             Command command,
@@ -14,62 +17,80 @@ namespace MainCore.Commands.Features.SendResource
             ILogger logger,
             CancellationToken cancellationToken)
         {
-            var (villageId, targetVillageId, resourceType, amount) = command;
+            var (villageId, targetVillageId, clicksPerResource) = command;
 
-            if (amount <= 0) return Result.Ok();
+            var totalClicks = clicksPerResource.Values.Sum();
+            if (totalClicks <= 0) return Result.Ok();
 
             var targetVillage = context.Villages.FirstOrDefault(x => x.Id == targetVillageId.Value);
             if (targetVillage is null)
             {
-                return Retry.Error.WithError($"Cannot find target village {targetVillageId} in the database.");
+                return Stop.Error.WithError($"Cannot find target village {targetVillageId} in the database.");
             }
 
             var freeMerchants = SendResourceParser.GetFreeMerchants(browser.Html);
-            var capacity = SendResourceParser.GetMerchantCapacity(browser.Html);
             if (freeMerchants <= 0)
             {
-                return Retry.Error.WithError("No free merchants available in this village right now.");
+                // Nothing to do right now - not an error, just try again on a later visit.
+                logger.Information("No free merchants in village {VillageId} right now.", villageId);
+                return Result.Ok();
             }
-            if (capacity > 0)
+
+            // Never click more than we actually have merchants for, even if the caller asked
+            // for more (defensive - the plan is computed slightly ahead of this live check).
+            if (totalClicks > freeMerchants)
             {
-                amount = Math.Min(amount, freeMerchants * capacity);
+                clicksPerResource = ScaleDown(clicksPerResource, freeMerchants);
+                totalClicks = clicksPerResource.Values.Sum();
             }
-            if (amount <= 0) return Result.Ok();
+            if (totalClicks <= 0) return Result.Ok();
 
             var result = await InputCoordinates(browser, targetVillage.X, targetVillage.Y, cancellationToken);
-            if (result.IsFailed) return result;
+            if (result.IsFailed) return Stop.Error.WithErrors(result.Errors);
 
-            result = await InputResourceAmount(browser, resourceType, amount, cancellationToken);
-            if (result.IsFailed) return result;
-
-            // give the page's own JS a moment to resolve the target village and
-            // enable the send button (it starts out disabled).
-            result = await browser.Wait(driver =>
+            foreach (var (resourceType, clicks) in clicksPerResource)
             {
-                var doc = new HtmlDocument();
-                doc.LoadHtml(driver.PageSource);
-                return SendResourceParser.IsSendButtonEnabled(doc);
-            }, cancellationToken);
-            if (result.IsFailed) return result;
+                for (var i = 0; i < clicks; i++)
+                {
+                    result = await ClickPlus(browser, resourceType, cancellationToken);
+                    if (result.IsFailed) return Stop.Error.WithErrors(result.Errors);
+                }
+            }
 
-            logger.Information("Sending {Amount} {ResourceType} from village {VillageId} to ({X}|{Y})", amount, resourceType, villageId, targetVillage.X, targetVillage.Y);
+            logger.Information(
+                "Sending resources from village {VillageId} to ({X}|{Y}): {Plan}",
+                villageId, targetVillage.X, targetVillage.Y,
+                string.Join(", ", clicksPerResource.Where(x => x.Value > 0).Select(x => $"{x.Key}x{x.Value}")));
+
+            result = await WaitSendButtonEnabled(browser, cancellationToken);
+            if (result.IsFailed) return Stop.Error.WithError("Send button never became enabled - the amounts or target may not have registered.");
 
             result = await ClickSend(browser, cancellationToken);
-            if (result.IsFailed) return result;
+            if (result.IsFailed) return Stop.Error.WithErrors(result.Errors);
 
-            // No confirmation screen on this server - resources are sent immediately.
-            // Wait for the free-merchant count to drop as proof the request went through.
-            result = await browser.Wait(driver =>
-            {
-                var doc = new HtmlDocument();
-                doc.LoadHtml(driver.PageSource);
-                return SendResourceParser.GetFreeMerchants(doc) < freeMerchants;
-            }, cancellationToken);
-            if (result.IsFailed) return result;
+            result = await WaitMerchantsDropped(browser, freeMerchants, cancellationToken);
+            if (result.IsFailed) return Stop.Error.WithError("Merchant count did not drop after sending - the shipment may not have gone through.");
 
             logger.Information("Merchants sent.");
 
             return Result.Ok();
+        }
+
+        private static Dictionary<string, int> ScaleDown(Dictionary<string, int> clicksPerResource, int maxTotal)
+        {
+            var result = new Dictionary<string, int>();
+            var remaining = maxTotal;
+            foreach (var (resourceType, clicks) in clicksPerResource)
+            {
+                var take = Math.Min(clicks, remaining);
+                if (take > 0)
+                {
+                    result[resourceType] = take;
+                    remaining -= take;
+                }
+                if (remaining <= 0) break;
+            }
+            return result;
         }
 
         private static async Task<Result> InputCoordinates(IChromeBrowser browser, int x, int y, CancellationToken cancellationToken)
@@ -92,15 +113,35 @@ namespace MainCore.Commands.Features.SendResource
             return await browser.Input(yElement, $"{y}", cancellationToken);
         }
 
-        private static async Task<Result> InputResourceAmount(IChromeBrowser browser, string resourceType, long amount, CancellationToken cancellationToken)
+        private static async Task<Result> ClickPlus(IChromeBrowser browser, string resourceType, CancellationToken cancellationToken)
         {
-            var node = SendResourceParser.GetResourceInput(browser.Html, resourceType);
-            if (node is null) return Retry.Error.WithError($"Cannot find '{resourceType}' amount input.");
+            var node = SendResourceParser.GetPlusButton(browser.Html, resourceType);
+            if (node is null) return Retry.Error.WithError($"Cannot find the '+' button for '{resourceType}'.");
 
             var (_, isFailed, element, errors) = await browser.GetElement(By.XPath(node.XPath), cancellationToken);
             if (isFailed) return Result.Fail(errors);
 
-            return await browser.Input(element, $"{amount}", cancellationToken);
+            return await browser.Click(element, cancellationToken);
+        }
+
+        private static async Task<Result> WaitSendButtonEnabled(IChromeBrowser browser, CancellationToken cancellationToken)
+        {
+            return await browser.Wait(driver =>
+            {
+                var doc = new HtmlDocument();
+                doc.LoadHtml(driver.PageSource);
+                return SendResourceParser.IsSendButtonEnabled(doc);
+            }, cancellationToken);
+        }
+
+        private static async Task<Result> WaitMerchantsDropped(IChromeBrowser browser, int freeMerchantsBefore, CancellationToken cancellationToken)
+        {
+            return await browser.Wait(driver =>
+            {
+                var doc = new HtmlDocument();
+                doc.LoadHtml(driver.PageSource);
+                return SendResourceParser.GetFreeMerchants(doc) < freeMerchantsBefore;
+            }, cancellationToken);
         }
 
         private static async Task<Result> ClickSend(IChromeBrowser browser, CancellationToken cancellationToken)
