@@ -50,6 +50,19 @@ namespace MainCore.Tasks
         private static long GetCapacity(Storage storage, string resourceType) =>
             resourceType == "crop" ? storage.Granary : storage.Warehouse;
 
+        // How much of this resource is spare to send away, i.e. the amount above the
+        // "drain down to X%" level - NOT the whole warehouse. This is what stops the bot
+        // from emptying the source village completely.
+        private static long GetSourceSurplus(Storage storage, string resourceType, int targetPercent)
+        {
+            var capacity = GetCapacity(storage, resourceType);
+            if (capacity <= 0) return 0;
+
+            var downTo = capacity * targetPercent / 100;
+            var current = GetAmount(storage, resourceType);
+            return Math.Max(0, current - downTo);
+        }
+
         // Resource types currently at/above the overflow threshold, most-full first.
         private static List<string> GetOverflowingResources(AppDbContext context, VillageId villageId)
         {
@@ -173,11 +186,16 @@ namespace MainCore.Tasks
             if (capacity <= 0) capacity = 1;
 
             var targetStorage = context.Storages.FirstOrDefault(x => x.VillageId == targetVillage.Id);
+            var sourceStorage = context.Storages.FirstOrDefault(x => x.VillageId == task.VillageId.Value);
+            var targetPercent = context.ByName(task.VillageId, VillageSettingEnums.AutoBalanceTargetPercent);
+
             var maxClicksPerResource = new Dictionary<string, int>();
             foreach (var resource in overflowing)
             {
                 var room = targetStorage is null ? long.MaxValue : Math.Max(0, GetCapacity(targetStorage, resource) - GetAmount(targetStorage, resource));
-                var maxClicks = (int)Math.Min(int.MaxValue, room / capacity);
+                var surplus = sourceStorage is null ? 0 : GetSourceSurplus(sourceStorage, resource, targetPercent);
+
+                var maxClicks = (int)Math.Min(room / capacity, surplus / capacity);
                 if (maxClicks > 0) maxClicksPerResource[resource] = maxClicks;
             }
 
