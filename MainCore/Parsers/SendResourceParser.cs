@@ -37,7 +37,7 @@ namespace MainCore.Parsers
             return form?.Descendants("input").FirstOrDefault(x => x.GetAttributeValue("name", "") == "y");
         }
 
-        // resourceType: "lumber", "clay", "iron", "crop"
+        // resourceType: "wood", "clay", "iron", "crop"
         public static HtmlNode? GetResourceInput(HtmlDocument doc, string resourceType)
         {
             var form = GetForm(doc);
@@ -51,7 +51,7 @@ namespace MainCore.Parsers
         {
             var iconClass = resourceType switch
             {
-                "lumber" => "lumber_medium",
+                "wood" => "lumber_medium",
                 "clay" => "clay_medium",
                 "iron" => "iron_medium",
                 "crop" => "crop_medium",
