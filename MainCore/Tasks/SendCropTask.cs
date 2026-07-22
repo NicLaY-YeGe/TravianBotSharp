@@ -134,13 +134,14 @@ namespace MainCore.Tasks
             if (capacity <= 0) capacity = 1;
 
             // Use every free merchant we have for crop, capped by how much is actually
-            // spare/needed so we don't send more than makes sense.
-            var maxUsefulClicks = (int)Math.Min(freeMerchants, plan.Amount / capacity);
-            if (maxUsefulClicks <= 0)
-            {
-                // Less than one merchant's worth is spare/needed - not worth a trip yet.
-                return Result.Ok();
-            }
+            // spare/needed. Even if the deficit is smaller than one merchant's capacity,
+            // still send one - a partial top-up is better than never topping up at all.
+            var neededClicks = (int)((plan.Amount + capacity - 1) / capacity); // round up
+            var maxUsefulClicks = Math.Max(1, Math.Min(freeMerchants, neededClicks));
+
+            logger.Information(
+                "Village {VillageId}: {SpareOrNeeded} crop to move, {Capacity} per merchant, {FreeMerchants} free -> sending {Clicks} merchant(s).",
+                task.VillageId, plan.Amount, capacity, freeMerchants, maxUsefulClicks);
 
             var clicksPerResource = new Dictionary<string, int> { { "crop", maxUsefulClicks } };
 

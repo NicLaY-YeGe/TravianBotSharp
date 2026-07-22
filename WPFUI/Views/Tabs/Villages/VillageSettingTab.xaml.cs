@@ -62,6 +62,13 @@ namespace WPFUI.Views.Tabs.Villages
                 this.Bind(ViewModel, vm => vm.VillageSettingInput.DodgeEnable, v => v.DodgeEnable.IsChecked).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.DodgeTroopSlot, v => v.DodgeTroopSlot.ViewModel).DisposeWith(d);
 
+                this.Bind(ViewModel, vm => vm.VillageSettingInput.SmithyUpgradeEnable, v => v.SmithyUpgradeEnable.IsChecked).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.SmithyUpgradeTroopSlot, v => v.SmithyUpgradeTroopSlot.ViewModel).DisposeWith(d);
+
+                this.Bind(ViewModel, vm => vm.VillageSettingInput.DemolishEnable, v => v.DemolishEnable.IsChecked).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.DemolishSourceLocation, v => v.DemolishSourceLocation.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.DemolishTargetBuildingType, v => v.DemolishTargetBuildingType.ViewModel).DisposeWith(d);
+
                 this.Bind(ViewModel, vm => vm.VillageSettingInput.AutoRefreshEnable, v => v.AutoRefreshEnable.IsChecked).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.AutoRefreshTime, v => v.AutoRefreshTime.ViewModel).DisposeWith(d);
 

@@ -148,6 +148,13 @@ namespace MainCore.Infrasturecture.Persistence
             {VillageSettingEnums.DodgeEnable, 0 },
             {VillageSettingEnums.DodgeTroopSlot, 1 },
 
+            {VillageSettingEnums.SmithyUpgradeEnable, 0 },
+            {VillageSettingEnums.SmithyUpgradeTroopSlot, 1 },
+
+            {VillageSettingEnums.DemolishEnable, 0 },
+            {VillageSettingEnums.DemolishSourceLocation, 0 },
+            {VillageSettingEnums.DemolishTargetBuildingType, 0 },
+
             {VillageSettingEnums.AutoRefreshEnable, 0 },
             {VillageSettingEnums.AutoRefreshMin, 45 },
             {VillageSettingEnums.AutoRefreshMax, 75 },

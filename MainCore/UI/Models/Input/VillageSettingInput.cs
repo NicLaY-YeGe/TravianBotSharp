@@ -73,6 +73,18 @@ namespace MainCore.UI.Models.Input
         public AmountInputViewModel DodgeTroopSlot { get; } = new();
 
         [Reactive]
+        private bool _smithyUpgradeEnable;
+
+        public AmountInputViewModel SmithyUpgradeTroopSlot { get; } = new();
+
+        [Reactive]
+        private bool _demolishEnable;
+
+        public AmountInputViewModel DemolishSourceLocation { get; } = new();
+
+        public AmountInputViewModel DemolishTargetBuildingType { get; } = new();
+
+        [Reactive]
         private bool _autoRefreshEnable;
 
         public RangeInputViewModel AutoRefreshTime { get; } = new();
@@ -146,6 +158,13 @@ namespace MainCore.UI.Models.Input
             DodgeEnable = settings.GetValueOrDefault(VillageSettingEnums.DodgeEnable) == 1;
             DodgeTroopSlot.Set(settings.GetValueOrDefault(VillageSettingEnums.DodgeTroopSlot));
 
+            SmithyUpgradeEnable = settings.GetValueOrDefault(VillageSettingEnums.SmithyUpgradeEnable) == 1;
+            SmithyUpgradeTroopSlot.Set(settings.GetValueOrDefault(VillageSettingEnums.SmithyUpgradeTroopSlot));
+
+            DemolishEnable = settings.GetValueOrDefault(VillageSettingEnums.DemolishEnable) == 1;
+            DemolishSourceLocation.Set(settings.GetValueOrDefault(VillageSettingEnums.DemolishSourceLocation));
+            DemolishTargetBuildingType.Set(settings.GetValueOrDefault(VillageSettingEnums.DemolishTargetBuildingType));
+
             AutoRefreshEnable = settings.GetValueOrDefault(VillageSettingEnums.AutoRefreshEnable) == 1;
             AutoRefreshTime.Set(
                 settings.GetValueOrDefault(VillageSettingEnums.AutoRefreshMin),
@@ -195,6 +214,13 @@ namespace MainCore.UI.Models.Input
 
             var dodgeEnable = DodgeEnable ? 1 : 0;
             var dodgeTroopSlot = DodgeTroopSlot.Get();
+
+            var smithyUpgradeEnable = SmithyUpgradeEnable ? 1 : 0;
+            var smithyUpgradeTroopSlot = SmithyUpgradeTroopSlot.Get();
+
+            var demolishEnable = DemolishEnable ? 1 : 0;
+            var demolishSourceLocation = DemolishSourceLocation.Get();
+            var demolishTargetBuildingType = DemolishTargetBuildingType.Get();
 
             var autoRefreshEnable = AutoRefreshEnable ? 1 : 0;
             var (autoRefreshMin, autoRefreshMax) = AutoRefreshTime.Get();
@@ -247,6 +273,13 @@ namespace MainCore.UI.Models.Input
 
                 { VillageSettingEnums.DodgeEnable, dodgeEnable },
                 { VillageSettingEnums.DodgeTroopSlot, dodgeTroopSlot },
+
+                { VillageSettingEnums.SmithyUpgradeEnable, smithyUpgradeEnable },
+                { VillageSettingEnums.SmithyUpgradeTroopSlot, smithyUpgradeTroopSlot },
+
+                { VillageSettingEnums.DemolishEnable, demolishEnable },
+                { VillageSettingEnums.DemolishSourceLocation, demolishSourceLocation },
+                { VillageSettingEnums.DemolishTargetBuildingType, demolishTargetBuildingType },
                 { VillageSettingEnums.AutoRefreshEnable, autoRefreshEnable },
                 { VillageSettingEnums.AutoRefreshMin, autoRefreshMin },
                 { VillageSettingEnums.AutoRefreshMax, autoRefreshMax },

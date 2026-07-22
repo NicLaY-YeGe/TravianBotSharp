@@ -95,5 +95,23 @@
         // Which troop slot to dodge with, 1-10 (tribe-relative order, same order shown in
         // the barracks / rally point "send troops" screen).
         DodgeTroopSlot,
+
+        // Auto-queue smithy (weapon/armor) upgrades for one chosen troop type.
+        SmithyUpgradeEnable,
+
+        // 1-10, tribe-relative order (same order shown in the barracks/rally point).
+        SmithyUpgradeTroopSlot,
+
+        // Auto-demolish a specific building and rebuild something else in its place.
+        DemolishEnable,
+
+        // The building's slot/location number (19-40 typically) to demolish - matches the
+        // exact value Travian itself uses in the demolish dropdown, so there's no ambiguity
+        // even when several buildings of the same type exist.
+        DemolishSourceLocation,
+
+        // What to build at that same location afterwards. Stored as the underlying int
+        // value of BuildingEnums.
+        DemolishTargetBuildingType,
     }
 }

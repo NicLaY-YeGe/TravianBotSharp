@@ -93,6 +93,23 @@
 
                 <Border Style="{DynamicResource Box}">
                     <StackPanel>
+                        <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Smithy upgrade" VerticalAlignment="Center" FontWeight="Bold" />
+                        <CheckBox x:Name="SmithyUpgradeEnable" Content="Keep improving one troop's weapon/armor in the smithy" />
+                        <uc:AmountInputUc x:Name="SmithyUpgradeTroopSlot" Text="Troop slot (1-10, order shown in barracks)" Unit="" />
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{DynamicResource Box}">
+                    <StackPanel>
+                        <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Demolish and rebuild (one-time)" VerticalAlignment="Center" FontWeight="Bold" />
+                        <CheckBox x:Name="DemolishEnable" Content="Demolish the building below and rebuild it as the chosen type" />
+                        <uc:AmountInputUc x:Name="DemolishSourceLocation" Text="Building slot/location to demolish" Unit="" />
+                        <uc:AmountInputUc x:Name="DemolishTargetBuildingType" Text="Rebuild as (BuildingEnums number)" Unit="" />
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{DynamicResource Box}">
+                    <StackPanel>
                         <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Village information" VerticalAlignment="Center" FontWeight="Bold" />
                         <uc:TribeSelectorUc x:Name="Tribes" Text="Tribe" />
                     </StackPanel>

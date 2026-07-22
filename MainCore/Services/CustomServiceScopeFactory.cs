@@ -81,6 +81,14 @@ namespace MainCore.Services
                     var balanceResourceTaskHandler = scope.GetHandler<BalanceResourceTask.Task>();
                     return await balanceResourceTaskHandler.HandleAsync(balanceResourceTask, cancellationToken);
 
+                case SmithyUpgradeTask.Task smithyUpgradeTask:
+                    var smithyUpgradeTaskHandler = scope.GetHandler<SmithyUpgradeTask.Task>();
+                    return await smithyUpgradeTaskHandler.HandleAsync(smithyUpgradeTask, cancellationToken);
+
+                case DemolishTask.Task demolishTask:
+                    var demolishTaskHandler = scope.GetHandler<DemolishTask.Task>();
+                    return await demolishTaskHandler.HandleAsync(demolishTask, cancellationToken);
+
                 case DodgeTroopTask.Task dodgeTroopTask:
                     var dodgeTroopTaskHandler = scope.GetHandler<DodgeTroopTask.Task>();
                     return await dodgeTroopTaskHandler.HandleAsync(dodgeTroopTask, cancellationToken);

@@ -69,6 +69,18 @@
             {
                 taskManager.Add(balanceResourceTask);
             }
+
+            var smithyUpgradeTask = new SmithyUpgradeTask.Task(accountId, villageId);
+            if (smithyUpgradeTask.CanStart(context) && !taskManager.IsExist<SmithyUpgradeTask.Task>(accountId, villageId))
+            {
+                taskManager.Add(smithyUpgradeTask);
+            }
+
+            var demolishTask = new DemolishTask.Task(accountId, villageId);
+            if (demolishTask.CanStart(context) && !taskManager.IsExist<DemolishTask.Task>(accountId, villageId))
+            {
+                taskManager.Add(demolishTask);
+            }
         }
 
         private static StorageDto Get(HtmlDocument doc)
