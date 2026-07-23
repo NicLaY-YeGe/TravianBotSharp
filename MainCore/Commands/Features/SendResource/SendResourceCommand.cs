@@ -69,6 +69,12 @@ namespace MainCore.Commands.Features.SendResource
                 }
             }
 
+            // Safety check: confirm the form actually has ONLY the intended resources filled
+            // in before we commit to sending. If a click landed on the wrong element (the
+            // page can shift under us), this catches it instead of shipping the wrong resource.
+            result = await VerifyOnlyIntendedResourcesFilled(browser, clicksPerResource, cancellationToken);
+            if (result.IsFailed) return Stop.Error.WithErrors(result.Errors);
+
             logger.Information(
                 "Sending resources from village {VillageId} to ({X}|{Y}): {Plan}",
                 villageId, targetVillage.X, targetVillage.Y,
@@ -84,6 +90,38 @@ namespace MainCore.Commands.Features.SendResource
             if (result.IsFailed) return Stop.Error.WithError("Merchant count did not drop after sending - the shipment may not have gone through.");
 
             logger.Information("Merchants sent.");
+
+            return Result.Ok();
+        }
+
+        private static readonly string[] AllResourceTypes = ["wood", "clay", "iron", "crop"];
+
+        private static async Task<Result> VerifyOnlyIntendedResourcesFilled(IChromeBrowser browser, Dictionary<string, int> clicksPerResource, CancellationToken cancellationToken)
+        {
+            foreach (var resourceType in AllResourceTypes)
+            {
+                var node = SendResourceParser.GetResourceInput(browser.Html, resourceType);
+                if (node is null) continue;
+
+                var (_, isFailed, element, errors) = await browser.GetElement(By.XPath(node.XPath), cancellationToken);
+                if (isFailed) return Result.Fail(errors);
+
+                // GetAttribute("value") returns the live input value (the JS-updated one),
+                // not the original static HTML attribute - important, since a resource typed
+                // in by the page's own JS won't necessarily be reflected in the raw page source.
+                var value = (element.GetAttribute("value") ?? "0").ParseLong();
+                var wasIntended = clicksPerResource.GetValueOrDefault(resourceType, 0) > 0;
+
+                if (wasIntended && value <= 0)
+                {
+                    return Stop.Error.WithError($"Expected '{resourceType}' to have an amount filled in after clicking, but it shows 0 - a click may have missed.");
+                }
+
+                if (!wasIntended && value > 0)
+                {
+                    return Stop.Error.WithError($"'{resourceType}' unexpectedly has {value} filled in even though it wasn't part of the plan - a click likely landed on the wrong resource. Aborting instead of sending it.");
+                }
+            }
 
             return Result.Ok();
         }
