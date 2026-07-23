@@ -1,5 +1,6 @@
 using MainCore.Commands.Features.Demolish;
 using MainCore.Commands.Misc;
+using MainCore.Commands.UI.Misc;
 using MainCore.Models;
 using MainCore.Tasks.Base;
 
@@ -85,7 +86,7 @@ namespace MainCore.Tasks
             return Result.Ok();
         }
 
-        private static async Task Disable(Task task, SaveVillageSettingCommand.Handler saveVillageSettingCommand, CancellationToken cancellationToken)
+        private static async System.Threading.Tasks.Task Disable(Task task, SaveVillageSettingCommand.Handler saveVillageSettingCommand, CancellationToken cancellationToken)
         {
             var settings = new Dictionary<VillageSettingEnums, int>() {
                 { VillageSettingEnums.DemolishEnable, 0 }
