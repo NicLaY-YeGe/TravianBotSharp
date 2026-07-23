@@ -1,3 +1,6 @@
+using HtmlAgilityPack;
+using System.Linq;
+
 namespace MainCore.Parsers
 {
     // Parses the "Send resources" tab of the Marketplace building (build.php?...&gid=17&t=5).
@@ -41,7 +44,18 @@ namespace MainCore.Parsers
         public static HtmlNode? GetResourceInput(HtmlDocument doc, string resourceType)
         {
             var form = GetForm(doc);
-            return form?.Descendants("input").FirstOrDefault(x => x.GetAttributeValue("name", "") == resourceType);
+            
+            // Travian HTML form yapısındaki gerçek input name karşılıkları (r1, r2, r3, r4) ile eşleştirildi
+            var inputName = resourceType switch
+            {
+                "wood" => "r1",
+                "clay" => "r2",
+                "iron" => "r3",
+                "crop" => "r4",
+                _ => resourceType
+            };
+
+            return form?.Descendants("input").FirstOrDefault(x => x.GetAttributeValue("name", "") == inputName);
         }
 
         // The "+" button next to a resource's slider. Clicking it once adds exactly one
@@ -59,12 +73,23 @@ namespace MainCore.Parsers
             };
             if (iconClass is null) return null;
 
-            var selector = doc.DocumentNode
-                .Descendants("div")
-                .FirstOrDefault(x => x.GetAttributeValue("class", "") == "resourceSelector"
-                    && x.Descendants("i").Any(i => i.GetAttributeValue("class", "").Contains(iconClass)));
+            // Doğru kaynağın ikonunu nokta atışı buluyoruz
+            var iconNode = doc.DocumentNode.Descendants("i")
+                .FirstOrDefault(i => i.GetAttributeValue("class", "").Contains(iconClass));
 
-            return selector?.Descendants("button").FirstOrDefault(x => x.HasClass("plus"));
+            if (iconNode is null) return null;
+
+            // İkonun container hiyerarşisinde yukarı çıkarak sadece o kaynağa ait olan satırdaki plus butonunu seçiyoruz
+            var currentNode = iconNode.ParentNode;
+            while (currentNode != null && currentNode.Name != "form")
+            {
+                var button = currentNode.Descendants("button").FirstOrDefault(x => x.HasClass("plus"));
+                if (button != null) return button;
+                
+                currentNode = currentNode.ParentNode;
+            }
+
+            return null;
         }
 
         public static HtmlNode? GetSendButton(HtmlDocument doc)
