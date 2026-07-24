@@ -1,6 +1,3 @@
-using HtmlAgilityPack;
-using System.Linq;
-
 namespace MainCore.Parsers
 {
     // Parses the "Send resources" tab of the Marketplace building (build.php?...&gid=17&t=5).
@@ -40,56 +37,30 @@ namespace MainCore.Parsers
             return form?.Descendants("input").FirstOrDefault(x => x.GetAttributeValue("name", "") == "y");
         }
 
-        // resourceType: "wood", "clay", "iron", "crop"
+        // resourceType: "wood", "clay", "iron", "crop" (our own naming). Travian's actual
+        // HTML uses "lumber" for wood's input name specifically - everything else matches.
         public static HtmlNode? GetResourceInput(HtmlDocument doc, string resourceType)
         {
             var form = GetForm(doc);
-            
-            // Travian HTML form yapısındaki gerçek input name karşılıkları (r1, r2, r3, r4) ile eşleştirildi
-            var inputName = resourceType switch
-            {
-                "wood" => "r1",
-                "clay" => "r2",
-                "iron" => "r3",
-                "crop" => "r4",
-                _ => resourceType
-            };
-
-            return form?.Descendants("input").FirstOrDefault(x => x.GetAttributeValue("name", "") == inputName);
+            var htmlName = resourceType == "wood" ? "lumber" : resourceType;
+            return form?.Descendants("input").FirstOrDefault(x => x.GetAttributeValue("name", "") == htmlName);
         }
 
         // The "+" button next to a resource's slider. Clicking it once adds exactly one
         // merchant's worth of that resource - this is the reliable way to fill in amounts,
         // since it goes through the page's own JS instead of us typing into the input.
+        // Anchored on the resource's <input name="..."> (already proven reliable elsewhere)
+        // rather than the icon's CSS class, which turned out to be less trustworthy.
         public static HtmlNode? GetPlusButton(HtmlDocument doc, string resourceType)
         {
-            var iconClass = resourceType switch
-            {
-                "wood" => "lumber_medium",
-                "clay" => "clay_medium",
-                "iron" => "iron_medium",
-                "crop" => "crop_medium",
-                _ => null,
-            };
-            if (iconClass is null) return null;
+            var input = GetResourceInput(doc, resourceType);
+            if (input is null) return null;
 
-            // Doğru kaynağın ikonunu nokta atışı buluyoruz
-            var iconNode = doc.DocumentNode.Descendants("i")
-                .FirstOrDefault(i => i.GetAttributeValue("class", "").Contains(iconClass));
+            var container = input.Ancestors("div")
+                .FirstOrDefault(x => x.GetAttributeValue("class", "") == "resourceSelector");
+            if (container is null) return null;
 
-            if (iconNode is null) return null;
-
-            // İkonun container hiyerarşisinde yukarı çıkarak sadece o kaynağa ait olan satırdaki plus butonunu seçiyoruz
-            var currentNode = iconNode.ParentNode;
-            while (currentNode != null && currentNode.Name != "form")
-            {
-                var button = currentNode.Descendants("button").FirstOrDefault(x => x.HasClass("plus"));
-                if (button != null) return button;
-                
-                currentNode = currentNode.ParentNode;
-            }
-
-            return null;
+            return container.Descendants("button").FirstOrDefault(x => x.HasClass("plus"));
         }
 
         public static HtmlNode? GetSendButton(HtmlDocument doc)
