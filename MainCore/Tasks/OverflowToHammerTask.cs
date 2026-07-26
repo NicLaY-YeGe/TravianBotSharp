@@ -131,12 +131,19 @@ namespace MainCore.Tasks
             var capacity = SendResourceParser.GetMerchantCapacity(browser.Html);
             if (capacity <= 0) capacity = 1;
 
+            var sourceStorage = context.Storages.FirstOrDefault(x => x.VillageId == task.VillageId.Value);
             var hammerStorage = context.Storages.FirstOrDefault(x => x.VillageId == hammerVillage.Id);
             var maxClicksPerResource = new Dictionary<string, int>();
             foreach (var resource in overflowing)
             {
                 var room = hammerStorage is null ? long.MaxValue : Math.Max(0, GetCapacity(hammerStorage, resource) - GetAmount(hammerStorage, resource));
-                var maxClicks = (int)Math.Min(int.MaxValue, room / capacity);
+                // Never plan more clicks than the source village actually has of this
+                // resource - clicking "+" past what's available has nothing left to add,
+                // and the button can then disappear/disable, which is what was causing the
+                // "can't find the + button" / long timeout failures.
+                var available = sourceStorage is null ? 0 : GetAmount(sourceStorage, resource);
+
+                var maxClicks = (int)Math.Min(room / capacity, (available + capacity - 1) / capacity);
                 if (maxClicks > 0) maxClicksPerResource[resource] = maxClicks;
             }
 

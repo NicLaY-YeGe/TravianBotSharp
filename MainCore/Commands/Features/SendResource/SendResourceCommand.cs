@@ -191,37 +191,17 @@ namespace MainCore.Commands.Features.SendResource
 
         private static async Task<Result> ClickPlus(IChromeBrowser browser, string resourceType, CancellationToken cancellationToken)
         {
-            // The page can briefly re-render right after coordinates resolve (or after a
-            // previous click updates the totals), so a single lookup can catch it mid-flicker.
-            // Retry a few times internally before giving up, instead of failing on the first miss.
-            const int maxAttempts = 5;
-            Result lastError = Retry.Error.WithError($"Cannot find the '+' button for '{resourceType}'.");
+            // GetElement already waits internally (up to 3 minutes) for the element to show
+            // up, so this should NOT be wrapped in an extra retry loop - doing that before
+            // multiplied the worst-case wait to 15 minutes. One lookup + one GetElement call
+            // is enough; if it still isn't there after 3 minutes, something is really wrong.
+            var node = SendResourceParser.GetPlusButton(browser.Html, resourceType);
+            if (node is null) return Retry.Error.WithError($"Cannot find the '+' button for '{resourceType}'.");
 
-            for (var attempt = 1; attempt <= maxAttempts; attempt++)
-            {
-                var node = SendResourceParser.GetPlusButton(browser.Html, resourceType);
-                if (node is not null)
-                {
-                    var (_, isFailed, element, errors) = await browser.GetElement(By.XPath(node.XPath), cancellationToken);
-                    if (!isFailed)
-                    {
-                        var clickResult = await browser.Click(element, cancellationToken);
-                        if (clickResult.IsSuccess) return clickResult;
-                        lastError = clickResult;
-                    }
-                    else
-                    {
-                        lastError = Result.Fail(errors);
-                    }
-                }
+            var (_, isFailed, element, errors) = await browser.GetElement(By.XPath(node.XPath), cancellationToken);
+            if (isFailed) return Result.Fail(errors);
 
-                if (attempt < maxAttempts)
-                {
-                    await Task.Delay(500, cancellationToken);
-                }
-            }
-
-            return lastError;
+            return await browser.Click(element, cancellationToken);
         }
 
         private static async Task<Result> WaitSendButtonEnabled(IChromeBrowser browser, CancellationToken cancellationToken)
@@ -246,34 +226,13 @@ namespace MainCore.Commands.Features.SendResource
 
         private static async Task<Result> ClickSend(IChromeBrowser browser, CancellationToken cancellationToken)
         {
-            const int maxAttempts = 5;
-            Result lastError = Retry.Error.WithError("Cannot find send button.");
+            var node = SendResourceParser.GetSendButton(browser.Html);
+            if (node is null) return Retry.Error.WithError("Cannot find send button.");
 
-            for (var attempt = 1; attempt <= maxAttempts; attempt++)
-            {
-                var node = SendResourceParser.GetSendButton(browser.Html);
-                if (node is not null)
-                {
-                    var (_, isFailed, element, errors) = await browser.GetElement(By.XPath(node.XPath), cancellationToken);
-                    if (!isFailed)
-                    {
-                        var clickResult = await browser.Click(element, cancellationToken);
-                        if (clickResult.IsSuccess) return clickResult;
-                        lastError = clickResult;
-                    }
-                    else
-                    {
-                        lastError = Result.Fail(errors);
-                    }
-                }
+            var (_, isFailed, element, errors) = await browser.GetElement(By.XPath(node.XPath), cancellationToken);
+            if (isFailed) return Result.Fail(errors);
 
-                if (attempt < maxAttempts)
-                {
-                    await Task.Delay(500, cancellationToken);
-                }
-            }
-
-            return lastError;
+            return await browser.Click(element, cancellationToken);
         }
     }
 }
