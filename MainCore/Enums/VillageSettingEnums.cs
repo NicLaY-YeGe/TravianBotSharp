@@ -113,5 +113,20 @@
         // What to build at that same location afterwards. Stored as the underlying int
         // value of BuildingEnums.
         DemolishTargetBuildingType,
+
+        // This village will request resource top-ups from the configured hammer village
+        // when it's short on wood/clay/iron/crop for its current build job.
+        SupplyFromHammerEnable,
+
+        // Automatically hold a Small Celebration in the Town Hall whenever resources allow.
+        SmallCelebrationEnable,
+
+        // This village sends its own overflow (wood/clay/iron/crop above the chosen %) to
+        // the configured hammer village, to speed up its troop production.
+        OverflowToHammerEnable,
+
+        // Send away the surplus once a resource reaches this % of its warehouse/granary
+        // capacity in THIS (side) village.
+        OverflowToHammerPercent,
     }
 }

@@ -85,6 +85,17 @@ namespace MainCore.UI.Models.Input
         public AmountInputViewModel DemolishTargetBuildingType { get; } = new();
 
         [Reactive]
+        private bool _supplyFromHammerEnable;
+
+        [Reactive]
+        private bool _smallCelebrationEnable;
+
+        [Reactive]
+        private bool _overflowToHammerEnable;
+
+        public AmountInputViewModel OverflowToHammerPercent { get; } = new();
+
+        [Reactive]
         private bool _autoRefreshEnable;
 
         public RangeInputViewModel AutoRefreshTime { get; } = new();
@@ -165,6 +176,13 @@ namespace MainCore.UI.Models.Input
             DemolishSourceLocation.Set(settings.GetValueOrDefault(VillageSettingEnums.DemolishSourceLocation));
             DemolishTargetBuildingType.Set(settings.GetValueOrDefault(VillageSettingEnums.DemolishTargetBuildingType));
 
+            SupplyFromHammerEnable = settings.GetValueOrDefault(VillageSettingEnums.SupplyFromHammerEnable) == 1;
+
+            SmallCelebrationEnable = settings.GetValueOrDefault(VillageSettingEnums.SmallCelebrationEnable) == 1;
+
+            OverflowToHammerEnable = settings.GetValueOrDefault(VillageSettingEnums.OverflowToHammerEnable) == 1;
+            OverflowToHammerPercent.Set(settings.GetValueOrDefault(VillageSettingEnums.OverflowToHammerPercent));
+
             AutoRefreshEnable = settings.GetValueOrDefault(VillageSettingEnums.AutoRefreshEnable) == 1;
             AutoRefreshTime.Set(
                 settings.GetValueOrDefault(VillageSettingEnums.AutoRefreshMin),
@@ -221,6 +239,13 @@ namespace MainCore.UI.Models.Input
             var demolishEnable = DemolishEnable ? 1 : 0;
             var demolishSourceLocation = DemolishSourceLocation.Get();
             var demolishTargetBuildingType = DemolishTargetBuildingType.Get();
+
+            var supplyFromHammerEnable = SupplyFromHammerEnable ? 1 : 0;
+
+            var smallCelebrationEnable = SmallCelebrationEnable ? 1 : 0;
+
+            var overflowToHammerEnable = OverflowToHammerEnable ? 1 : 0;
+            var overflowToHammerPercent = OverflowToHammerPercent.Get();
 
             var autoRefreshEnable = AutoRefreshEnable ? 1 : 0;
             var (autoRefreshMin, autoRefreshMax) = AutoRefreshTime.Get();
@@ -280,6 +305,13 @@ namespace MainCore.UI.Models.Input
                 { VillageSettingEnums.DemolishEnable, demolishEnable },
                 { VillageSettingEnums.DemolishSourceLocation, demolishSourceLocation },
                 { VillageSettingEnums.DemolishTargetBuildingType, demolishTargetBuildingType },
+
+                { VillageSettingEnums.SupplyFromHammerEnable, supplyFromHammerEnable },
+
+                { VillageSettingEnums.SmallCelebrationEnable, smallCelebrationEnable },
+
+                { VillageSettingEnums.OverflowToHammerEnable, overflowToHammerEnable },
+                { VillageSettingEnums.OverflowToHammerPercent, overflowToHammerPercent },
                 { VillageSettingEnums.AutoRefreshEnable, autoRefreshEnable },
                 { VillageSettingEnums.AutoRefreshMin, autoRefreshMin },
                 { VillageSettingEnums.AutoRefreshMax, autoRefreshMax },

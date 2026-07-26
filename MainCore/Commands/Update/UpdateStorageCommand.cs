@@ -81,6 +81,18 @@
             {
                 taskManager.Add(demolishTask);
             }
+
+            var smallCelebrationTask = new SmallCelebrationTask.Task(accountId, villageId);
+            if (smallCelebrationTask.CanStart(context) && !taskManager.IsExist<SmallCelebrationTask.Task>(accountId, villageId))
+            {
+                taskManager.Add(smallCelebrationTask);
+            }
+
+            var overflowToHammerTask = new OverflowToHammerTask.Task(accountId, villageId);
+            if (overflowToHammerTask.CanStart(context) && !taskManager.IsExist<OverflowToHammerTask.Task>(accountId, villageId))
+            {
+                taskManager.Add(overflowToHammerTask);
+            }
         }
 
         private static StorageDto Get(HtmlDocument doc)

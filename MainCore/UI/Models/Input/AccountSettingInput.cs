@@ -17,6 +17,8 @@ namespace MainCore.UI.Models.Input
             EnableAutoStartAdventure = settings.GetValueOrDefault(AccountSettingEnums.EnableAutoStartAdventure) == 1;
             FarmInterval.Set(settings.GetValueOrDefault(AccountSettingEnums.FarmIntervalMin), settings.GetValueOrDefault(AccountSettingEnums.FarmIntervalMax));
             UseStartAllButton = settings.GetValueOrDefault(AccountSettingEnums.UseStartAllButton) == 1;
+            HammerVillageId.Set(settings.GetValueOrDefault(AccountSettingEnums.HammerVillageId));
+            HammerReservePercent.Set(settings.GetValueOrDefault(AccountSettingEnums.HammerReservePercent));
         }
 
         public Dictionary<AccountSettingEnums, int> Get()
@@ -32,6 +34,8 @@ namespace MainCore.UI.Models.Input
 
             var (farmIntervalMin, farmIntervalMax) = FarmInterval.Get();
             var useStartAllButton = UseStartAllButton ? 1 : 0;
+            var hammerVillageId = HammerVillageId.Get();
+            var hammerReservePercent = HammerReservePercent.Get();
 
             var settings = new Dictionary<AccountSettingEnums, int>()
             {
@@ -53,6 +57,8 @@ namespace MainCore.UI.Models.Input
 
                 { AccountSettingEnums.HeadlessChrome, headlessChrome },
                 { AccountSettingEnums.EnableAutoStartAdventure, autoStartAdventure },
+                { AccountSettingEnums.HammerVillageId, hammerVillageId },
+                { AccountSettingEnums.HammerReservePercent, hammerReservePercent },
             };
             return settings;
         }
@@ -73,6 +79,9 @@ namespace MainCore.UI.Models.Input
 
         [Reactive]
         private bool _enableAutoStartAdventure;
+
+        public AmountInputViewModel HammerVillageId { get; } = new();
+        public AmountInputViewModel HammerReservePercent { get; } = new();
 
         [Reactive]
         private bool _useStartAllButton;

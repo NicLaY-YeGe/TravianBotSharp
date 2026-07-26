@@ -110,6 +110,28 @@
 
                 <Border Style="{DynamicResource Box}">
                     <StackPanel>
+                        <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Supply from hammer village" VerticalAlignment="Center" FontWeight="Bold" />
+                        <CheckBox x:Name="SupplyFromHammerEnable" Content="Request resource top-ups from the hammer village when short for a build job" />
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{DynamicResource Box}">
+                    <StackPanel>
+                        <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Small celebration" VerticalAlignment="Center" FontWeight="Bold" />
+                        <CheckBox x:Name="SmallCelebrationEnable" Content="Automatically hold a small celebration whenever resources allow" />
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{DynamicResource Box}">
+                    <StackPanel>
+                        <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Send overflow to hammer village" VerticalAlignment="Center" FontWeight="Bold" />
+                        <CheckBox x:Name="OverflowToHammerEnable" Content="Send this village's overflow resources to the hammer village" />
+                        <uc:AmountInputUc x:Name="OverflowToHammerPercent" Text="Send away surplus once storage reaches" Unit="%" />
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{DynamicResource Box}">
+                    <StackPanel>
                         <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Village information" VerticalAlignment="Center" FontWeight="Bold" />
                         <uc:TribeSelectorUc x:Name="Tribes" Text="Tribe" />
                     </StackPanel>

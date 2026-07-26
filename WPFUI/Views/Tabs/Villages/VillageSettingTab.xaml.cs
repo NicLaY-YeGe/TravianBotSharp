@@ -69,6 +69,13 @@ namespace WPFUI.Views.Tabs.Villages
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.DemolishSourceLocation, v => v.DemolishSourceLocation.ViewModel).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.DemolishTargetBuildingType, v => v.DemolishTargetBuildingType.ViewModel).DisposeWith(d);
 
+                this.Bind(ViewModel, vm => vm.VillageSettingInput.SupplyFromHammerEnable, v => v.SupplyFromHammerEnable.IsChecked).DisposeWith(d);
+
+                this.Bind(ViewModel, vm => vm.VillageSettingInput.SmallCelebrationEnable, v => v.SmallCelebrationEnable.IsChecked).DisposeWith(d);
+
+                this.Bind(ViewModel, vm => vm.VillageSettingInput.OverflowToHammerEnable, v => v.OverflowToHammerEnable.IsChecked).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.OverflowToHammerPercent, v => v.OverflowToHammerPercent.ViewModel).DisposeWith(d);
+
                 this.Bind(ViewModel, vm => vm.VillageSettingInput.AutoRefreshEnable, v => v.AutoRefreshEnable.IsChecked).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.AutoRefreshTime, v => v.AutoRefreshTime.ViewModel).DisposeWith(d);
 

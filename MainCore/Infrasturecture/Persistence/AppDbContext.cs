@@ -47,6 +47,8 @@ namespace MainCore.Infrasturecture.Persistence
             {AccountSettingEnums.WorkTimeMax, 720 },
             {AccountSettingEnums.HeadlessChrome, 0 },
             {AccountSettingEnums.EnableAutoStartAdventure, 0 },
+            {AccountSettingEnums.HammerVillageId, 0 },
+            {AccountSettingEnums.HammerReservePercent, 50 },
         }.ToImmutableDictionary();
 
         private List<AccountSettingEnums> GetMissingAccountSettings()
@@ -154,6 +156,13 @@ namespace MainCore.Infrasturecture.Persistence
             {VillageSettingEnums.DemolishEnable, 0 },
             {VillageSettingEnums.DemolishSourceLocation, 0 },
             {VillageSettingEnums.DemolishTargetBuildingType, 0 },
+
+            {VillageSettingEnums.SupplyFromHammerEnable, 0 },
+
+            {VillageSettingEnums.SmallCelebrationEnable, 0 },
+
+            {VillageSettingEnums.OverflowToHammerEnable, 0 },
+            {VillageSettingEnums.OverflowToHammerPercent, 90 },
 
             {VillageSettingEnums.AutoRefreshEnable, 0 },
             {VillageSettingEnums.AutoRefreshMin, 45 },

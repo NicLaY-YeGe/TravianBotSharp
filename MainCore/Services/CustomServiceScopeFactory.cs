@@ -89,6 +89,18 @@ namespace MainCore.Services
                     var demolishTaskHandler = scope.GetHandler<DemolishTask.Task>();
                     return await demolishTaskHandler.HandleAsync(demolishTask, cancellationToken);
 
+                case SupplyFromHammerTask.Task supplyFromHammerTask:
+                    var supplyFromHammerTaskHandler = scope.GetHandler<SupplyFromHammerTask.Task>();
+                    return await supplyFromHammerTaskHandler.HandleAsync(supplyFromHammerTask, cancellationToken);
+
+                case SmallCelebrationTask.Task smallCelebrationTask:
+                    var smallCelebrationTaskHandler = scope.GetHandler<SmallCelebrationTask.Task>();
+                    return await smallCelebrationTaskHandler.HandleAsync(smallCelebrationTask, cancellationToken);
+
+                case OverflowToHammerTask.Task overflowToHammerTask:
+                    var overflowToHammerTaskHandler = scope.GetHandler<OverflowToHammerTask.Task>();
+                    return await overflowToHammerTaskHandler.HandleAsync(overflowToHammerTask, cancellationToken);
+
                 case DodgeTroopTask.Task dodgeTroopTask:
                     var dodgeTroopTaskHandler = scope.GetHandler<DodgeTroopTask.Task>();
                     return await dodgeTroopTaskHandler.HandleAsync(dodgeTroopTask, cancellationToken);
