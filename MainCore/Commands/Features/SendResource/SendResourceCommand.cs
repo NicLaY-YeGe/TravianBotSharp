@@ -45,6 +45,12 @@ namespace MainCore.Commands.Features.SendResource
             }
             if (totalClicks <= 0) return Result.Ok();
 
+            // Clear all 4 resource fields first. The page can retain a leftover value from a
+            // previous visit/session (same as it remembers the last-used target coordinates),
+            // and we don't want to assume any of them start at 0.
+            var clearResult = await ClearAllResourceInputs(browser, cancellationToken);
+            if (clearResult.IsFailed) return Stop.Error.WithErrors(clearResult.Errors);
+
             var result = await InputCoordinates(browser, targetVillage.X, targetVillage.Y, cancellationToken);
             if (result.IsFailed) return Stop.Error.WithErrors(result.Errors);
 
@@ -95,6 +101,26 @@ namespace MainCore.Commands.Features.SendResource
         }
 
         private static readonly string[] AllResourceTypes = ["wood", "clay", "iron", "crop"];
+
+        private static async Task<Result> ClearAllResourceInputs(IChromeBrowser browser, CancellationToken cancellationToken)
+        {
+            foreach (var resourceType in AllResourceTypes)
+            {
+                var node = SendResourceParser.GetResourceInput(browser.Html, resourceType);
+                if (node is null) continue;
+
+                var (_, isFailed, element, errors) = await browser.GetElement(By.XPath(node.XPath), cancellationToken);
+                if (isFailed) return Result.Fail(errors);
+
+                var current = (element.GetAttribute("value") ?? "0").ParseLong();
+                if (current == 0) continue;
+
+                var result = await browser.Input(element, "0", cancellationToken);
+                if (result.IsFailed) return result;
+            }
+
+            return Result.Ok();
+        }
 
         private static async Task<Result> VerifyOnlyIntendedResourcesFilled(IChromeBrowser browser, Dictionary<string, int> clicksPerResource, CancellationToken cancellationToken)
         {

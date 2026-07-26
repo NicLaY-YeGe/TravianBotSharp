@@ -116,25 +116,24 @@ namespace MainCore.Tasks
         // Give each resource type one merchant at a time, round-robin, until either the
         // merchants run out or every resource has hit the most it's useful to send (limited
         // by how much room the target actually has for it).
+        // Fills the most-overflowing resource's need FIRST (up to its own cap), then moves
+        // on to the next one with whatever merchants remain - rather than spreading merchants
+        // thin 1-at-a-time across all of them. "resources" is expected most-severe-first.
         private static Dictionary<string, int> DistributeClicks(List<string> resources, int freeMerchants, Dictionary<string, int> maxClicksPerResource)
         {
             var result = resources.ToDictionary(r => r, r => 0);
             var remaining = freeMerchants;
 
-            while (remaining > 0)
+            foreach (var resource in resources)
             {
-                var progressed = false;
-                foreach (var resource in resources)
-                {
-                    if (remaining <= 0) break;
-                    if (result[resource] < maxClicksPerResource.GetValueOrDefault(resource, 0))
-                    {
-                        result[resource]++;
-                        remaining--;
-                        progressed = true;
-                    }
-                }
-                if (!progressed) break;
+                if (remaining <= 0) break;
+
+                var cap = maxClicksPerResource.GetValueOrDefault(resource, 0);
+                var take = Math.Min(cap, remaining);
+                if (take <= 0) continue;
+
+                result[resource] = take;
+                remaining -= take;
             }
 
             return result;
