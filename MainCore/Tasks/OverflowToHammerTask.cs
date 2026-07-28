@@ -8,8 +8,8 @@ namespace MainCore.Tasks
     {
         // Runs on a SIDE village that has OverflowToHammerEnable = true. Sends whichever of
         // its own resources are above the chosen % to the account's configured hammer
-        // village, using every free merchant available (split across overflowing resources
-        // the same way BalanceResourceTask does).
+        // village, splitting every free merchant's capacity proportionally across however
+        // many resources are overflowing (weighted by how much each one is overflowing by).
         public sealed class Task : VillageTask
         {
             public Task(AccountId accountId, VillageId villageId) : base(accountId, villageId)
@@ -69,24 +69,54 @@ namespace MainCore.Tasks
                 .ToList();
         }
 
-        // Fills the most-overflowing resource's need FIRST (up to its own cap), then moves
-        // on to the next one with whatever merchants remain - rather than spreading merchants
-        // thin 1-at-a-time across all of them. "resources" is expected most-severe-first.
-        private static Dictionary<string, int> DistributeClicks(List<string> resources, int freeMerchants, Dictionary<string, int> maxClicksPerResource)
+        // How much of this resource sits above the overflow threshold - this is both the
+        // weight used to split merchants across resources, and the hard cap on how much of
+        // it makes sense to send (never more than what's actually "extra").
+        private static long GetOverflowAmount(Storage storage, string resourceType, int overflowPercent)
         {
-            var result = resources.ToDictionary(r => r, r => 0);
-            var remaining = freeMerchants;
+            var capacity = GetCapacity(storage, resourceType);
+            if (capacity <= 0) return 0;
+
+            var thresholdAmount = capacity * overflowPercent / 100;
+            var current = GetAmount(storage, resourceType);
+            return Math.Max(0, current - thresholdAmount);
+        }
+
+        // Rounds to the nearest 100 with a small random jitter (+/-3%) first, so shipment
+        // amounts don't look like they came out of exact machine math every single time.
+        private static long RoundHumanLike(double raw)
+        {
+            if (raw <= 0) return 0;
+            var jitter = 1 + ((Random.Shared.NextDouble() * 0.06) - 0.03);
+            var jittered = raw * jitter;
+            var rounded = Math.Round(jittered / 100.0) * 100;
+            return (long)Math.Max(0, rounded);
+        }
+
+        // Splits totalToSend across "resources" proportional to each one's weight (how much
+        // it's overflowing by), capped individually by maxPerResource (hammer's room, this
+        // village's own overflow amount). Only overflowing resources get anything.
+        private static Dictionary<string, long> DistributeProportionally(
+            List<string> resources,
+            Dictionary<string, long> weights,
+            Dictionary<string, long> maxPerResource,
+            long totalToSend)
+        {
+            var result = new Dictionary<string, long>();
+            var totalWeight = resources.Sum(r => weights.GetValueOrDefault(r, 0));
+            if (totalWeight <= 0 || totalToSend <= 0) return result;
 
             foreach (var resource in resources)
             {
-                if (remaining <= 0) break;
+                var weight = weights.GetValueOrDefault(resource, 0);
+                if (weight <= 0) continue;
 
-                var cap = maxClicksPerResource.GetValueOrDefault(resource, 0);
-                var take = Math.Min(cap, remaining);
-                if (take <= 0) continue;
+                var rawShare = (double)totalToSend * weight / totalWeight;
+                var cap = maxPerResource.GetValueOrDefault(resource, 0);
+                var capped = Math.Min(rawShare, cap);
 
-                result[resource] = take;
-                remaining -= take;
+                var amount = RoundHumanLike(capped);
+                if (amount > 0) result[resource] = amount;
             }
 
             return result;
@@ -130,29 +160,27 @@ namespace MainCore.Tasks
 
             var capacity = SendResourceParser.GetMerchantCapacity(browser.Html);
             if (capacity <= 0) capacity = 1;
+            var totalToSend = (long)freeMerchants * capacity;
 
+            var overflowPercent = context.ByName(task.VillageId, VillageSettingEnums.OverflowToHammerPercent);
             var sourceStorage = context.Storages.FirstOrDefault(x => x.VillageId == task.VillageId.Value);
             var hammerStorage = context.Storages.FirstOrDefault(x => x.VillageId == hammerVillage.Id);
-            var maxClicksPerResource = new Dictionary<string, int>();
+
+            var weights = new Dictionary<string, long>();
+            var maxPerResource = new Dictionary<string, long>();
             foreach (var resource in overflowing)
             {
                 var room = hammerStorage is null ? long.MaxValue : Math.Max(0, GetCapacity(hammerStorage, resource) - GetAmount(hammerStorage, resource));
-                // Never plan more clicks than the source village actually has of this
-                // resource - clicking "+" past what's available has nothing left to add,
-                // and the button can then disappear/disable, which is what was causing the
-                // "can't find the + button" / long timeout failures.
-                var available = sourceStorage is null ? 0 : GetAmount(sourceStorage, resource);
+                var overflowAmount = sourceStorage is null ? 0 : GetOverflowAmount(sourceStorage, resource, overflowPercent);
 
-                var maxClicks = (int)Math.Min(room / capacity, (available + capacity - 1) / capacity);
-                if (maxClicks > 0) maxClicksPerResource[resource] = maxClicks;
+                weights[resource] = overflowAmount;
+                maxPerResource[resource] = Math.Min(room, overflowAmount);
             }
 
-            if (maxClicksPerResource.Count == 0) return Skip.Error;
+            var amounts = DistributeProportionally(overflowing, weights, maxPerResource, totalToSend);
+            if (amounts.Values.Sum() <= 0) return Skip.Error;
 
-            var clicksPerResource = DistributeClicks(overflowing, freeMerchants, maxClicksPerResource);
-            if (clicksPerResource.Values.Sum() <= 0) return Skip.Error;
-
-            var sendResult = await sendResourceCommand.HandleAsync(new(task.VillageId, hammerVillageId.Value, clicksPerResource), cancellationToken);
+            var sendResult = await sendResourceCommand.HandleAsync(new(task.VillageId, hammerVillageId.Value, amounts), cancellationToken);
             if (sendResult.IsFailed) return Stop.Error.WithErrors(sendResult.Errors);
 
             return Result.Ok();

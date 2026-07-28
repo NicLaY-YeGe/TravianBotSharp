@@ -113,27 +113,42 @@ namespace MainCore.Tasks
             return bestId;
         }
 
-        // Give each resource type one merchant at a time, round-robin, until either the
-        // merchants run out or every resource has hit the most it's useful to send (limited
-        // by how much room the target actually has for it).
-        // Fills the most-overflowing resource's need FIRST (up to its own cap), then moves
-        // on to the next one with whatever merchants remain - rather than spreading merchants
-        // thin 1-at-a-time across all of them. "resources" is expected most-severe-first.
-        private static Dictionary<string, int> DistributeClicks(List<string> resources, int freeMerchants, Dictionary<string, int> maxClicksPerResource)
+        // Rounds to the nearest 100 with a small random jitter (+/-3%) first, so shipment
+        // amounts don't look like they came out of exact machine math every single time.
+        private static long RoundHumanLike(double raw)
         {
-            var result = resources.ToDictionary(r => r, r => 0);
-            var remaining = freeMerchants;
+            if (raw <= 0) return 0;
+            var jitter = 1 + ((Random.Shared.NextDouble() * 0.06) - 0.03);
+            var jittered = raw * jitter;
+            var rounded = Math.Round(jittered / 100.0) * 100;
+            return (long)Math.Max(0, rounded);
+        }
+
+        // Splits totalToSend across "resources" proportional to each one's weight (how much
+        // surplus it has), capped individually by maxPerResource (target's room, source's
+        // surplus). Only resources already in "resources" (i.e. actually overflowing) get
+        // anything - everything else is left untouched.
+        private static Dictionary<string, long> DistributeProportionally(
+            List<string> resources,
+            Dictionary<string, long> weights,
+            Dictionary<string, long> maxPerResource,
+            long totalToSend)
+        {
+            var result = new Dictionary<string, long>();
+            var totalWeight = resources.Sum(r => weights.GetValueOrDefault(r, 0));
+            if (totalWeight <= 0 || totalToSend <= 0) return result;
 
             foreach (var resource in resources)
             {
-                if (remaining <= 0) break;
+                var weight = weights.GetValueOrDefault(resource, 0);
+                if (weight <= 0) continue;
 
-                var cap = maxClicksPerResource.GetValueOrDefault(resource, 0);
-                var take = Math.Min(cap, remaining);
-                if (take <= 0) continue;
+                var rawShare = (double)totalToSend * weight / totalWeight;
+                var cap = maxPerResource.GetValueOrDefault(resource, 0);
+                var capped = Math.Min(rawShare, cap);
 
-                result[resource] = take;
-                remaining -= take;
+                var amount = RoundHumanLike(capped);
+                if (amount > 0) result[resource] = amount;
             }
 
             return result;
@@ -183,27 +198,27 @@ namespace MainCore.Tasks
 
             var capacity = SendResourceParser.GetMerchantCapacity(browser.Html);
             if (capacity <= 0) capacity = 1;
+            var totalToSend = (long)freeMerchants * capacity;
 
             var targetStorage = context.Storages.FirstOrDefault(x => x.VillageId == targetVillage.Id);
             var sourceStorage = context.Storages.FirstOrDefault(x => x.VillageId == task.VillageId.Value);
             var targetPercent = context.ByName(task.VillageId, VillageSettingEnums.AutoBalanceTargetPercent);
 
-            var maxClicksPerResource = new Dictionary<string, int>();
+            var weights = new Dictionary<string, long>();
+            var maxPerResource = new Dictionary<string, long>();
             foreach (var resource in overflowing)
             {
                 var room = targetStorage is null ? long.MaxValue : Math.Max(0, GetCapacity(targetStorage, resource) - GetAmount(targetStorage, resource));
                 var surplus = sourceStorage is null ? 0 : GetSourceSurplus(sourceStorage, resource, targetPercent);
 
-                var maxClicks = (int)Math.Min(room / capacity, surplus / capacity);
-                if (maxClicks > 0) maxClicksPerResource[resource] = maxClicks;
+                weights[resource] = surplus;
+                maxPerResource[resource] = Math.Min(room, surplus);
             }
 
-            if (maxClicksPerResource.Count == 0) return Skip.Error;
+            var amounts = DistributeProportionally(overflowing, weights, maxPerResource, totalToSend);
+            if (amounts.Values.Sum() <= 0) return Skip.Error;
 
-            var clicksPerResource = DistributeClicks(overflowing, freeMerchants, maxClicksPerResource);
-            if (clicksPerResource.Values.Sum() <= 0) return Skip.Error;
-
-            var sendResult = await sendResourceCommand.HandleAsync(new(task.VillageId, targetId.Value, clicksPerResource), cancellationToken);
+            var sendResult = await sendResourceCommand.HandleAsync(new(task.VillageId, targetId.Value, amounts), cancellationToken);
             if (sendResult.IsFailed) return Stop.Error.WithErrors(sendResult.Errors);
 
             return Result.Ok();

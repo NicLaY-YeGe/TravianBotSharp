@@ -133,19 +133,21 @@ namespace MainCore.Tasks
             var capacity = SendResourceParser.GetMerchantCapacity(browser.Html);
             if (capacity <= 0) capacity = 1;
 
-            // Use every free merchant we have for crop, capped by how much is actually
-            // spare/needed. Even if the deficit is smaller than one merchant's capacity,
-            // still send one - a partial top-up is better than never topping up at all.
-            var neededClicks = (int)((plan.Amount + capacity - 1) / capacity); // round up
-            var maxUsefulClicks = Math.Max(1, Math.Min(freeMerchants, neededClicks));
+            var maxTotal = (long)freeMerchants * capacity;
+            var rawAmount = Math.Min(plan.Amount, maxTotal);
+            if (rawAmount <= 0) return Result.Ok();
+
+            var jitter = 1 + ((Random.Shared.NextDouble() * 0.06) - 0.03);
+            var amount = (long)Math.Round((rawAmount * jitter) / 100.0) * 100;
+            if (amount <= 0) amount = Math.Min(100, maxTotal);
 
             logger.Information(
-                "Village {VillageId}: {SpareOrNeeded} crop to move, {Capacity} per merchant, {FreeMerchants} free -> sending {Clicks} merchant(s).",
-                task.VillageId, plan.Amount, capacity, freeMerchants, maxUsefulClicks);
+                "Village {VillageId}: {SpareOrNeeded} crop to move, {Capacity} per merchant, {FreeMerchants} free -> sending {Amount}.",
+                task.VillageId, plan.Amount, capacity, freeMerchants, amount);
 
-            var clicksPerResource = new Dictionary<string, int> { { "crop", maxUsefulClicks } };
+            var amounts = new Dictionary<string, long> { { "crop", amount } };
 
-            var sendResult = await sendResourceCommand.HandleAsync(new(task.VillageId, plan.TargetVillageId, clicksPerResource), cancellationToken);
+            var sendResult = await sendResourceCommand.HandleAsync(new(task.VillageId, plan.TargetVillageId, amounts), cancellationToken);
             if (sendResult.IsFailed) return Stop.Error.WithErrors(sendResult.Errors);
 
             return Result.Ok();

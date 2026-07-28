@@ -4,11 +4,12 @@ namespace MainCore.Commands.Features.SendResource
     public static partial class SendResourceCommand
     {
         // VillageId here is the SOURCE village (the one whose merchants will travel).
-        // ClicksPerResource maps resource name ("wood"/"clay"/"iron"/"crop") to how many times
-        // to click that resource's "+" button - each click sends exactly one merchant's worth.
-        // This mirrors using the page by hand instead of typing raw numbers into the inputs,
-        // which is more reliable because it goes through the site's own JS validation.
-        public sealed record Command(VillageId VillageId, VillageId TargetVillageId, Dictionary<string, int> ClicksPerResource) : IVillageCommand;
+        // Amounts maps resource name ("wood"/"clay"/"iron"/"crop") to the exact amount to
+        // type into that resource's field. Callers are expected to have already rounded/
+        // jittered these amounts - this command just fills the form and sends it.
+        public sealed record Command(VillageId VillageId, VillageId TargetVillageId, Dictionary<string, long> Amounts) : IVillageCommand;
+
+        private static readonly string[] AllResourceTypes = ["wood", "clay", "iron", "crop"];
 
         private static async ValueTask<Result> HandleAsync(
             Command command,
@@ -17,10 +18,10 @@ namespace MainCore.Commands.Features.SendResource
             ILogger logger,
             CancellationToken cancellationToken)
         {
-            var (villageId, targetVillageId, clicksPerResource) = command;
+            var (villageId, targetVillageId, amounts) = command;
 
-            var totalClicks = clicksPerResource.Values.Sum();
-            if (totalClicks <= 0) return Result.Ok();
+            var totalRequested = amounts.Values.Sum();
+            if (totalRequested <= 0) return Result.Ok();
 
             var targetVillage = context.Villages.FirstOrDefault(x => x.Id == targetVillageId.Value);
             if (targetVillage is null)
@@ -36,14 +37,19 @@ namespace MainCore.Commands.Features.SendResource
                 return Result.Ok();
             }
 
-            // Never click more than we actually have merchants for, even if the caller asked
-            // for more (defensive - the plan is computed slightly ahead of this live check).
-            if (totalClicks > freeMerchants)
+            var capacity = SendResourceParser.GetMerchantCapacity(browser.Html);
+            if (capacity <= 0) capacity = 1;
+
+            // Never exceed what the merchants we actually have can carry, even if the
+            // caller's plan asked for more (the plan is computed slightly ahead of this
+            // live check, so free merchants may have changed).
+            var maxTotal = (long)freeMerchants * capacity;
+            if (totalRequested > maxTotal)
             {
-                clicksPerResource = ScaleDown(clicksPerResource, freeMerchants);
-                totalClicks = clicksPerResource.Values.Sum();
+                amounts = ScaleDown(amounts, maxTotal);
+                totalRequested = amounts.Values.Sum();
             }
-            if (totalClicks <= 0) return Result.Ok();
+            if (totalRequested <= 0) return Result.Ok();
 
             // Clear all 4 resource fields first. The page can retain a leftover value from a
             // previous visit/session (same as it remembers the last-used target coordinates),
@@ -54,37 +60,24 @@ namespace MainCore.Commands.Features.SendResource
             var result = await InputCoordinates(browser, targetVillage.X, targetVillage.Y, cancellationToken);
             if (result.IsFailed) return Stop.Error.WithErrors(result.Errors);
 
-            // Entering the coordinates triggers an AJAX call that resolves the village name
-            // and re-renders parts of the form. Give it a moment to settle before clicking
-            // anything, otherwise the resource "+" buttons can briefly be missing/stale.
-            var firstResourceType = clicksPerResource.Keys.First();
-            result = await browser.Wait(driver =>
+            foreach (var (resourceType, amount) in amounts)
             {
-                var doc = new HtmlDocument();
-                doc.LoadHtml(driver.PageSource);
-                return SendResourceParser.GetPlusButton(doc, firstResourceType) is not null;
-            }, cancellationToken);
-            if (result.IsFailed) return Stop.Error.WithError("The send-resources form never finished loading after entering coordinates.");
+                if (amount <= 0) continue;
 
-            foreach (var (resourceType, clicks) in clicksPerResource)
-            {
-                for (var i = 0; i < clicks; i++)
-                {
-                    result = await ClickPlus(browser, resourceType, cancellationToken);
-                    if (result.IsFailed) return Stop.Error.WithErrors(result.Errors);
-                }
+                result = await TypeResourceAmount(browser, resourceType, amount, cancellationToken);
+                if (result.IsFailed) return Stop.Error.WithErrors(result.Errors);
             }
 
             // Safety check: confirm the form actually has ONLY the intended resources filled
-            // in before we commit to sending. If a click landed on the wrong element (the
+            // in before we commit to sending. If typing landed on the wrong element (the
             // page can shift under us), this catches it instead of shipping the wrong resource.
-            result = await VerifyOnlyIntendedResourcesFilled(browser, clicksPerResource, cancellationToken);
+            result = await VerifyOnlyIntendedResourcesFilled(browser, amounts, cancellationToken);
             if (result.IsFailed) return Stop.Error.WithErrors(result.Errors);
 
             logger.Information(
                 "Sending resources from village {VillageId} to ({X}|{Y}): {Plan}",
                 villageId, targetVillage.X, targetVillage.Y,
-                string.Join(", ", clicksPerResource.Where(x => x.Value > 0).Select(x => $"{x.Key}x{x.Value}")));
+                string.Join(", ", amounts.Where(x => x.Value > 0).Select(x => $"{x.Key}={x.Value}")));
 
             result = await WaitSendButtonEnabled(browser, cancellationToken);
             if (result.IsFailed) return Stop.Error.WithError("Send button never became enabled - the amounts or target may not have registered.");
@@ -100,7 +93,18 @@ namespace MainCore.Commands.Features.SendResource
             return Result.Ok();
         }
 
-        private static readonly string[] AllResourceTypes = ["wood", "clay", "iron", "crop"];
+        private static Dictionary<string, long> ScaleDown(Dictionary<string, long> amounts, long maxTotal)
+        {
+            var total = amounts.Values.Sum();
+            if (total <= 0) return amounts;
+
+            var result = new Dictionary<string, long>();
+            foreach (var (resourceType, amount) in amounts)
+            {
+                result[resourceType] = amount * maxTotal / total;
+            }
+            return result;
+        }
 
         private static async Task<Result> ClearAllResourceInputs(IChromeBrowser browser, CancellationToken cancellationToken)
         {
@@ -122,7 +126,7 @@ namespace MainCore.Commands.Features.SendResource
             return Result.Ok();
         }
 
-        private static async Task<Result> VerifyOnlyIntendedResourcesFilled(IChromeBrowser browser, Dictionary<string, int> clicksPerResource, CancellationToken cancellationToken)
+        private static async Task<Result> VerifyOnlyIntendedResourcesFilled(IChromeBrowser browser, Dictionary<string, long> amounts, CancellationToken cancellationToken)
         {
             foreach (var resourceType in AllResourceTypes)
             {
@@ -132,41 +136,21 @@ namespace MainCore.Commands.Features.SendResource
                 var (_, isFailed, element, errors) = await browser.GetElement(By.XPath(node.XPath), cancellationToken);
                 if (isFailed) return Result.Fail(errors);
 
-                // GetAttribute("value") returns the live input value (the JS-updated one),
-                // not the original static HTML attribute - important, since a resource typed
-                // in by the page's own JS won't necessarily be reflected in the raw page source.
                 var value = (element.GetAttribute("value") ?? "0").ParseLong();
-                var wasIntended = clicksPerResource.GetValueOrDefault(resourceType, 0) > 0;
+                var intended = amounts.GetValueOrDefault(resourceType, 0);
 
-                if (wasIntended && value <= 0)
+                if (intended > 0 && value <= 0)
                 {
-                    return Stop.Error.WithError($"Expected '{resourceType}' to have an amount filled in after clicking, but it shows 0 - a click may have missed.");
+                    return Stop.Error.WithError($"Expected '{resourceType}' to have an amount filled in after typing, but it shows 0 - the typing may have missed.");
                 }
 
-                if (!wasIntended && value > 0)
+                if (intended <= 0 && value > 0)
                 {
-                    return Stop.Error.WithError($"'{resourceType}' unexpectedly has {value} filled in even though it wasn't part of the plan - a click likely landed on the wrong resource. Aborting instead of sending it.");
+                    return Stop.Error.WithError($"'{resourceType}' unexpectedly has {value} filled in even though it wasn't part of the plan - typing likely landed on the wrong resource. Aborting instead of sending it.");
                 }
             }
 
             return Result.Ok();
-        }
-
-        private static Dictionary<string, int> ScaleDown(Dictionary<string, int> clicksPerResource, int maxTotal)
-        {
-            var result = new Dictionary<string, int>();
-            var remaining = maxTotal;
-            foreach (var (resourceType, clicks) in clicksPerResource)
-            {
-                var take = Math.Min(clicks, remaining);
-                if (take > 0)
-                {
-                    result[resourceType] = take;
-                    remaining -= take;
-                }
-                if (remaining <= 0) break;
-            }
-            return result;
         }
 
         private static async Task<Result> InputCoordinates(IChromeBrowser browser, int x, int y, CancellationToken cancellationToken)
@@ -189,19 +173,15 @@ namespace MainCore.Commands.Features.SendResource
             return await browser.Input(yElement, $"{y}", cancellationToken);
         }
 
-        private static async Task<Result> ClickPlus(IChromeBrowser browser, string resourceType, CancellationToken cancellationToken)
+        private static async Task<Result> TypeResourceAmount(IChromeBrowser browser, string resourceType, long amount, CancellationToken cancellationToken)
         {
-            // GetElement already waits internally (up to 3 minutes) for the element to show
-            // up, so this should NOT be wrapped in an extra retry loop - doing that before
-            // multiplied the worst-case wait to 15 minutes. One lookup + one GetElement call
-            // is enough; if it still isn't there after 3 minutes, something is really wrong.
-            var node = SendResourceParser.GetPlusButton(browser.Html, resourceType);
-            if (node is null) return Retry.Error.WithError($"Cannot find the '+' button for '{resourceType}'.");
+            var node = SendResourceParser.GetResourceInput(browser.Html, resourceType);
+            if (node is null) return Retry.Error.WithError($"Cannot find '{resourceType}' amount input.");
 
             var (_, isFailed, element, errors) = await browser.GetElement(By.XPath(node.XPath), cancellationToken);
             if (isFailed) return Result.Fail(errors);
 
-            return await browser.Click(element, cancellationToken);
+            return await browser.Input(element, $"{amount}", cancellationToken);
         }
 
         private static async Task<Result> WaitSendButtonEnabled(IChromeBrowser browser, CancellationToken cancellationToken)

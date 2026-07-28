@@ -68,7 +68,8 @@ namespace MainCore.Tasks
             var capacity = SendResourceParser.GetMerchantCapacity(browser.Html);
             if (capacity <= 0) capacity = 1;
 
-            var clicksPerResource = new Dictionary<string, int>();
+            var totalCapacity = (long)freeMerchants * capacity;
+            var amounts = new Dictionary<string, long>();
             foreach (var resourceType in ResourceTypes)
             {
                 if (!task.Amounts.TryGetValue(resourceType, out var requested) || requested <= 0) continue;
@@ -77,18 +78,21 @@ namespace MainCore.Tasks
                 var reserveLevel = GetCapacity(hammerStorage, resourceType) * reservePercent / 100;
                 var spare = Math.Max(0, GetAmount(hammerStorage, resourceType) - reserveLevel);
 
-                var amountToSend = Math.Min(requested, spare);
-                var clicks = (int)((amountToSend + capacity - 1) / capacity); // round up
-                if (clicks > 0) clicksPerResource[resourceType] = clicks;
+                var raw = Math.Min(Math.Min(requested, spare), totalCapacity);
+                if (raw <= 0) continue;
+
+                var jitter = 1 + ((Random.Shared.NextDouble() * 0.06) - 0.03);
+                var amount = (long)Math.Round((raw * jitter) / 100.0) * 100;
+                if (amount > 0) amounts[resourceType] = amount;
             }
 
-            if (clicksPerResource.Count == 0 || clicksPerResource.Values.Sum() == 0)
+            if (amounts.Count == 0 || amounts.Values.Sum() == 0)
             {
                 logger.Information("Hammer village {VillageId} has nothing spare to send {Target} right now (reserve protected).", task.VillageId, task.TargetVillageId);
                 return Result.Ok();
             }
 
-            var result = await sendResourceCommand.HandleAsync(new(task.VillageId, task.TargetVillageId, clicksPerResource), cancellationToken);
+            var result = await sendResourceCommand.HandleAsync(new(task.VillageId, task.TargetVillageId, amounts), cancellationToken);
             if (result.IsFailed) return Stop.Error.WithErrors(result.Errors);
 
             return Result.Ok();
