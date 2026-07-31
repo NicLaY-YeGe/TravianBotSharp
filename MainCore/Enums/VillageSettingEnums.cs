@@ -118,6 +118,9 @@
         // when it's short on wood/clay/iron/crop for its current build job.
         SupplyFromHammerEnable,
 
+        // Fill this village's warehouse AND granary up to this % using hammer village supply.
+        SupplyFromHammerTargetPercent,
+
         // Automatically hold a Small Celebration in the Town Hall whenever resources allow.
         SmallCelebrationEnable,
 

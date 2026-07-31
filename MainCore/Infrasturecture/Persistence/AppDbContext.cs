@@ -158,6 +158,7 @@ namespace MainCore.Infrasturecture.Persistence
             {VillageSettingEnums.DemolishTargetBuildingType, 0 },
 
             {VillageSettingEnums.SupplyFromHammerEnable, 0 },
+            {VillageSettingEnums.SupplyFromHammerTargetPercent, 50 },
 
             {VillageSettingEnums.SmallCelebrationEnable, 0 },
 

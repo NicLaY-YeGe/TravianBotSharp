@@ -87,6 +87,8 @@ namespace MainCore.UI.Models.Input
         [Reactive]
         private bool _supplyFromHammerEnable;
 
+        public AmountInputViewModel SupplyFromHammerTargetPercent { get; } = new();
+
         [Reactive]
         private bool _smallCelebrationEnable;
 
@@ -177,6 +179,7 @@ namespace MainCore.UI.Models.Input
             DemolishTargetBuildingType.Set(settings.GetValueOrDefault(VillageSettingEnums.DemolishTargetBuildingType));
 
             SupplyFromHammerEnable = settings.GetValueOrDefault(VillageSettingEnums.SupplyFromHammerEnable) == 1;
+            SupplyFromHammerTargetPercent.Set(settings.GetValueOrDefault(VillageSettingEnums.SupplyFromHammerTargetPercent));
 
             SmallCelebrationEnable = settings.GetValueOrDefault(VillageSettingEnums.SmallCelebrationEnable) == 1;
 
@@ -241,6 +244,7 @@ namespace MainCore.UI.Models.Input
             var demolishTargetBuildingType = DemolishTargetBuildingType.Get();
 
             var supplyFromHammerEnable = SupplyFromHammerEnable ? 1 : 0;
+            var supplyFromHammerTargetPercent = SupplyFromHammerTargetPercent.Get();
 
             var smallCelebrationEnable = SmallCelebrationEnable ? 1 : 0;
 
@@ -307,6 +311,7 @@ namespace MainCore.UI.Models.Input
                 { VillageSettingEnums.DemolishTargetBuildingType, demolishTargetBuildingType },
 
                 { VillageSettingEnums.SupplyFromHammerEnable, supplyFromHammerEnable },
+                { VillageSettingEnums.SupplyFromHammerTargetPercent, supplyFromHammerTargetPercent },
 
                 { VillageSettingEnums.SmallCelebrationEnable, smallCelebrationEnable },
 

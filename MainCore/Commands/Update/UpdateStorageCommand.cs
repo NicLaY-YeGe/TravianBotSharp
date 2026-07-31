@@ -10,7 +10,8 @@
             AppDbContext context,
             IChromeBrowser browser,
             ITaskManager taskManager,
-            ITelegramNotifier telegramNotifier
+            ITelegramNotifier telegramNotifier,
+            ILogger logger
             )
         {
             await Task.CompletedTask;
@@ -93,6 +94,8 @@
             {
                 taskManager.Add(overflowToHammerTask);
             }
+
+            SupplyFromHammerTask.RequestIfNeeded(context, accountId, villageId, taskManager, logger);
         }
 
         private static StorageDto Get(HtmlDocument doc)

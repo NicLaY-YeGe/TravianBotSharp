@@ -112,6 +112,7 @@
                     <StackPanel>
                         <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Supply from hammer village" VerticalAlignment="Center" FontWeight="Bold" />
                         <CheckBox x:Name="SupplyFromHammerEnable" Content="Request resource top-ups from the hammer village when short for a build job" />
+                        <uc:AmountInputUc x:Name="SupplyFromHammerTargetPercent" Text="Fill warehouse and granary up to" Unit="%" />
                     </StackPanel>
                 </Border>
 
