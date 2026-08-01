@@ -152,6 +152,7 @@ namespace MainCore.Infrasturecture.Persistence
 
             {VillageSettingEnums.SmithyUpgradeEnable, 0 },
             {VillageSettingEnums.SmithyUpgradeTroopSlot, 1 },
+            {VillageSettingEnums.SmithyUpgradeBusyUntilUnixTime, 0 },
 
             {VillageSettingEnums.DemolishEnable, 0 },
             {VillageSettingEnums.DemolishSourceLocation, 0 },
@@ -161,6 +162,7 @@ namespace MainCore.Infrasturecture.Persistence
             {VillageSettingEnums.SupplyFromHammerTargetPercent, 50 },
 
             {VillageSettingEnums.SmallCelebrationEnable, 0 },
+            {VillageSettingEnums.SmallCelebrationBusyUntilUnixTime, 0 },
 
             {VillageSettingEnums.OverflowToHammerEnable, 0 },
             {VillageSettingEnums.OverflowToHammerPercent, 90 },

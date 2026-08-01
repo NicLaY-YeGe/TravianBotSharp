@@ -30,5 +30,21 @@ namespace MainCore.Parsers
         {
             return GetHoldButton(doc, celebrationName) is null;
         }
+
+        // Seconds remaining until the currently-running celebration finishes, if any.
+        public static int? GetOngoingCelebrationSecondsRemaining(HtmlDocument doc)
+        {
+            var table = doc.DocumentNode
+                .Descendants("table")
+                .FirstOrDefault(x => x.HasClass("under_progress"));
+            if (table is null) return null;
+
+            var timer = table.Descendants("span")
+                .FirstOrDefault(x => x.GetAttributeValue("class", "") == "timer");
+            if (timer is null) return null;
+
+            var seconds = timer.GetAttributeValue("data-value", "").ParseInt();
+            return seconds > 0 ? seconds : null;
+        }
     }
 }

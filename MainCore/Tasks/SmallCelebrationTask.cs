@@ -17,12 +17,20 @@ namespace MainCore.Tasks
 
             public override bool CanStart(AppDbContext context)
             {
-                return context.BooleanByName(VillageId, VillageSettingEnums.SmallCelebrationEnable);
+                var enabled = context.BooleanByName(VillageId, VillageSettingEnums.SmallCelebrationEnable);
+                if (!enabled) return false;
+
+                var busyUntil = context.ByName(VillageId, VillageSettingEnums.SmallCelebrationBusyUntilUnixTime);
+                if (busyUntil <= 0) return true;
+
+                var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                return now >= busyUntil;
             }
         }
 
         private static async ValueTask<Result> HandleAsync(
             Task task,
+            IChromeBrowser browser,
             ToTownHallPageCommand.Handler toTownHallPageCommand,
             HoldCelebrationCommand.Handler holdCelebrationCommand,
             SaveVillageSettingCommand.Handler saveVillageSettingCommand,
@@ -42,6 +50,20 @@ namespace MainCore.Tasks
                     return Skip.Error.WithErrors(pageResult.Errors);
                 }
                 return Stop.Error.WithErrors(pageResult.Errors);
+            }
+
+            // If a celebration is already running, remember when it finishes so we don't
+            // bother revisiting the Town Hall until then - instead of retrying every cycle.
+            var secondsRemaining = TownHallParser.GetOngoingCelebrationSecondsRemaining(browser.Html);
+            if (secondsRemaining is not null)
+            {
+                var busyUntil = DateTimeOffset.UtcNow.ToUnixTimeSeconds() + secondsRemaining.Value;
+                var settings = new Dictionary<VillageSettingEnums, int>() {
+                    { VillageSettingEnums.SmallCelebrationBusyUntilUnixTime, (int)busyUntil }
+                };
+                await saveVillageSettingCommand.HandleAsync(new(task.AccountId, task.VillageId, settings), cancellationToken);
+                logger.Information("Celebration already running in {VillageId}, {Seconds}s left - won't check again until then.", task.VillageId, secondsRemaining.Value);
+                return Result.Ok();
             }
 
             var result = await holdCelebrationCommand.HandleAsync(new(task.VillageId, HoldCelebrationCommand.SmallCelebration), cancellationToken);

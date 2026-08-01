@@ -102,6 +102,11 @@
         // 1-10, tribe-relative order (same order shown in the barracks/rally point).
         SmithyUpgradeTroopSlot,
 
+        // Unix timestamp (seconds) for when the currently-running smithy research finishes.
+        // Set automatically when one is detected in progress, so we don't need to revisit
+        // the Smithy until it's actually over. 0 = none known.
+        SmithyUpgradeBusyUntilUnixTime,
+
         // Auto-demolish a specific building and rebuild something else in its place.
         DemolishEnable,
 
@@ -123,6 +128,11 @@
 
         // Automatically hold a Small Celebration in the Town Hall whenever resources allow.
         SmallCelebrationEnable,
+
+        // Unix timestamp (seconds) for when the currently-running celebration finishes.
+        // Set automatically when one is detected in progress, so we don't need to revisit
+        // the Town Hall until it's actually over. 0 = none known.
+        SmallCelebrationBusyUntilUnixTime,
 
         // This village sends its own overflow (wood/clay/iron/crop above the chosen %) to
         // the configured hammer village, to speed up its troop production.
