@@ -73,25 +73,80 @@ namespace MainCore.Tasks
         }
 
         // Shared entry point: call this whenever a village might need topping up (periodic
-        // storage check, or right after a build job fails from lack of resources). Queues a
-        // one-shot delivery task on the hammer village if this village is short and opted in.
+        // storage check, or right after a build job fails from lack of resources). Queues
+        // one-shot delivery tasks - the hammer village first, and also any other
+        // AutoBalance-opted village that has spare of a resource the hammer might not be
+        // able to fully cover (each source independently re-checks what's still actually
+        // needed once it's their turn, so there's no double-sending).
         public static void RequestIfNeeded(AppDbContext context, AccountId accountId, VillageId villageId, ITaskManager taskManager, ILogger logger)
         {
             var enabled = context.BooleanByName(villageId, VillageSettingEnums.SupplyFromHammerEnable);
             if (!enabled) return;
 
-            var hammerVillageId = GetHammerVillageId(context, accountId, villageId);
-            if (hammerVillageId is null) return;
-
             var missing = GetMissingAmounts(context, villageId);
             if (missing.Count == 0) return;
 
-            var task = new Task(accountId, hammerVillageId.Value, villageId);
-            if (!taskManager.IsExist<Task>(accountId, hammerVillageId.Value))
+            var sources = new List<VillageId>();
+
+            var hammerVillageId = GetHammerVillageId(context, accountId, villageId);
+            if (hammerVillageId is not null) sources.Add(hammerVillageId.Value);
+
+            sources.AddRange(GetFallbackSources(context, accountId, villageId, missing, hammerVillageId));
+
+            foreach (var sourceVillageId in sources)
             {
-                logger.Information("Requesting hammer village {HammerVillageId} to supply village {VillageId}.", hammerVillageId.Value, villageId);
-                taskManager.Add(task);
+                var task = new Task(accountId, sourceVillageId, villageId);
+                if (!taskManager.IsExist<Task>(accountId, sourceVillageId))
+                {
+                    logger.Information("Requesting village {SourceVillageId} to supply village {VillageId}.", sourceVillageId, villageId);
+                    taskManager.Add(task);
+                }
             }
+        }
+
+        // Other AutoBalance-opted villages (not the hammer, not the needy village itself)
+        // that currently have some spare of at least one of the missing resources, above
+        // their own "drain down to X%" level. These act as a fallback so a resource the
+        // hammer can't fully cover (because of ITS OWN reserve) still gets delivered from
+        // somewhere.
+        private static List<VillageId> GetFallbackSources(
+            AppDbContext context,
+            AccountId accountId,
+            VillageId needyVillageId,
+            Dictionary<string, long> missing,
+            VillageId? hammerVillageId)
+        {
+            var result = new List<VillageId>();
+
+            var candidates = context.Villages
+                .Where(x => x.AccountId == accountId.Value)
+                .Where(x => x.Id != needyVillageId.Value)
+                .Where(x => hammerVillageId is null || x.Id != hammerVillageId.Value.Value)
+                .Select(x => x.Id)
+                .AsEnumerable()
+                .Select(id => new VillageId(id))
+                .Where(id => context.BooleanByName(id, VillageSettingEnums.AutoBalanceEnable))
+                .ToList();
+
+            foreach (var candidateId in candidates)
+            {
+                var storage = context.Storages.FirstOrDefault(x => x.VillageId == candidateId.Value);
+                if (storage is null) continue;
+
+                var targetPercent = context.ByName(candidateId, VillageSettingEnums.AutoBalanceTargetPercent);
+
+                var hasSpare = missing.Keys.Any(resourceType =>
+                {
+                    var capacity = GetCapacity(storage, resourceType);
+                    if (capacity <= 0) return false;
+                    var reserveLevel = capacity * targetPercent / 100;
+                    return GetAmount(storage, resourceType) > reserveLevel;
+                });
+
+                if (hasSpare) result.Add(candidateId);
+            }
+
+            return result;
         }
 
         private static async ValueTask<Result> HandleAsync(
@@ -111,10 +166,16 @@ namespace MainCore.Tasks
                 return Skip.Error;
             }
 
-            var hammerStorage = context.Storages.FirstOrDefault(x => x.VillageId == task.VillageId.Value);
-            if (hammerStorage is null) return Skip.Error;
+            var sourceStorage = context.Storages.FirstOrDefault(x => x.VillageId == task.VillageId.Value);
+            if (sourceStorage is null) return Skip.Error;
 
-            var reservePercent = context.ByName(task.AccountId, AccountSettingEnums.HammerReservePercent);
+            // The reserve level depends on whether this source is the hammer village itself
+            // or a fallback (AutoBalance-opted) village helping to cover what the hammer
+            // couldn't - each uses its own configured "don't go below" setting.
+            var hammerVillageIdRaw = context.ByName(task.AccountId, AccountSettingEnums.HammerVillageId);
+            var reservePercent = hammerVillageIdRaw == task.VillageId.Value
+                ? context.ByName(task.AccountId, AccountSettingEnums.HammerReservePercent)
+                : context.ByName(task.VillageId, VillageSettingEnums.AutoBalanceTargetPercent);
 
             var pageResult = await toSendResourcePageCommand.HandleAsync(new(task.VillageId), cancellationToken);
             if (pageResult.IsFailed)
@@ -125,7 +186,7 @@ namespace MainCore.Tasks
             var freeMerchants = SendResourceParser.GetFreeMerchants(browser.Html);
             if (freeMerchants <= 0)
             {
-                logger.Information("No free merchants in hammer village {VillageId}, will retry supplying {Target} later.", task.VillageId, task.TargetVillageId);
+                logger.Information("No free merchants in {VillageId}, will retry supplying {Target} later.", task.VillageId, task.TargetVillageId);
                 return Result.Ok();
             }
 
@@ -138,9 +199,9 @@ namespace MainCore.Tasks
             {
                 if (!missing.TryGetValue(resourceType, out var requested) || requested <= 0) continue;
 
-                // Never dip below the hammer village's own reserve for that resource.
-                var reserveLevel = GetCapacity(hammerStorage, resourceType) * reservePercent / 100;
-                var spare = Math.Max(0, GetAmount(hammerStorage, resourceType) - reserveLevel);
+                // Never dip below this source's own reserve for that resource.
+                var reserveLevel = GetCapacity(sourceStorage, resourceType) * reservePercent / 100;
+                var spare = Math.Max(0, GetAmount(sourceStorage, resourceType) - reserveLevel);
 
                 var raw = Math.Min(Math.Min(requested, spare), totalCapacity);
                 if (raw <= 0) continue;
@@ -153,7 +214,7 @@ namespace MainCore.Tasks
 
             if (amounts.Count == 0 || amounts.Values.Sum() == 0)
             {
-                logger.Information("Hammer village {VillageId} has nothing spare to send {Target} right now (reserve protected).", task.VillageId, task.TargetVillageId);
+                logger.Information("{VillageId} has nothing spare to send {Target} right now (reserve protected).", task.VillageId, task.TargetVillageId);
                 return Result.Ok();
             }
 

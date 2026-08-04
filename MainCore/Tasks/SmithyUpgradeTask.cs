@@ -62,11 +62,7 @@ namespace MainCore.Tasks
             var secondsRemaining = SmithyParser.GetOngoingResearchSecondsRemaining(browser.Html);
             if (secondsRemaining is not null)
             {
-                var busyUntil = DateTimeOffset.UtcNow.ToUnixTimeSeconds() + secondsRemaining.Value;
-                var settings = new Dictionary<VillageSettingEnums, int>() {
-                    { VillageSettingEnums.SmithyUpgradeBusyUntilUnixTime, (int)busyUntil }
-                };
-                await saveVillageSettingCommand.HandleAsync(new(task.AccountId, task.VillageId, settings), cancellationToken);
+                await SetBusyUntil(task, saveVillageSettingCommand, secondsRemaining.Value, cancellationToken);
                 logger.Information("Smithy research already running in {VillageId}, {Seconds}s left - won't check again until then.", task.VillageId, secondsRemaining.Value);
                 return Result.Ok();
             }
@@ -74,7 +70,23 @@ namespace MainCore.Tasks
             var result = await smithyUpgradeCommand.HandleAsync(new(task.VillageId, troopSlot), cancellationToken);
             if (result.IsFailed) return Stop.Error.WithErrors(result.Errors);
 
+            // Safety net: whether we just started a research or the page said it isn't
+            // available for some reason we didn't specifically detect, don't come back to
+            // this page again for a while. Repeatedly hammering the same page every cycle
+            // is exactly the kind of pattern that looks bad, even if each visit is harmless.
+            const int minCooldownSeconds = 20 * 60;
+            await SetBusyUntil(task, saveVillageSettingCommand, minCooldownSeconds, cancellationToken);
+
             return Result.Ok();
+        }
+
+        private static async Task SetBusyUntil(Task task, SaveVillageSettingCommand.Handler saveVillageSettingCommand, int secondsFromNow, CancellationToken cancellationToken)
+        {
+            var busyUntil = DateTimeOffset.UtcNow.ToUnixTimeSeconds() + secondsFromNow;
+            var settings = new Dictionary<VillageSettingEnums, int>() {
+                { VillageSettingEnums.SmithyUpgradeBusyUntilUnixTime, (int)busyUntil }
+            };
+            await saveVillageSettingCommand.HandleAsync(new(task.AccountId, task.VillageId, settings), cancellationToken);
         }
     }
 }
