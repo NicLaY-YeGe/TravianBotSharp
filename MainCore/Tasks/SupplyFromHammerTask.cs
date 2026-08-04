@@ -121,7 +121,7 @@ namespace MainCore.Tasks
             var candidates = context.Villages
                 .Where(x => x.AccountId == accountId.Value)
                 .Where(x => x.Id != needyVillageId.Value)
-                .Where(x => hammerVillageId is null || x.Id != hammerVillageId.Value.Value)
+                .Where(x => !hammerVillageId.HasValue || x.Id != hammerVillageId.Value.Value)
                 .Select(x => x.Id)
                 .AsEnumerable()
                 .Select(id => new VillageId(id))
