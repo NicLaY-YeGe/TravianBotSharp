@@ -25,5 +25,11 @@
         // Never let the hammer village's own stock drop below this % of capacity when
         // sending resources away, so troop training doesn't stall.
         HammerReservePercent,
+
+        // Bitmask of which hours of the day (0-23, bit N = hour N) the account is allowed
+        // to run tasks. Default = all 24 bits set (no restriction). Browser stays open
+        // outside allowed hours, the bot just won't start a new task until an allowed
+        // hour comes around.
+        OnlineHoursMask,
     }
 }

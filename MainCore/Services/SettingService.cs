@@ -83,6 +83,13 @@
             var settingValue = GetSetting.ByNameAccountSettingBooleanQuery(_context, accountId.Value, setting);
             return settingValue;
         }
+
+        public bool IsCurrentHourOnline(AccountId accountId)
+        {
+            var mask = ByName(accountId, AccountSettingEnums.OnlineHoursMask);
+            var hour = DateTime.Now.Hour;
+            return (mask & (1 << hour)) != 0;
+        }
     }
 
     public static class GetSetting

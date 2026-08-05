@@ -19,6 +19,7 @@ namespace MainCore.UI.Models.Input
             UseStartAllButton = settings.GetValueOrDefault(AccountSettingEnums.UseStartAllButton) == 1;
             HammerVillageId.Set(settings.GetValueOrDefault(AccountSettingEnums.HammerVillageId));
             HammerReservePercent.Set(settings.GetValueOrDefault(AccountSettingEnums.HammerReservePercent));
+            OnlineHours.Set(settings.GetValueOrDefault(AccountSettingEnums.OnlineHoursMask, AppDbContext.OnlineHoursMaskAll));
         }
 
         public Dictionary<AccountSettingEnums, int> Get()
@@ -36,6 +37,7 @@ namespace MainCore.UI.Models.Input
             var useStartAllButton = UseStartAllButton ? 1 : 0;
             var hammerVillageId = HammerVillageId.Get();
             var hammerReservePercent = HammerReservePercent.Get();
+            var onlineHoursMask = OnlineHours.Get();
 
             var settings = new Dictionary<AccountSettingEnums, int>()
             {
@@ -59,6 +61,7 @@ namespace MainCore.UI.Models.Input
                 { AccountSettingEnums.EnableAutoStartAdventure, autoStartAdventure },
                 { AccountSettingEnums.HammerVillageId, hammerVillageId },
                 { AccountSettingEnums.HammerReservePercent, hammerReservePercent },
+                { AccountSettingEnums.OnlineHoursMask, onlineHoursMask },
             };
             return settings;
         }
@@ -82,6 +85,7 @@ namespace MainCore.UI.Models.Input
 
         public AmountInputViewModel HammerVillageId { get; } = new();
         public AmountInputViewModel HammerReservePercent { get; } = new();
+        public HoursScheduleViewModel OnlineHours { get; } = new();
 
         [Reactive]
         private bool _useStartAllButton;

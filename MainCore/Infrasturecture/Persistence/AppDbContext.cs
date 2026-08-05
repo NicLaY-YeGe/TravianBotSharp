@@ -49,7 +49,12 @@ namespace MainCore.Infrasturecture.Persistence
             {AccountSettingEnums.EnableAutoStartAdventure, 0 },
             {AccountSettingEnums.HammerVillageId, 0 },
             {AccountSettingEnums.HammerReservePercent, 50 },
+            {AccountSettingEnums.OnlineHoursMask, OnlineHoursMaskAll },
         }.ToImmutableDictionary();
+
+        // All 24 bits set (hour 0 .. hour 23) = no restriction, matches pre-existing behavior
+        // for accounts that existed before this setting was introduced.
+        public const int OnlineHoursMaskAll = (1 << 24) - 1;
 
         private List<AccountSettingEnums> GetMissingAccountSettings()
         {

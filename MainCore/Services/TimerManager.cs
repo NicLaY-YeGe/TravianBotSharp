@@ -81,6 +81,14 @@ namespace MainCore.Services
 
             if (task.ExecuteAt > DateTime.Now) return;
 
+            using var scope = _serviceScopeFactory.CreateScope(accountId);
+
+            // Account is configured to be "offline" during this hour of the day: leave the
+            // browser open (if it already is) but don't start a new task. We just skip this
+            // tick and try again on the next timer elapse.
+            var settingService = scope.ServiceProvider.GetRequiredService<ISettingService>();
+            if (!settingService.IsCurrentHourOnline(accountId)) return;
+
             taskQueue.IsExecuting = true;
             var cts = new CancellationTokenSource();
             taskQueue.CancellationTokenSource = cts;
@@ -89,8 +97,6 @@ namespace MainCore.Services
             _rxQueue.Enqueue(new TasksModified(accountId));
 
             var cacheExecuteTime = task.ExecuteAt;
-
-            using var scope = _serviceScopeFactory.CreateScope(accountId);
 
             ///===========================================================///
             var browser = scope.ServiceProvider.GetRequiredService<IChromeBrowser>();
