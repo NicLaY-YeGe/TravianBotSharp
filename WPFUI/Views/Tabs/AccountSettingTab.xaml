@@ -64,6 +64,7 @@
                         <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Feature settings" VerticalAlignment="Center" FontWeight="Bold" />
                         <CheckBox x:Name="EnableAutoLoadVillage" Content="Enable auto load village's building" />
                         <CheckBox x:Name="EnableAutoStartAdventure" Content="Enable auto start adventure" />
+                        <uc:AmountInputUc x:Name="MinHeroHealthPercent" Text="Don't send hero below this health % (0 = no restriction)" Unit="%" />
 
                         <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Hammer village supply" VerticalAlignment="Center" FontWeight="Bold" Margin="0,8,0,0" />
                         <uc:AmountInputUc x:Name="HammerVillageId" Text="Hammer village (Village.Id, see Villages tab)" Unit="" />

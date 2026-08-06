@@ -15,6 +15,7 @@ namespace MainCore.UI.Models.Input
             EnableAutoLoadVillage = settings.GetValueOrDefault(AccountSettingEnums.EnableAutoLoadVillageBuilding) == 1;
             HeadlessChrome = settings.GetValueOrDefault(AccountSettingEnums.HeadlessChrome) == 1;
             EnableAutoStartAdventure = settings.GetValueOrDefault(AccountSettingEnums.EnableAutoStartAdventure) == 1;
+            MinHeroHealthPercent.Set(settings.GetValueOrDefault(AccountSettingEnums.MinHeroHealthPercent));
             FarmInterval.Set(settings.GetValueOrDefault(AccountSettingEnums.FarmIntervalMin), settings.GetValueOrDefault(AccountSettingEnums.FarmIntervalMax));
             UseStartAllButton = settings.GetValueOrDefault(AccountSettingEnums.UseStartAllButton) == 1;
             HammerVillageId.Set(settings.GetValueOrDefault(AccountSettingEnums.HammerVillageId));
@@ -38,6 +39,7 @@ namespace MainCore.UI.Models.Input
             var hammerVillageId = HammerVillageId.Get();
             var hammerReservePercent = HammerReservePercent.Get();
             var onlineHoursMask = OnlineHours.Get();
+            var minHeroHealthPercent = MinHeroHealthPercent.Get();
 
             var settings = new Dictionary<AccountSettingEnums, int>()
             {
@@ -62,6 +64,7 @@ namespace MainCore.UI.Models.Input
                 { AccountSettingEnums.HammerVillageId, hammerVillageId },
                 { AccountSettingEnums.HammerReservePercent, hammerReservePercent },
                 { AccountSettingEnums.OnlineHoursMask, onlineHoursMask },
+                { AccountSettingEnums.MinHeroHealthPercent, minHeroHealthPercent },
             };
             return settings;
         }
@@ -82,6 +85,8 @@ namespace MainCore.UI.Models.Input
 
         [Reactive]
         private bool _enableAutoStartAdventure;
+
+        public AmountInputViewModel MinHeroHealthPercent { get; } = new();
 
         public AmountInputViewModel HammerVillageId { get; } = new();
         public AmountInputViewModel HammerReservePercent { get; } = new();

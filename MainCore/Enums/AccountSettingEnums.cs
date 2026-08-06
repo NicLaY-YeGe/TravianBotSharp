@@ -31,5 +31,10 @@
         // outside allowed hours, the bot just won't start a new task until an allowed
         // hour comes around.
         OnlineHoursMask,
+
+        // Don't send the hero on an adventure if their health is below this percent
+        // (0-100). Default = 0, meaning no restriction (always send when an adventure
+        // is available). Checked live on the hero/attributes page before departure.
+        MinHeroHealthPercent,
     }
 }

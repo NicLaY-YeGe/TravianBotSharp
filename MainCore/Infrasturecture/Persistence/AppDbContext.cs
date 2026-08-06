@@ -50,6 +50,7 @@ namespace MainCore.Infrasturecture.Persistence
             {AccountSettingEnums.HammerVillageId, 0 },
             {AccountSettingEnums.HammerReservePercent, 50 },
             {AccountSettingEnums.OnlineHoursMask, OnlineHoursMaskAll },
+            {AccountSettingEnums.MinHeroHealthPercent, 0 },
         }.ToImmutableDictionary();
 
         // All 24 bits set (hour 0 .. hour 23) = no restriction, matches pre-existing behavior
