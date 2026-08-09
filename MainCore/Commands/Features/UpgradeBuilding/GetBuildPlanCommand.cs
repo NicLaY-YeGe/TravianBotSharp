@@ -17,12 +17,20 @@ namespace MainCore.Commands.Features.UpgradeBuilding
             DeleteJobByIdCommand.Handler deleteJobByIdCommand,
             AddJobCommand.Handler addJobCommand,
             ValidatePlanCompleteCommand.Handler validatePlanCompleteCommand,
+            ResolveMissingPrerequisiteCommand.Handler resolveMissingPrerequisiteCommand,
             ILogger logger,
             IRxQueue rxQueue,
             CancellationToken cancellationToken
         )
         {
             var (accountId, villageId) = command;
+
+            // Safety net for auto-resolving missing prerequisites (see the ValidatePlanCompleteCommand
+            // failure branch below): caps how many prerequisite jobs this single call will chain through,
+            // so a bug in the prerequisite table (or a village stuck with no empty plots) can't turn into
+            // an infinite loop.
+            const int maxPrerequisiteResolutions = 8;
+            var prerequisiteResolutions = 0;
 
             while (true)
             {
@@ -82,7 +90,36 @@ namespace MainCore.Commands.Features.UpgradeBuilding
                 }
 
                 var validateResult = await validatePlanCompleteCommand.HandleAsync(new(villageId, plan), cancellationToken);
-                if (validateResult.IsFailed) return Result.Fail(validateResult.Errors);
+                if (validateResult.IsFailed)
+                {
+                    var missingPrerequisite = validateResult.Errors
+                        .OfType<UpgradeBuildingError>()
+                        .FirstOrDefault(x => x.PrerequisiteLevel > 0);
+
+                    // Already queued in-game (NextExecuteError.PrerequisiteBuildingInQueue for this
+                    // specific type+level) - nothing to auto-resolve, just wait for it like before.
+                    var alreadyQueued = missingPrerequisite is not null && validateResult.Errors
+                        .OfType<NextExecuteError>()
+                        .Any(x => x.PrerequisiteType == missingPrerequisite.PrerequisiteType && x.PrerequisiteLevel == missingPrerequisite.PrerequisiteLevel);
+
+                    if (missingPrerequisite is not null && !alreadyQueued)
+                    {
+                        if (prerequisiteResolutions >= maxPrerequisiteResolutions)
+                        {
+                            logger.Warning("Prerequisite auto-resolve limit ({Max}) reached in {VillageId}, giving up for this cycle.", maxPrerequisiteResolutions, villageId);
+                        }
+                        else
+                        {
+                            prerequisiteResolutions++;
+                            var resolved = await resolveMissingPrerequisiteCommand.HandleAsync(
+                                new(villageId, missingPrerequisite.PrerequisiteType, missingPrerequisite.PrerequisiteLevel),
+                                cancellationToken);
+                            if (resolved) continue;
+                        }
+                    }
+
+                    return Result.Fail(validateResult.Errors);
+                }
                 if (!validateResult.Value)
                 {
                     await deleteJobByIdCommand.HandleAsync(new(job.Id), cancellationToken);

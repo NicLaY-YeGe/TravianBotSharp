@@ -70,6 +70,9 @@
                 <TabItem x:Name="FarmingTab" Header="Farming">
                     <v_tab:FarmingTab x:Name="Farming" />
                 </TabItem>
+                <TabItem x:Name="SyncAttackTab" Header="Sync attack">
+                    <v_tab:SyncAttackTab x:Name="SyncAttack" />
+                </TabItem>
                 <TabItem x:Name="EditAccountTab" Header="Edit account">
                     <v_tab:EditAccountTab x:Name="EditAccount" />
                 </TabItem>

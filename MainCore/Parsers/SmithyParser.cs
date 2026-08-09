@@ -10,7 +10,7 @@ namespace MainCore.Parsers
         {
             return doc.DocumentNode
                 .Descendants("div")
-                .Where(x => x.GetAttributeValue("class", "") == "research")
+                .Where(x => x.HasClass("research"))
                 .FirstOrDefault(x => x.Descendants("button")
                     .Any(b => b.GetAttributeValue("onclick", "").Contains($"&t=t{troopSlot}&")));
         }
@@ -28,6 +28,15 @@ namespace MainCore.Parsers
             var span = block?.Descendants("span").FirstOrDefault(x => x.HasClass("level"));
             if (span is null) return -1;
             return span.InnerText.ParseInt();
+        }
+
+        // True when the troop's research block isn't on the page at all - wrong slot for this
+        // tribe, or the page didn't parse as expected. Distinct from IsUnavailable (block
+        // found, but no Improve button - smithy too low, already maxed, or another research
+        // running), which is an expected, everyday state and not worth a warning.
+        public static bool IsResearchBlockMissing(HtmlDocument doc, int troopSlot)
+        {
+            return GetResearchBlock(doc, troopSlot) is null;
         }
 
         // True when this troop can't be upgraded right now (smithy level too low, already

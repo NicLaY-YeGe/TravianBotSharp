@@ -44,6 +44,7 @@ namespace WPFUI.Views.UserControls
                 this.OneWayBind(ViewModel, vm => vm.AccountTabStore.VillageViewModel, v => v.Village.ViewModel).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.AccountTabStore.EditAccountViewModel, v => v.EditAccount.ViewModel).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.AccountTabStore.FarmingViewModel, v => v.Farming.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.AccountTabStore.SyncAttackViewModel, v => v.SyncAttack.ViewModel).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.AccountTabStore.DebugViewModel, v => v.Debug.ViewModel).DisposeWith(d);
 
                 // visible
@@ -54,6 +55,7 @@ namespace WPFUI.Views.UserControls
                 this.OneWayBind(ViewModel, vm => vm.AccountTabStore.IsNormalTabVisible, v => v.VillageTab.Visibility).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.AccountTabStore.IsNormalTabVisible, v => v.EditAccountTab.Visibility).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.AccountTabStore.IsNormalTabVisible, v => v.FarmingTab.Visibility).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.AccountTabStore.IsNormalTabVisible, v => v.SyncAttackTab.Visibility).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.AccountTabStore.IsNormalTabVisible, v => v.DebugTab.Visibility).DisposeWith(d);
 
                 // selected
@@ -64,6 +66,7 @@ namespace WPFUI.Views.UserControls
                 this.Bind(ViewModel, vm => vm.AccountTabStore.VillageViewModel.IsActive, v => v.VillageTab.IsSelected).DisposeWith(d);
                 this.Bind(ViewModel, vm => vm.AccountTabStore.EditAccountViewModel.IsActive, v => v.EditAccountTab.IsSelected).DisposeWith(d);
                 this.Bind(ViewModel, vm => vm.AccountTabStore.FarmingViewModel.IsActive, v => v.FarmingTab.IsSelected).DisposeWith(d);
+                this.Bind(ViewModel, vm => vm.AccountTabStore.SyncAttackViewModel.IsActive, v => v.SyncAttackTab.IsSelected).DisposeWith(d);
                 this.Bind(ViewModel, vm => vm.AccountTabStore.DebugViewModel.IsActive, v => v.DebugTab.IsSelected).DisposeWith(d);
             });
         }
