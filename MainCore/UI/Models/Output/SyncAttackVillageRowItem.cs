@@ -3,7 +3,7 @@ using System.Collections.ObjectModel;
 
 namespace MainCore.UI.Models.Output
 {
-    public class SyncAttackVillageRowItem : ReactiveObject
+    public partial class SyncAttackVillageRowItem : ReactiveObject
     {
         public VillageId VillageId { get; }
         public string VillageName { get; }

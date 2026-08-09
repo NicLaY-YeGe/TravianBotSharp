@@ -1,6 +1,6 @@
 namespace MainCore.UI.Models.Output
 {
-    public class SyncAttackTroopSlotItem : ReactiveObject
+    public partial class SyncAttackTroopSlotItem : ReactiveObject
     {
         public int Slot { get; }
         public TroopEnums Troop { get; }
