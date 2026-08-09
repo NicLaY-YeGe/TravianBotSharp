@@ -1,6 +1,7 @@
 using MainCore.Enums;
 using MainCore.UI.ViewModels.Tabs;
 using ReactiveUI;
+using System.Reactive.Disposables;
 using System.Reactive.Disposables.Fluent;
 using System.Reactive.Linq;
 using System.Windows;
@@ -33,38 +34,55 @@ namespace WPFUI.Views.Tabs
                 // Event type radios - wired by hand (routed events) rather than a converter-Bind,
                 // since it's the most predictable way to two-way-map a tri-state radio group to
                 // an enum without depending on a specific ReactiveUI overload being available.
+                // Plain RoutedEventHandler wiring (not Rx's Observable.FromEventPattern) is used
+                // here deliberately: FromEventPattern's <TDelegate, TEventArgs> overload resolution
+                // proved fragile against this ReactiveUI/System.Reactive package combination
+                // (CS-level "Cannot convert lambda expression to type 'IObserver<...>'" build
+                // failures), so we avoid it entirely in favor of the ordinary event pattern that
+                // every other WPF control in this codebase already relies on.
                 ReinforcementRadio.IsChecked = ViewModel?.EventType == RallyPointEventTypeEnums.Reinforcement;
                 AttackNormalRadio.IsChecked = ViewModel?.EventType == RallyPointEventTypeEnums.AttackNormal;
                 AttackRaidRadio.IsChecked = ViewModel?.EventType == RallyPointEventTypeEnums.AttackRaid;
 
-                Observable.FromEventPattern<RoutedEventHandler, RoutedEventArgs>(
-                        h => ReinforcementRadio.Checked += h, h => ReinforcementRadio.Checked -= h)
-                    .Subscribe(_ => { if (ViewModel is not null) ViewModel.EventType = RallyPointEventTypeEnums.Reinforcement; })
-                    .DisposeWith(d);
+                RoutedEventHandler reinforcementHandler = (_, __) =>
+                {
+                    if (ViewModel is not null) ViewModel.EventType = RallyPointEventTypeEnums.Reinforcement;
+                };
+                RoutedEventHandler attackNormalHandler = (_, __) =>
+                {
+                    if (ViewModel is not null) ViewModel.EventType = RallyPointEventTypeEnums.AttackNormal;
+                };
+                RoutedEventHandler attackRaidHandler = (_, __) =>
+                {
+                    if (ViewModel is not null) ViewModel.EventType = RallyPointEventTypeEnums.AttackRaid;
+                };
 
-                Observable.FromEventPattern<RoutedEventHandler, RoutedEventArgs>(
-                        h => AttackNormalRadio.Checked += h, h => AttackNormalRadio.Checked -= h)
-                    .Subscribe(_ => { if (ViewModel is not null) ViewModel.EventType = RallyPointEventTypeEnums.AttackNormal; })
-                    .DisposeWith(d);
+                ReinforcementRadio.Checked += reinforcementHandler;
+                AttackNormalRadio.Checked += attackNormalHandler;
+                AttackRaidRadio.Checked += attackRaidHandler;
 
-                Observable.FromEventPattern<RoutedEventHandler, RoutedEventArgs>(
-                        h => AttackRaidRadio.Checked += h, h => AttackRaidRadio.Checked -= h)
-                    .Subscribe(_ => { if (ViewModel is not null) ViewModel.EventType = RallyPointEventTypeEnums.AttackRaid; })
-                    .DisposeWith(d);
+                Disposable.Create(() => ReinforcementRadio.Checked -= reinforcementHandler).DisposeWith(d);
+                Disposable.Create(() => AttackNormalRadio.Checked -= attackNormalHandler).DisposeWith(d);
+                Disposable.Create(() => AttackRaidRadio.Checked -= attackRaidHandler).DisposeWith(d);
 
                 // Arrival mode radios - same approach.
                 EarliestRadio.IsChecked = ViewModel?.ArrivalMode == SyncAttackArrivalModeEnums.Earliest;
                 SpecificRadio.IsChecked = ViewModel?.ArrivalMode == SyncAttackArrivalModeEnums.Specific;
 
-                Observable.FromEventPattern<RoutedEventHandler, RoutedEventArgs>(
-                        h => EarliestRadio.Checked += h, h => EarliestRadio.Checked -= h)
-                    .Subscribe(_ => { if (ViewModel is not null) ViewModel.ArrivalMode = SyncAttackArrivalModeEnums.Earliest; })
-                    .DisposeWith(d);
+                RoutedEventHandler earliestHandler = (_, __) =>
+                {
+                    if (ViewModel is not null) ViewModel.ArrivalMode = SyncAttackArrivalModeEnums.Earliest;
+                };
+                RoutedEventHandler specificHandler = (_, __) =>
+                {
+                    if (ViewModel is not null) ViewModel.ArrivalMode = SyncAttackArrivalModeEnums.Specific;
+                };
 
-                Observable.FromEventPattern<RoutedEventHandler, RoutedEventArgs>(
-                        h => SpecificRadio.Checked += h, h => SpecificRadio.Checked -= h)
-                    .Subscribe(_ => { if (ViewModel is not null) ViewModel.ArrivalMode = SyncAttackArrivalModeEnums.Specific; })
-                    .DisposeWith(d);
+                EarliestRadio.Checked += earliestHandler;
+                SpecificRadio.Checked += specificHandler;
+
+                Disposable.Create(() => EarliestRadio.Checked -= earliestHandler).DisposeWith(d);
+                Disposable.Create(() => SpecificRadio.Checked -= specificHandler).DisposeWith(d);
             });
         }
     }
