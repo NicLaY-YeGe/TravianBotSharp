@@ -4,7 +4,7 @@ namespace MainCore.Commands.Features.SmithyUpgrade
     public static partial class SmithyUpgradeCommand
     {
         // troopSlot: 1-10, tribe-relative order (same order shown in the barracks/rally point).
-        public sealed record Command(VillageId VillageId, int TroopSlot) : IVillageCommand;
+        public sealed record Command(VillageId VillageId, int TroopSlot, TribeEnums Tribe) : IVillageCommand;
 
         private static async ValueTask<Result> HandleAsync(
             Command command,
@@ -12,27 +12,31 @@ namespace MainCore.Commands.Features.SmithyUpgrade
             ILogger logger,
             CancellationToken cancellationToken)
         {
-            var (villageId, troopSlot) = command;
+            var (villageId, troopSlot, tribe) = command;
 
-            if (SmithyParser.IsResearchBlockMissing(browser.Html, troopSlot))
+            if (SmithyParser.IsResearchBlockMissing(browser.Html, troopSlot, tribe))
             {
                 // The whole research entry for this slot isn't on the page - either the slot
-                // number doesn't match this tribe's troop order, or the page didn't parse the
-                // way SmithyParser expects. Either way this is worth a Warning, not silence:
-                // unlike IsUnavailable below, this isn't a normal/expected state.
-                logger.Warning("Smithy: no research block found for troop slot {TroopSlot} in {VillageId} - check the configured slot matches this tribe's troop order.", troopSlot, villageId);
+                // number doesn't match this tribe's troop order, this troop's unit-producing
+                // building isn't built yet so the game doesn't offer its research at all, or the
+                // page didn't parse the way SmithyParser expects. Either way this is worth a
+                // Warning, not silence: unlike IsUnavailable below, this isn't a normal/expected
+                // state. (Not enough resources yet is NOT this case - see IsUnavailable.)
+                logger.Warning("Smithy: no research block found for troop slot {TroopSlot} in {VillageId} - check the configured slot matches this tribe's troop order, and that its unit-producing building is already built.", troopSlot, villageId);
                 return Stop.Error.WithError($"Research block for troop slot {troopSlot} not found.");
             }
 
-            if (SmithyParser.IsUnavailable(browser.Html, troopSlot))
+            if (SmithyParser.IsUnavailable(browser.Html, troopSlot, tribe))
             {
-                // Smithy level too low, troop already maxed, or another research is already
-                // running - none of these are errors, just nothing to do right now.
+                // Smithy level too low, troop already maxed, not enough resources yet (game
+                // shows an ETA + gold "Exchange resources" button instead of Improve in this
+                // case), or another research is already running - none of these are errors, just
+                // nothing to do right now.
                 logger.Information("Smithy upgrade for slot {TroopSlot} in {VillageId} is not available right now.", troopSlot, villageId);
                 return Result.Ok();
             }
 
-            var node = SmithyParser.GetImproveButton(browser.Html, troopSlot);
+            var node = SmithyParser.GetImproveButton(browser.Html, troopSlot, tribe);
             if (node is null) return Stop.Error.WithError($"Cannot find the Improve button for troop slot {troopSlot}.");
 
             var (_, isFailed, element, errors) = await browser.GetElement(By.XPath(node.XPath), cancellationToken);

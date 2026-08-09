@@ -41,6 +41,11 @@ namespace MainCore.Tasks
             var troopSlot = context.ByName(task.VillageId, VillageSettingEnums.SmithyUpgradeTroopSlot);
             if (troopSlot <= 0) troopSlot = 1;
 
+            var tribe = context.AccountsInfo
+                .Where(x => x.AccountId == task.AccountId.Value)
+                .Select(x => x.Tribe)
+                .FirstOrDefault();
+
             var pageResult = await toSmithyPageCommand.HandleAsync(new(task.VillageId), cancellationToken);
             if (pageResult.IsFailed)
             {
@@ -67,7 +72,7 @@ namespace MainCore.Tasks
                 return Result.Ok();
             }
 
-            var result = await smithyUpgradeCommand.HandleAsync(new(task.VillageId, troopSlot), cancellationToken);
+            var result = await smithyUpgradeCommand.HandleAsync(new(task.VillageId, troopSlot, tribe), cancellationToken);
             if (result.IsFailed) return Stop.Error.WithErrors(result.Errors);
 
             // Safety net: whether we just started a research or the page said it isn't

@@ -42,9 +42,27 @@ namespace MainCore.UI.ViewModels.Tabs
             _dialogService = dialogService;
             _serviceScopeFactory = serviceScopeFactory;
             _taskManager = taskManager;
+
+            // LoadVillagesCommand's DB work runs on whatever thread Execute() is invoked from
+            // (here: RxApp.TaskpoolScheduler, see AccountTabViewModelBase), but its *output* is
+            // delivered on RxApp.MainThreadScheduler by default - so this Subscribe callback,
+            // and the ObservableCollection mutation inside it, runs on the UI thread. Mutating
+            // Villages directly inside Load() (the old approach) ran on the background thread
+            // instead and silently failed to update the bound UI - see CHANGELOG.md, 2026-08-09.
+            LoadVillagesCommand.Subscribe(items =>
+            {
+                Villages.Clear();
+                foreach (var item in items) Villages.Add(item);
+            });
         }
 
-        protected override Task Load(AccountId accountId)
+        protected override async Task Load(AccountId accountId)
+        {
+            await LoadVillagesCommand.Execute(accountId);
+        }
+
+        [ReactiveCommand]
+        private List<SyncAttackVillageRowItem> LoadVillages(AccountId accountId)
         {
             using var scope = _serviceScopeFactory.CreateScope(accountId);
             var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -54,17 +72,11 @@ namespace MainCore.UI.ViewModels.Tabs
                 .Select(x => x.Tribe)
                 .FirstOrDefault();
 
-            var villages = context.Villages
+            return context.Villages
                 .Where(x => x.AccountId == accountId.Value)
+                .ToList()
+                .Select(village => new SyncAttackVillageRowItem(new VillageId(village.Id), village.Name, tribe))
                 .ToList();
-
-            Villages.Clear();
-            foreach (var village in villages)
-            {
-                Villages.Add(new SyncAttackVillageRowItem(new VillageId(village.Id), village.Name, tribe));
-            }
-
-            return Task.CompletedTask;
         }
 
         [ReactiveCommand]
