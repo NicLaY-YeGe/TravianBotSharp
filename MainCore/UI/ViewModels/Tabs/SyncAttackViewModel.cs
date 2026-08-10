@@ -67,10 +67,12 @@ namespace MainCore.UI.ViewModels.Tabs
             using var scope = _serviceScopeFactory.CreateScope(accountId);
             var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-            var tribe = context.AccountsInfo
-                .Where(x => x.AccountId == accountId.Value)
-                .Select(x => x.Tribe)
-                .FirstOrDefault();
+            // NOTE: AccountsInfo.Tribe is NOT a reliable source - UpdateAccountInfoCommand
+            // hard-codes it to TribeEnums.Any and never actually parses it from the page. The
+            // account's real tribe lives in the AccountSettingEnums.Tribe key-value setting
+            // instead (see CLAUDE.md; found and fixed alongside the same issue in
+            // SmithyUpgradeTask, 2026-08-09).
+            var tribe = (TribeEnums)context.ByName(accountId, AccountSettingEnums.Tribe);
 
             return context.Villages
                 .Where(x => x.AccountId == accountId.Value)

@@ -41,10 +41,14 @@ namespace MainCore.Tasks
             var troopSlot = context.ByName(task.VillageId, VillageSettingEnums.SmithyUpgradeTroopSlot);
             if (troopSlot <= 0) troopSlot = 1;
 
-            var tribe = context.AccountsInfo
-                .Where(x => x.AccountId == task.AccountId.Value)
-                .Select(x => x.Tribe)
-                .FirstOrDefault();
+            // NOTE: AccountsInfo.Tribe is NOT a reliable source here - UpdateAccountInfoCommand
+            // hard-codes it to TribeEnums.Any and never actually parses it from the page, so it's
+            // effectively always "Any" (see CHANGELOG.md, 2026-08-09 - this caused the tribe-aware
+            // GetResearchBlock fix to still fail with the same "research block not found" error,
+            // since RallyPointTroopSlots.GetSlots(Any) returns an empty list). The account's real
+            // tribe lives in the AccountSettingEnums.Tribe key-value setting instead - the same
+            // one set via the Tribe selector on the Account Setting tab.
+            var tribe = (TribeEnums)context.ByName(task.AccountId, AccountSettingEnums.Tribe);
 
             var pageResult = await toSmithyPageCommand.HandleAsync(new(task.VillageId), cancellationToken);
             if (pageResult.IsFailed)
