@@ -32,8 +32,13 @@ namespace MainCore.Parsers
         public static HtmlNode? GetImproveButton(HtmlDocument doc, int troopSlot, TribeEnums tribe)
         {
             var block = GetResearchBlock(doc, troopSlot, tribe);
+            // HtmlAgilityPack does NOT decode HTML entities in attribute values - the real page
+            // source has ampersands entity-encoded (e.g. "...&amp;t=t1&amp;checksum=..."), so a
+            // literal "&t=t1&" search never matched and every Smithy upgrade silently reported
+            // "not available" even when the Improve button was actually present (see CHANGELOG.md,
+            // 2026-08-10). Decode entities before comparing.
             return block?.Descendants("button")
-                .FirstOrDefault(b => b.GetAttributeValue("onclick", "").Contains($"&t=t{troopSlot}&"));
+                .FirstOrDefault(b => HtmlEntity.DeEntitize(b.GetAttributeValue("onclick", "")).Contains($"&t=t{troopSlot}&"));
         }
 
         public static int GetLevel(HtmlDocument doc, int troopSlot, TribeEnums tribe)

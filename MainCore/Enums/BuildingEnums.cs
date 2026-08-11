@@ -322,7 +322,11 @@
             BuildingEnums.Palace => true,
             BuildingEnums.Marketplace => true,
             BuildingEnums.Treasury => true,
-            BuildingEnums.TownHall => true,
+            // TownHall removed (2026-08-11): real page HTML has no tab bar
+            // (contentNavi/subNavi/tabItem all absent) at least at level 1, so
+            // SwitchManagementTabCommand always tried to switch to a non-existent
+            // tab and failed with "Found 0 tabs but need tab #1 active", looping
+            // "Upgrade building" retries forever without ever clicking Upgrade.
             _ => false,
         };
 
