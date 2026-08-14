@@ -60,7 +60,16 @@ namespace WPFUI.Views.Tabs.Villages
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.AutoBalanceTargetPercent, v => v.AutoBalanceTargetPercent.ViewModel).DisposeWith(d);
 
                 this.Bind(ViewModel, vm => vm.VillageSettingInput.DodgeEnable, v => v.DodgeEnable.IsChecked).DisposeWith(d);
-                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.DodgeTroopSlot, v => v.DodgeTroopSlot.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.DodgeTroopSlots.Items, v => v.DodgeTroopItems.ItemsSource).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.DodgeTargetX, v => v.DodgeTargetX.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.DodgeTargetY, v => v.DodgeTargetY.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.DodgeSendSecondsBeforeImpact, v => v.DodgeSendSecondsBeforeImpact.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.DodgeRecallSecondsAfterSend, v => v.DodgeRecallSecondsAfterSend.ViewModel).DisposeWith(d);
+
+                this.Bind(ViewModel, vm => vm.VillageSettingInput.AutoSettleEnable, v => v.AutoSettleEnable.IsChecked).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.AutoSettleTargetX, v => v.AutoSettleTargetX.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.AutoSettleTargetY, v => v.AutoSettleTargetY.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.ExpansionSupplyReservePercent, v => v.ExpansionSupplyReservePercent.ViewModel).DisposeWith(d);
 
                 this.Bind(ViewModel, vm => vm.VillageSettingInput.SmithyUpgradeEnable, v => v.SmithyUpgradeEnable.IsChecked).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.SmithyUpgradeTroopSlot, v => v.SmithyUpgradeTroopSlot.ViewModel).DisposeWith(d);

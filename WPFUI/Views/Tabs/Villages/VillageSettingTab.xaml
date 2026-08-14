@@ -86,8 +86,34 @@
                 <Border Style="{DynamicResource Box}">
                     <StackPanel>
                         <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Dodge troops on attack" VerticalAlignment="Center" FontWeight="Bold" />
-                        <CheckBox x:Name="DodgeEnable" Content="When this village is attacked, send the chosen troop slot to the nearest own village" />
-                        <uc:AmountInputUc x:Name="DodgeTroopSlot" Text="Troop slot (1-10, order shown in barracks)" Unit="" />
+                        <CheckBox x:Name="DodgeEnable" Content="When this village is attacked, send the checked troop types out as an attack to the target below, then cancel it before it lands" />
+                        <TextBlock Text="Troop types to dodge with" Margin="0,4,0,0" />
+                        <ItemsControl x:Name="DodgeTroopItems">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <CheckBox Content="{Binding TroopName}" IsChecked="{Binding IsChecked}" Margin="0,0,10,4" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <uc:AmountInputUc x:Name="DodgeTargetX" Text="Target X" Unit="" />
+                        <uc:AmountInputUc x:Name="DodgeTargetY" Text="Target Y" Unit="" />
+                        <uc:AmountInputUc x:Name="DodgeSendSecondsBeforeImpact" Text="Send this many seconds before the attack lands" Unit="s" />
+                        <uc:AmountInputUc x:Name="DodgeRecallSecondsAfterSend" Text="Cancel this many seconds after sending (must stay under 90s)" Unit="s" />
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{DynamicResource Box}">
+                    <StackPanel>
+                        <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Auto settle (train settlers + found new village)" VerticalAlignment="Center" FontWeight="Bold" />
+                        <CheckBox x:Name="AutoSettleEnable" Content="Train settlers/chieftains in this village's Residence/Palace and found a new village once 3 are ready" />
+                        <uc:AmountInputUc x:Name="AutoSettleTargetX" Text="New village target X" Unit="" />
+                        <uc:AmountInputUc x:Name="AutoSettleTargetY" Text="New village target Y" Unit="" />
+                        <uc:AmountInputUc x:Name="ExpansionSupplyReservePercent" Text="Keep this village's own storage above this % when helping another village settle" Unit="%" />
                     </StackPanel>
                 </Border>
 

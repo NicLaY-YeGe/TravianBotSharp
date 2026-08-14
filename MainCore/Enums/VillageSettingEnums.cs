@@ -141,5 +141,50 @@
         // Send away the surplus once a resource reaches this % of its warehouse/granary
         // capacity in THIS (side) village.
         OverflowToHammerPercent,
+
+        // NOTE: new members must always be appended at the end - VillageSetting.Setting is
+        // stored as this enum's underlying int, so inserting/reordering/removing a member
+        // would silently corrupt every existing account's stored settings (see CLAUDE.md).
+
+        // Dodge (2026-08-13, evolved from a single-slot reinforcement into a multi-slot
+        // ATTACK-type send): when this village is attacked, send the checked troop slots as
+        // an attack to a fixed target coordinate shortly before impact, then cancel it within
+        // Travian's 90-second cancellation window. DodgeTroopSlot (above) is no longer read by
+        // this feature - kept in place only so existing enum numbering doesn't shift.
+        DodgeTroopSlotsMask,
+
+        DodgeTargetX,
+        DodgeTargetY,
+
+        // Seconds before the incoming attack lands to send the dodge movement.
+        DodgeSendSecondsBeforeImpact,
+
+        // Seconds after sending to click cancel - must stay under Travian's 90s window.
+        DodgeRecallSecondsAfterSend,
+
+        // Auto Settle (2026-08-12/13): train settlers/chieftains in this village's
+        // Residence/Palace and, once 3 are ready and the 750-each founding cost is covered,
+        // found a new village at a fixed target coordinate. Missing resources are pulled
+        // on-demand from every other village on the account (see NeedExpansion* below and
+        // SupplyForSettleTask).
+        AutoSettleEnable,
+
+        AutoSettleTargetX,
+        AutoSettleTargetY,
+
+        // % of THIS village's own warehouse/granary capacity to keep in reserve when a
+        // sibling village asks for expansion resources - mirrors AutoBalanceTargetPercent's
+        // role, but for the settle "on-demand pull" mechanism instead of the always-on
+        // AutoBalance one.
+        ExpansionSupplyReservePercent,
+
+        // Per-resource "how much more THIS village still needs" snapshot for settler
+        // training / the founding cost, written by AutoSettleTask and read by
+        // SupplyForSettleTask on every other village. 0 = nothing currently needed.
+        NeedExpansionWood,
+
+        NeedExpansionClay,
+        NeedExpansionIron,
+        NeedExpansionCrop,
     }
 }

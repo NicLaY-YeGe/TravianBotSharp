@@ -1,13 +1,25 @@
 using MainCore.Commands.Features.DodgeTroop;
+using MainCore.Enums;
+using MainCore.Models;
 using MainCore.Tasks.Base;
+using SendTroopsCommand = MainCore.Commands.Features.SyncAttack.SendTroopsCommand;
 
 namespace MainCore.Tasks
 {
+    // Evolved 2026-08-13 from a single-slot REINFORCEMENT to a multi-slot ATTACK send (see
+    // CLAUDE.md/PROJECT_CONTEXT.md §5m). Sending as an attack (rather than reinforcing one of
+    // our own villages) means the target no longer has to be a real village - any coordinate
+    // works, including an empty/nature tile - and lets us reuse SyncAttack's already
+    // real-page-verified SendTroopsCommand instead of a bespoke reinforcement command.
+    //
+    // Verified official timing: a sent movement can be cancelled for 90 seconds after
+    // sending (not the 1 minute originally assumed), and cancelling returns the troops as if
+    // they'd travelled partway back, not instantly. Default schedule: send 30s before the
+    // real attack lands, cancel 50s after sending - comfortably inside the 90s window while
+    // still pulling the troops out well before impact.
     [Handler]
     public static partial class DodgeTroopTask
     {
-        // Runs on the village that's under attack. Sends the configured troop slot's full
-        // stack to the nearest own village as reinforcement.
         public sealed class Task : VillageTask
         {
             public Task(AccountId accountId, VillageId villageId) : base(accountId, villageId)
@@ -22,66 +34,34 @@ namespace MainCore.Tasks
                 if (!enabled) return false;
 
                 var village = context.Villages.FirstOrDefault(x => x.Id == VillageId.Value);
-                if (village is null || !village.IsUnderAttack) return false;
-
-                var target = GetNearestVillage(context, AccountId, VillageId);
-                return target is not null;
+                return village is not null && village.IsUnderAttack;
             }
         }
 
-        // Nearest own village by straight-line distance. Whether it can actually be reached
-        // in time is not checked here - per the chosen behaviour, we dodge anyway even if late.
-        public static VillageId? GetNearestVillage(AppDbContext context, AccountId accountId, VillageId sourceVillageId)
+        // Bit (slot-1) of the DodgeTroopSlotsMask setting - slot is 1-10, tribe-relative order
+        // (same convention as RallyPointTroopSlots/SyncAttack's troop selector).
+        public static List<int> GetSelectedSlots(int mask)
         {
-            var source = context.Villages.FirstOrDefault(x => x.Id == sourceVillageId.Value);
-            if (source is null) return null;
-
-            var candidates = context.Villages
-                .Where(x => x.AccountId == accountId.Value)
-                .Where(x => x.Id != sourceVillageId.Value)
-                .ToList();
-
-            if (candidates.Count == 0) return null;
-
-            var nearest = candidates
-                .OrderBy(x => DistanceSquared(source.X, source.Y, x.X, x.Y))
-                .First();
-
-            return new VillageId(nearest.Id);
-        }
-
-        private static long DistanceSquared(int x1, int y1, int x2, int y2)
-        {
-            var dx = (long)(x1 - x2);
-            var dy = (long)(y1 - y2);
-            return (dx * dx) + (dy * dy);
+            var slots = new List<int>();
+            for (var slot = 1; slot <= 10; slot++)
+            {
+                if ((mask & (1 << (slot - 1))) != 0) slots.Add(slot);
+            }
+            return slots;
         }
 
         private static async ValueTask<Result> HandleAsync(
             Task task,
             AppDbContext context,
             IChromeBrowser browser,
-            ToRallyPointOverviewCommand.Handler toRallyPointOverviewCommand,
+            ToRallyPointOverviewCommand.Handler toOverviewCommand,
             ToSendTroopsPageCommand.Handler toSendTroopsPageCommand,
-            SendReinforcementCommand.Handler sendReinforcementCommand,
+            SendTroopsCommand.Handler sendTroopsCommand,
             ITaskManager taskManager,
             ILogger logger,
             CancellationToken cancellationToken)
         {
-            var target = GetNearestVillage(context, task.AccountId, task.VillageId);
-            if (target is null)
-            {
-                // no other village to dodge to
-                return Skip.Error;
-            }
-
-            var troopSlot = context.ByName(task.VillageId, VillageSettingEnums.DodgeTroopSlot);
-            if (troopSlot <= 0) troopSlot = 1;
-
-            // Read the incoming attack's own arrival time first (from the Overview tab) so the
-            // recall can be scheduled off when the ATTACK lands, not off our own dodge arrival.
-            DateTime? attackArrivalTime = null;
-            var overviewResult = await toRallyPointOverviewCommand.HandleAsync(new(task.VillageId), cancellationToken);
+            var overviewResult = await toOverviewCommand.HandleAsync(new(task.VillageId), cancellationToken);
             if (overviewResult.IsFailed)
             {
                 if (overviewResult.HasError<MissingBuilding>())
@@ -93,35 +73,74 @@ namespace MainCore.Tasks
             }
 
             var attackSeconds = RallyPointOverviewParser.GetIncomingAttackSeconds(browser.Html);
-            if (attackSeconds is not null)
+            if (attackSeconds is null)
             {
-                attackArrivalTime = DateTime.Now.AddSeconds(attackSeconds.Value);
-                logger.Information("Incoming attack lands in {Seconds}s.", attackSeconds.Value);
+                // No incoming attack showing right now (already landed, already dodged, or
+                // the IsUnderAttack flag was stale) - nothing to do this pass.
+                return Skip.Error;
             }
 
-            var result = await toSendTroopsPageCommand.HandleAsync(new(task.VillageId), cancellationToken);
-            if (result.IsFailed)
+            var sendBeforeSeconds = context.ByName(task.VillageId, VillageSettingEnums.DodgeSendSecondsBeforeImpact);
+            if (sendBeforeSeconds <= 0) sendBeforeSeconds = 30;
+
+            var secondsUntilSend = attackSeconds.Value - sendBeforeSeconds;
+
+            // Not yet time to send - reschedule THIS SAME task instance to fire right at the
+            // send moment rather than sending now. Mutating ExecuteAt in place (instead of
+            // queueing a separate task) matches the self-reschedule pattern already used by
+            // TrainTroopTask/NextExecuteTrainTroopTaskCommand: the task stays in the queue and
+            // this handler simply runs again once ExecuteAt is reached.
+            if (secondsUntilSend > 5)
             {
-                if (result.HasError<MissingBuilding>())
-                {
-                    logger.Warning("No rally point in this village, cannot dodge.");
-                    return Skip.Error.WithErrors(result.Errors);
-                }
-                return result;
+                task.ExecuteAt = DateTime.Now.AddSeconds(secondsUntilSend);
+                logger.Information("Incoming attack on {VillageId} lands in {Seconds}s - will send dodge troops in {SendIn}s.",
+                    task.VillageId, attackSeconds.Value, secondsUntilSend);
+                return Result.Ok();
             }
 
-            var sendResult = await sendReinforcementCommand.HandleAsync(new(task.VillageId, troopSlot, target.Value), cancellationToken);
+            var slotsMask = context.ByName(task.VillageId, VillageSettingEnums.DodgeTroopSlotsMask);
+            var selectedSlots = GetSelectedSlots(slotsMask);
+            if (selectedSlots.Count == 0)
+            {
+                logger.Warning("Dodge is enabled on {VillageId} but no troop types are selected.", task.VillageId);
+                return Skip.Error;
+            }
+
+            var targetX = context.ByName(task.VillageId, VillageSettingEnums.DodgeTargetX);
+            var targetY = context.ByName(task.VillageId, VillageSettingEnums.DodgeTargetY);
+
+            var sendPageResult = await toSendTroopsPageCommand.HandleAsync(new(task.VillageId), cancellationToken);
+            if (sendPageResult.IsFailed) return sendPageResult;
+
+            var troopAmounts = new Dictionary<int, long>();
+            foreach (var slot in selectedSlots)
+            {
+                var available = RallyPointSendTroopsParser.GetAvailableTroopCount(browser.Html, slot);
+                if (available > 0) troopAmounts[slot] = available;
+            }
+
+            if (troopAmounts.Count == 0)
+            {
+                logger.Information("No troops available in the selected slots to dodge with in {VillageId}.", task.VillageId);
+                return Skip.Error;
+            }
+
+            var sendResult = await sendTroopsCommand.HandleAsync(
+                new(task.VillageId, targetX, targetY, RallyPointEventTypeEnums.AttackNormal, troopAmounts, Confirm: true),
+                cancellationToken);
             if (sendResult.IsFailed) return Result.Fail(sendResult.Errors);
 
-            // Bring the troops back home ~5 minutes after the ATTACK lands (not after our own
-            // troops arrive at the safe village). Falls back to our own arrival time, then a
-            // fixed default, if the attack's arrival time couldn't be read.
-            var recallAt = attackArrivalTime ?? sendResult.Value ?? DateTime.Now.AddMinutes(20);
-            var recallTask = new RecallTroopTask.Task(task.AccountId, task.VillageId)
+            var recallAfterSeconds = context.ByName(task.VillageId, VillageSettingEnums.DodgeRecallSecondsAfterSend);
+            if (recallAfterSeconds <= 0) recallAfterSeconds = 50;
+
+            var recallTask = new RecallTroopTask.Task(task.AccountId, task.VillageId, targetX, targetY)
             {
-                ExecuteAt = recallAt.AddMinutes(5),
+                ExecuteAt = DateTime.Now.AddSeconds(recallAfterSeconds),
             };
             taskManager.Add(recallTask);
+
+            logger.Information("Dodged {Count} troop type(s) from village {VillageId} to ({X}|{Y}); will recall in {Seconds}s.",
+                troopAmounts.Count, task.VillageId, targetX, targetY, recallAfterSeconds);
 
             return Result.Ok();
         }

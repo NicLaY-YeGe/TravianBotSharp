@@ -109,6 +109,14 @@ namespace MainCore.Services
                     var recallTroopTaskHandler = scope.GetHandler<RecallTroopTask.Task>();
                     return await recallTroopTaskHandler.HandleAsync(recallTroopTask, cancellationToken);
 
+                case AutoSettleTask.Task autoSettleTask:
+                    var autoSettleTaskHandler = scope.GetHandler<AutoSettleTask.Task>();
+                    return await autoSettleTaskHandler.HandleAsync(autoSettleTask, cancellationToken);
+
+                case SupplyForSettleTask.Task supplyForSettleTask:
+                    var supplyForSettleTaskHandler = scope.GetHandler<SupplyForSettleTask.Task>();
+                    return await supplyForSettleTaskHandler.HandleAsync(supplyForSettleTask, cancellationToken);
+
                 case SleepTask.Task sleepTask:
                     var sleepTaskHandler = scope.GetHandler<SleepTask.Task>();
                     return await sleepTaskHandler.HandleAsync(sleepTask, cancellationToken);

@@ -95,7 +95,14 @@
                 taskManager.Add(overflowToHammerTask);
             }
 
+            var autoSettleTask = new AutoSettleTask.Task(accountId, villageId);
+            if (autoSettleTask.CanStart(context) && !taskManager.IsExist<AutoSettleTask.Task>(accountId, villageId))
+            {
+                taskManager.Add(autoSettleTask);
+            }
+
             SupplyFromHammerTask.RequestIfNeeded(context, accountId, villageId, taskManager, logger);
+            SupplyForSettleTask.RequestIfNeeded(context, accountId, villageId, taskManager, logger);
         }
 
         private static StorageDto Get(HtmlDocument doc)

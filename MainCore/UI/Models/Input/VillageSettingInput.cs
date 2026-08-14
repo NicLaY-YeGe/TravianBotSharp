@@ -70,7 +70,18 @@ namespace MainCore.UI.Models.Input
         [Reactive]
         private bool _dodgeEnable;
 
-        public AmountInputViewModel DodgeTroopSlot { get; } = new();
+        public DodgeTroopSelectorViewModel DodgeTroopSlots { get; } = new();
+        public AmountInputViewModel DodgeTargetX { get; } = new();
+        public AmountInputViewModel DodgeTargetY { get; } = new();
+        public AmountInputViewModel DodgeSendSecondsBeforeImpact { get; } = new();
+        public AmountInputViewModel DodgeRecallSecondsAfterSend { get; } = new();
+
+        [Reactive]
+        private bool _autoSettleEnable;
+
+        public AmountInputViewModel AutoSettleTargetX { get; } = new();
+        public AmountInputViewModel AutoSettleTargetY { get; } = new();
+        public AmountInputViewModel ExpansionSupplyReservePercent { get; } = new();
 
         [Reactive]
         private bool _smithyUpgradeEnable;
@@ -169,7 +180,16 @@ namespace MainCore.UI.Models.Input
             AutoBalanceTargetPercent.Set(settings.GetValueOrDefault(VillageSettingEnums.AutoBalanceTargetPercent));
 
             DodgeEnable = settings.GetValueOrDefault(VillageSettingEnums.DodgeEnable) == 1;
-            DodgeTroopSlot.Set(settings.GetValueOrDefault(VillageSettingEnums.DodgeTroopSlot));
+            DodgeTroopSlots.Set(settings.GetValueOrDefault(VillageSettingEnums.DodgeTroopSlotsMask), tribe);
+            DodgeTargetX.Set(settings.GetValueOrDefault(VillageSettingEnums.DodgeTargetX));
+            DodgeTargetY.Set(settings.GetValueOrDefault(VillageSettingEnums.DodgeTargetY));
+            DodgeSendSecondsBeforeImpact.Set(settings.GetValueOrDefault(VillageSettingEnums.DodgeSendSecondsBeforeImpact));
+            DodgeRecallSecondsAfterSend.Set(settings.GetValueOrDefault(VillageSettingEnums.DodgeRecallSecondsAfterSend));
+
+            AutoSettleEnable = settings.GetValueOrDefault(VillageSettingEnums.AutoSettleEnable) == 1;
+            AutoSettleTargetX.Set(settings.GetValueOrDefault(VillageSettingEnums.AutoSettleTargetX));
+            AutoSettleTargetY.Set(settings.GetValueOrDefault(VillageSettingEnums.AutoSettleTargetY));
+            ExpansionSupplyReservePercent.Set(settings.GetValueOrDefault(VillageSettingEnums.ExpansionSupplyReservePercent));
 
             SmithyUpgradeEnable = settings.GetValueOrDefault(VillageSettingEnums.SmithyUpgradeEnable) == 1;
             SmithyUpgradeTroopSlot.Set(settings.GetValueOrDefault(VillageSettingEnums.SmithyUpgradeTroopSlot));
@@ -234,7 +254,16 @@ namespace MainCore.UI.Models.Input
             var autoBalanceTargetPercent = AutoBalanceTargetPercent.Get();
 
             var dodgeEnable = DodgeEnable ? 1 : 0;
-            var dodgeTroopSlot = DodgeTroopSlot.Get();
+            var dodgeTroopSlotsMask = DodgeTroopSlots.Get();
+            var dodgeTargetX = DodgeTargetX.Get();
+            var dodgeTargetY = DodgeTargetY.Get();
+            var dodgeSendSecondsBeforeImpact = DodgeSendSecondsBeforeImpact.Get();
+            var dodgeRecallSecondsAfterSend = DodgeRecallSecondsAfterSend.Get();
+
+            var autoSettleEnable = AutoSettleEnable ? 1 : 0;
+            var autoSettleTargetX = AutoSettleTargetX.Get();
+            var autoSettleTargetY = AutoSettleTargetY.Get();
+            var expansionSupplyReservePercent = ExpansionSupplyReservePercent.Get();
 
             var smithyUpgradeEnable = SmithyUpgradeEnable ? 1 : 0;
             var smithyUpgradeTroopSlot = SmithyUpgradeTroopSlot.Get();
@@ -301,7 +330,16 @@ namespace MainCore.UI.Models.Input
                 { VillageSettingEnums.AutoBalanceTargetPercent, autoBalanceTargetPercent },
 
                 { VillageSettingEnums.DodgeEnable, dodgeEnable },
-                { VillageSettingEnums.DodgeTroopSlot, dodgeTroopSlot },
+                { VillageSettingEnums.DodgeTroopSlotsMask, dodgeTroopSlotsMask },
+                { VillageSettingEnums.DodgeTargetX, dodgeTargetX },
+                { VillageSettingEnums.DodgeTargetY, dodgeTargetY },
+                { VillageSettingEnums.DodgeSendSecondsBeforeImpact, dodgeSendSecondsBeforeImpact },
+                { VillageSettingEnums.DodgeRecallSecondsAfterSend, dodgeRecallSecondsAfterSend },
+
+                { VillageSettingEnums.AutoSettleEnable, autoSettleEnable },
+                { VillageSettingEnums.AutoSettleTargetX, autoSettleTargetX },
+                { VillageSettingEnums.AutoSettleTargetY, autoSettleTargetY },
+                { VillageSettingEnums.ExpansionSupplyReservePercent, expansionSupplyReservePercent },
 
                 { VillageSettingEnums.SmithyUpgradeEnable, smithyUpgradeEnable },
                 { VillageSettingEnums.SmithyUpgradeTroopSlot, smithyUpgradeTroopSlot },
@@ -337,6 +375,7 @@ namespace MainCore.UI.Models.Input
                     GreatBarrackTroop.ChangeTribe(BuildingEnums.GreatBarracks, tribe);
                     GreatStableTroop.ChangeTribe(BuildingEnums.GreatStable, tribe);
                     WorkshopTroop.ChangeTribe(BuildingEnums.Workshop, tribe);
+                    DodgeTroopSlots.ChangeTribe(tribe);
                 });
         }
     }

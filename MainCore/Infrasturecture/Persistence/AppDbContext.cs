@@ -173,6 +173,21 @@ namespace MainCore.Infrasturecture.Persistence
             {VillageSettingEnums.OverflowToHammerEnable, 0 },
             {VillageSettingEnums.OverflowToHammerPercent, 90 },
 
+            {VillageSettingEnums.DodgeTroopSlotsMask, 0 },
+            {VillageSettingEnums.DodgeTargetX, 0 },
+            {VillageSettingEnums.DodgeTargetY, 0 },
+            {VillageSettingEnums.DodgeSendSecondsBeforeImpact, 30 },
+            {VillageSettingEnums.DodgeRecallSecondsAfterSend, 50 },
+
+            {VillageSettingEnums.AutoSettleEnable, 0 },
+            {VillageSettingEnums.AutoSettleTargetX, 0 },
+            {VillageSettingEnums.AutoSettleTargetY, 0 },
+            {VillageSettingEnums.ExpansionSupplyReservePercent, 30 },
+            {VillageSettingEnums.NeedExpansionWood, 0 },
+            {VillageSettingEnums.NeedExpansionClay, 0 },
+            {VillageSettingEnums.NeedExpansionIron, 0 },
+            {VillageSettingEnums.NeedExpansionCrop, 0 },
+
             {VillageSettingEnums.AutoRefreshEnable, 0 },
             {VillageSettingEnums.AutoRefreshMin, 45 },
             {VillageSettingEnums.AutoRefreshMax, 75 },
