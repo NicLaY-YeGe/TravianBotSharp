@@ -23,6 +23,7 @@ namespace MainCore.Tasks
             public int TargetY { get; }
             public RallyPointEventTypeEnums EventType { get; }
             public IReadOnlyDictionary<int, long> TroopAmounts { get; }
+            public bool IncludeHero { get; }
 
             public Task(
                 AccountId accountId,
@@ -30,13 +31,15 @@ namespace MainCore.Tasks
                 int targetX,
                 int targetY,
                 RallyPointEventTypeEnums eventType,
-                IReadOnlyDictionary<int, long> troopAmounts)
+                IReadOnlyDictionary<int, long> troopAmounts,
+                bool includeHero = false)
                 : base(accountId, villageId)
             {
                 TargetX = targetX;
                 TargetY = targetY;
                 EventType = eventType;
                 TroopAmounts = troopAmounts;
+                IncludeHero = includeHero;
             }
 
             protected override string TaskName => $"Synchronized send to ({TargetX}|{TargetY})";
@@ -53,7 +56,7 @@ namespace MainCore.Tasks
             if (toPageResult.IsFailed) return toPageResult;
 
             var sendResult = await sendTroopsCommand.HandleAsync(
-                new(task.VillageId, task.TargetX, task.TargetY, task.EventType, task.TroopAmounts, Confirm: true),
+                new(task.VillageId, task.TargetX, task.TargetY, task.EventType, task.TroopAmounts, Confirm: true, IncludeHero: task.IncludeHero),
                 cancellationToken);
             if (sendResult.IsFailed) return Result.Fail(sendResult.Errors);
 

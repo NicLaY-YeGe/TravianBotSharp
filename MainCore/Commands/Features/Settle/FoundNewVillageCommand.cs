@@ -96,7 +96,17 @@ namespace MainCore.Commands.Features.Settle
             var (_, yFailed, yElement, yErrors) = await browser.GetElement(doc => MapParser.GetYInput(doc), cancellationToken);
             if (yFailed) return Result.Fail(yErrors);
 
-            return await browser.Input(yElement, $"{y}", cancellationToken);
+            result = await browser.Input(yElement, $"{y}", cancellationToken);
+            if (result.IsFailed) return result;
+
+            // CONFIRMED (2026-08-15, real page capture): typing X/Y alone - even with a
+            // trailing Enter - does NOT jump the map. A real click on the "Go"/OK button next
+            // to the coordinate inputs is required; see MapParser.GetGoButton for why its id
+            // can't be hardcoded.
+            var (_, goFailed, goElement, goErrors) = await browser.GetElement(doc => MapParser.GetGoButton(doc), cancellationToken);
+            if (goFailed) return Result.Fail(goErrors);
+
+            return await browser.Click(goElement, cancellationToken);
         }
     }
 }

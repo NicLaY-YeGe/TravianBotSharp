@@ -19,6 +19,7 @@
   </PropertyGroup>-->
   <ItemGroup>
     <EmbeddedResource Include="Infrasturecture\ExtensionFiles\**" />
+    <EmbeddedResource Include="Resources\DefaultBuildTemplate.json" />
     
     <!--<Compile Remove="$(GeneratedFolder)/**/*.cs" />
     <None Include="$(GeneratedFolder)/**/*.cs" />-->

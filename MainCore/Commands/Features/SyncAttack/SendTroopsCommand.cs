@@ -28,7 +28,13 @@ namespace MainCore.Commands.Features.SyncAttack
             int Y,
             RallyPointEventTypeEnums EventType,
             IReadOnlyDictionary<int, long> TroopAmounts,
-            bool Confirm) : IVillageCommand;
+            bool Confirm,
+            // Send the hero along with this movement. Confirmed against a real page capture
+            // (Europe Qualification Tournament): the hero row is slot t11, identical markup to
+            // the other 10 troop slots. Defaults to false so every existing call site
+            // (DodgeTroopTask, SyncAttackPlanTask, SendTroopsAtTimeTask) keeps
+            // compiling/behaving unchanged without passing it explicitly.
+            bool IncludeHero = false) : IVillageCommand;
 
         private static async ValueTask<Result<DateTime?>> HandleAsync(
             Command command,
@@ -37,7 +43,7 @@ namespace MainCore.Commands.Features.SyncAttack
             ILogger logger,
             CancellationToken cancellationToken)
         {
-            var (villageId, x, y, eventType, troopAmounts, confirm) = command;
+            var (villageId, x, y, eventType, troopAmounts, confirm, includeHero) = command;
 
             foreach (var (slot, amount) in troopAmounts)
             {
@@ -52,6 +58,22 @@ namespace MainCore.Commands.Features.SyncAttack
 
                 var inputResult = await InputTroopAmount(browser, slot, amount, cancellationToken);
                 if (inputResult.IsFailed) return Result.Fail(inputResult.Errors);
+            }
+
+            if (includeHero)
+            {
+                // Hero is slot 11, sent with the exact same input as the other 10 troop slots -
+                // see RallyPointSendTroopsParser's comment on GetTroopInput/GetAvailableTroopCount.
+                const int heroSlot = 11;
+                var heroAvailable = RallyPointSendTroopsParser.GetAvailableTroopCount(browser.Html, heroSlot);
+                if (heroAvailable < 1)
+                {
+                    return Retry.Error.WithError(
+                        $"Village {villageId}: hero was requested for this wave but is not available (already on an adventure/other movement?).");
+                }
+
+                var heroResult = await InputTroopAmount(browser, heroSlot, 1, cancellationToken);
+                if (heroResult.IsFailed) return Result.Fail(heroResult.Errors);
             }
 
             var coordResult = await InputCoordinates(browser, x, y, cancellationToken);

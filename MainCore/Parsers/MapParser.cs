@@ -11,6 +11,25 @@ namespace MainCore.Parsers
 
         public static HtmlNode? GetYInput(HtmlDocument doc) => doc.GetElementbyId("yCoordInputMap");
 
+        // The "Go"/OK button that actually jumps the map to the typed coordinate - CONFIRMED
+        // by a real capture (2026-08-15) that typing alone (even with Enter) does NOT trigger
+        // the jump, a real button click does. Its id is dynamically generated per page load
+        // (e.g. "button6a8035613b05b" - same pattern seen on other unrelated buttons across
+        // this game, like the "Activate" plus-account button), so it can't be hardcoded.
+        // Instead: find the X coordinate input's containing <form> and grab that form's submit
+        // button - more robust than a global id/class search since "OK" as button text/value
+        // isn't guaranteed unique on the page.
+        public static HtmlNode? GetGoButton(HtmlDocument doc)
+        {
+            var xInput = GetXInput(doc);
+            var form = xInput?.Ancestors("form").FirstOrDefault();
+            if (form is null) return null;
+
+            return form.Descendants()
+                .FirstOrDefault(x => (x.Name == "button" || x.Name == "input")
+                    && x.GetAttributeValue("type", "") == "submit");
+        }
+
         // Only appears once a foundable coordinate (empty, within settler range) is entered -
         // a null return means either the coordinates haven't been entered yet, or that tile
         // isn't currently foundable. Its href embeds eventType=10 and the target's internal

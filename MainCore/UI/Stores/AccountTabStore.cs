@@ -29,9 +29,10 @@ namespace MainCore.UI.Stores
         private readonly EditAccountViewModel _editAccountViewModel;
         private readonly FarmingViewModel _farmingViewModel;
         private readonly SyncAttackViewModel _syncAttackViewModel;
+        private readonly WaveAttackViewModel _waveAttackViewModel;
         private readonly DebugViewModel _debugViewModel;
 
-        public AccountTabStore(NoAccountViewModel noAccountViewModel, AddAccountViewModel addAccountViewModel, AddAccountsViewModel addAccountsViewModel, EditAccountViewModel editAccountViewModel, DebugViewModel debugViewModel, AccountSettingViewModel accountSettingViewModel, VillageViewModel villageViewModel, FarmingViewModel farmingViewModel, SyncAttackViewModel syncAttackViewModel)
+        public AccountTabStore(NoAccountViewModel noAccountViewModel, AddAccountViewModel addAccountViewModel, AddAccountsViewModel addAccountsViewModel, EditAccountViewModel editAccountViewModel, DebugViewModel debugViewModel, AccountSettingViewModel accountSettingViewModel, VillageViewModel villageViewModel, FarmingViewModel farmingViewModel, SyncAttackViewModel syncAttackViewModel, WaveAttackViewModel waveAttackViewModel)
         {
             _noAccountViewModel = noAccountViewModel;
             _addAccountViewModel = addAccountViewModel;
@@ -42,6 +43,7 @@ namespace MainCore.UI.Stores
             _villageViewModel = villageViewModel;
             _farmingViewModel = farmingViewModel;
             _syncAttackViewModel = syncAttackViewModel;
+            _waveAttackViewModel = waveAttackViewModel;
         }
 
         public void SetTabType(AccountTabType tabType)
@@ -99,5 +101,6 @@ namespace MainCore.UI.Stores
         public DebugViewModel DebugViewModel => _debugViewModel;
         public FarmingViewModel FarmingViewModel => _farmingViewModel;
         public SyncAttackViewModel SyncAttackViewModel => _syncAttackViewModel;
+        public WaveAttackViewModel WaveAttackViewModel => _waveAttackViewModel;
     }
 }

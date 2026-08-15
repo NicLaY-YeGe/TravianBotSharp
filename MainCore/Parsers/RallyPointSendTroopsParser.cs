@@ -29,6 +29,14 @@ namespace MainCore.Parsers
             return 0;
         }
 
+        // Hero row in the "Send troops" form is slot "t11" (1-10 are the regular tribe troop
+        // slots from RallyPointTroopSlots, 11 is the hero) - CONFIRMED against a real page
+        // capture (Europe Qualification Tournament, English client): it's a plain text input
+        // with name="troop[t11]", same markup as the other 10 slots, with the "available count"
+        // (always 1, or absent if the hero isn't in the village) shown the same way via the
+        // adjacent <a> link. So GetTroopInput(doc, 11) / GetAvailableTroopCount(doc, 11) already
+        // work for the hero as-is - no separate parsing needed.
+
         public static HtmlNode? GetXInput(HtmlDocument doc)
         {
             return doc.GetElementbyId("xCoordInput");

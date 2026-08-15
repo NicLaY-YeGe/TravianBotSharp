@@ -24,7 +24,15 @@
                 .Select(x => x.Id)
                 .ToHashSet();
 
-            context.UpdateToDatabase(accountId, dtos.ToList());
+            var newVillageIds = context.UpdateToDatabase(accountId, dtos.ToList());
+
+            // §5l (2026-08-15): apply the account-wide default build template to every newly
+            // founded village, exactly once. CanStart on the task itself waits until that
+            // village's buildings have actually been scanned - see ApplyBuildTemplateTask.
+            foreach (var newVillageId in newVillageIds)
+            {
+                taskManager.AddOrUpdate<ApplyBuildTemplateTask.Task>(new(accountId, newVillageId));
+            }
 
             var newlyAttacked = dtos
                 .Where(x => x.IsUnderAttack && !previousAttackedVillageIds.Contains(x.Id.Value))
@@ -70,7 +78,7 @@
             }
         }
 
-        private static void UpdateToDatabase(this AppDbContext context, AccountId accountId, List<VillageDto> dtos)
+        private static List<VillageId> UpdateToDatabase(this AppDbContext context, AccountId accountId, List<VillageDto> dtos)
         {
             var villages = context.Villages
                 .Where(x => x.AccountId == accountId.Value)
@@ -97,6 +105,8 @@
             }
 
             context.SaveChanges();
+
+            return villageInserted.Select(x => x.Id).ToList();
         }
     }
 }

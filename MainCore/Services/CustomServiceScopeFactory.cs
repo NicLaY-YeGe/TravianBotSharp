@@ -157,6 +157,14 @@ namespace MainCore.Services
                     var sendTroopsAtTimeTaskHandler = scope.GetHandler<SendTroopsAtTimeTask.Task>();
                     return await sendTroopsAtTimeTaskHandler.HandleAsync(sendTroopsAtTimeTask, cancellationToken);
 
+                case WaveAttackPlanTask.Task waveAttackPlanTask:
+                    var waveAttackPlanTaskHandler = scope.GetHandler<WaveAttackPlanTask.Task>();
+                    return await waveAttackPlanTaskHandler.HandleAsync(waveAttackPlanTask, cancellationToken);
+
+                case ApplyBuildTemplateTask.Task applyBuildTemplateTask:
+                    var applyBuildTemplateTaskHandler = scope.GetHandler<ApplyBuildTemplateTask.Task>();
+                    return await applyBuildTemplateTaskHandler.HandleAsync(applyBuildTemplateTask, cancellationToken);
+
                 default:
                     throw new NotImplementedException($"Task {task.GetType().Name} is not implemented");
             }
