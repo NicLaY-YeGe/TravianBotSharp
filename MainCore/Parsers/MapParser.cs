@@ -43,6 +43,18 @@ namespace MainCore.Parsers
                 .FirstOrDefault(x => x.GetAttributeValue("href", "").Contains("eventType=10")
                     && x.InnerText.Contains("Found new village", StringComparison.OrdinalIgnoreCase));
         }
+
+        // The map's interactive viewport - a fixed id, unlike the individual tiles which have
+        // NO per-tile DOM elements at all: CONFIRMED by a real page capture (2026-08-17), each
+        // tile is rendered as a plain background-image block (<img src="/map/block/...png">),
+        // not a clickable HTML element, and there is no per-coordinate node to select. The
+        // container itself has a fixed size (containerViewSize 543x401 per the page's inline
+        // script), and whatever coordinate the map has just jumped to always renders dead-center
+        // inside it - see FoundNewVillageCommand.InputCoordinates for why a plain click on this
+        // element (which WebDriver always aims at the element's own in-view center point) is
+        // what actually opens the current tile's info dialog and reveals the "Found new
+        // village" link.
+        public static HtmlNode? GetMapContainer(HtmlDocument doc) => doc.GetElementbyId("mapContainer");
     }
 
     // Parses the Settle confirmation screen reached from MapParser.GetFoundNewVillageLink.

@@ -106,7 +106,43 @@ namespace MainCore.Commands.Features.Settle
             var (_, goFailed, goElement, goErrors) = await browser.GetElement(doc => MapParser.GetGoButton(doc), cancellationToken);
             if (goFailed) return Result.Fail(goErrors);
 
-            return await browser.Click(goElement, cancellationToken);
+            result = await browser.Click(goElement, cancellationToken);
+            if (result.IsFailed) return result;
+
+            // The Go button is a real <form method="get" action="/karte.php"> submit, so this
+            // click triggers a full page reload to /karte.php?x={x}&y={y} - a real capture
+            // (2026-08-17) showed the coordinate inputs' "value" attributes are server-rendered
+            // straight from those same URL params after the reload. Wait for that reload to land
+            // on our exact target before doing anything else - same "verify the click, don't
+            // assume it worked" approach as ToMapCommand's mapLoaded wait and the rest of this
+            // file (§2e).
+            bool jumpedToTarget(IWebDriver driver)
+            {
+                var doc = new HtmlDocument();
+                doc.LoadHtml(driver.PageSource);
+                var xVal = MapParser.GetXInput(doc)?.GetAttributeValue("value", "");
+                var yVal = MapParser.GetYInput(doc)?.GetAttributeValue("value", "");
+                return xVal == $"{x}" && yVal == $"{y}";
+            }
+
+            var jumpWaitResult = await browser.Wait(jumpedToTarget, cancellationToken);
+            if (jumpWaitResult.IsFailed)
+            {
+                return Retry.Error.WithErrors(jumpWaitResult.Errors)
+                    .WithError($"Map never jumped to ({x}|{y}) after clicking Go.");
+            }
+
+            // CONFIRMED (2026-08-17, real page capture): the map has no per-tile DOM elements
+            // (see MapParser.GetMapContainer) - jumping to a coordinate only re-centers the map
+            // view on it. The "Found new village" link only appears once the current (center)
+            // tile's info dialog is opened (the page sets tileDisplayInformation.type =
+            // 'dialog'), which requires an actual left-click - there is no element to click for
+            // the tile itself, only the map viewport, whose own center always IS the tile that
+            // was just jumped to.
+            var (_, mapFailed, mapElement, mapErrors) = await browser.GetElement(doc => MapParser.GetMapContainer(doc), cancellationToken);
+            if (mapFailed) return Result.Fail(mapErrors);
+
+            return await browser.Click(mapElement, cancellationToken);
         }
     }
 }
