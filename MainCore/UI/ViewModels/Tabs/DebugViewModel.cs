@@ -1,4 +1,6 @@
-﻿using MainCore.UI.Models.Output;
+﻿using MainCore.Commands.Poc;
+using MainCore.Services.Playwright;
+using MainCore.UI.Models.Output;
 using MainCore.UI.ViewModels.Abstract;
 using Serilog.Events;
 using Serilog.Templates;
@@ -13,6 +15,7 @@ namespace MainCore.UI.ViewModels.Tabs
     {
         private readonly LogSink _logSink;
         private readonly ITaskManager _taskManager;
+        private readonly ICustomServiceScopeFactory _serviceScopeFactory;
         private static readonly ExpressionTemplate _template = new("{@t:HH:mm:ss} [{@l:u3}] {@m}\n{@x}");
 
         public ObservableCollection<TaskItem> Tasks { get; } = [];
@@ -24,10 +27,20 @@ namespace MainCore.UI.ViewModels.Tabs
         [Reactive]
         private string _endpointAddress = "";
 
-        public DebugViewModel(LogSink logSink, ITaskManager taskManager, IRxQueue rxQueue)
+        [Reactive]
+        private string _playwrightPocX = "";
+
+        [Reactive]
+        private string _playwrightPocY = "";
+
+        [Reactive]
+        private string _playwrightPocStatus = "Not run yet.";
+
+        public DebugViewModel(LogSink logSink, ITaskManager taskManager, IRxQueue rxQueue, ICustomServiceScopeFactory serviceScopeFactory)
         {
             _logSink = logSink;
             _taskManager = taskManager;
+            _serviceScopeFactory = serviceScopeFactory;
 
             LoadTaskCommand.Subscribe(items =>
             {
@@ -175,6 +188,59 @@ namespace MainCore.UI.ViewModels.Tabs
                 FileName = Path.Combine(AppContext.BaseDirectory, "logs"),
                 UseShellExecute = true
             });
+        }
+
+        // ⚠️ PROOF OF CONCEPT ONLY (2026-08-15) - see MainCore/Services/Playwright and
+        // MainCore/Commands/Poc. Launches a SEPARATE, Playwright-driven Chromium window (not
+        // the account's real Selenium browser) pointed at this account's karte.php, and runs
+        // the exact same map-jump + "Found new village" + settle-confirm logic as the real
+        // FoundNewVillageCommand, reusing MapParser/SettleConfirmParser completely unmodified.
+        // First run needs a manual login in the popped-up window - the profile folder persists
+        // it after that. Entirely disconnected from the real bot's task pipeline: running this
+        // cannot affect or be affected by the account's normal automation.
+        [ReactiveCommand]
+        private async Task RunPlaywrightPoc()
+        {
+            if (!int.TryParse(PlaywrightPocX, out var x) || !int.TryParse(PlaywrightPocY, out var y))
+            {
+                PlaywrightPocStatus = "Enter valid X/Y coordinates first.";
+                return;
+            }
+
+            string server;
+            using (var scope = _serviceScopeFactory.CreateScope(AccountId))
+            {
+                var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                server = context.Accounts.First(a => a.Id == AccountId.Value).Server;
+            }
+
+            PlaywrightPocStatus = "Launching Playwright browser (log in by hand if prompted)...";
+
+            await using var browser = new PlaywrightBrowserPoc();
+            try
+            {
+                await browser.StartAsync();
+
+                var mapUrl = $"{server.TrimEnd('/')}/karte.php";
+                var navResult = await browser.NavigateAsync(mapUrl);
+                if (navResult.IsFailed)
+                {
+                    PlaywrightPocStatus = $"Navigate failed: {string.Join(' ', navResult.Errors.Select(e => e.Message))}";
+                    return;
+                }
+
+                PlaywrightPocStatus = $"On map page. Entering ({x}|{y}) and clicking through...";
+
+                var result = await FoundNewVillageCommandPoc.RunAsync(browser, x, y, CancellationToken.None);
+
+                PlaywrightPocStatus = result.IsSuccess
+                    ? $"SUCCESS - founded new village at ({x}|{y}) via Playwright."
+                    : $"FAILED: {string.Join(' ', result.Errors.Select(e => e.Message))}";
+            }
+            catch (Exception ex)
+            {
+                PlaywrightPocStatus = $"Exception: {ex.Message}";
+            }
         }
     }
 }

@@ -37,6 +37,10 @@
     <PackageReference Include="Injectio" Version="5.1.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.10" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.10" />
+    <!-- ⚠️ Playwright göçü kanıtı (2026-08-15) - sadece MainCore/Services/Playwright ve
+         MainCore/Commands/Poc altındaki, üretime hiç bağlı olmayan kod tarafından kullanılıyor.
+         Selenium.WebDriver hâlâ tüm gerçek bota hizmet ediyor, bilerek kaldırılmadı. -->
+    <PackageReference Include="Microsoft.Playwright" Version="1.49.0" />
     <PackageReference Include="Polly" Version="8.6.4" />
     <PackageReference Include="ReactiveUI" Version="22.2.1" />
     <PackageReference Include="ReactiveUI.SourceGenerators" Version="2.5.1">
