@@ -15,6 +15,7 @@ namespace MainCore.Commands.Features.Settle
         private static async ValueTask<Result> HandleAsync(
             Command command,
             IChromeBrowser browser,
+            IDelayService delayService,
             ToMapCommand.Handler toMapCommand,
             ILogger logger,
             CancellationToken cancellationToken)
@@ -24,7 +25,7 @@ namespace MainCore.Commands.Features.Settle
             var toMapResult = await toMapCommand.HandleAsync(new(), cancellationToken);
             if (toMapResult.IsFailed) return toMapResult;
 
-            var coordResult = await InputCoordinates(browser, x, y, cancellationToken);
+            var coordResult = await InputCoordinates(browser, delayService, x, y, cancellationToken);
             if (coordResult.IsFailed) return coordResult;
 
             bool linkAppeared(IWebDriver driver)
@@ -85,7 +86,7 @@ namespace MainCore.Commands.Features.Settle
             return Result.Ok();
         }
 
-        private static async Task<Result> InputCoordinates(IChromeBrowser browser, int x, int y, CancellationToken cancellationToken)
+        private static async Task<Result> InputCoordinates(IChromeBrowser browser, IDelayService delayService, int x, int y, CancellationToken cancellationToken)
         {
             var (_, xFailed, xElement, xErrors) = await browser.GetElement(doc => MapParser.GetXInput(doc), cancellationToken);
             if (xFailed) return Result.Fail(xErrors);
@@ -109,28 +110,19 @@ namespace MainCore.Commands.Features.Settle
             result = await browser.Click(goElement, cancellationToken);
             if (result.IsFailed) return result;
 
-            // The Go button is a real <form method="get" action="/karte.php"> submit, so this
-            // click triggers a full page reload to /karte.php?x={x}&y={y} - a real capture
-            // (2026-08-17) showed the coordinate inputs' "value" attributes are server-rendered
-            // straight from those same URL params after the reload. Wait for that reload to land
-            // on our exact target before doing anything else - same "verify the click, don't
-            // assume it worked" approach as ToMapCommand's mapLoaded wait and the rest of this
-            // file (§2e).
-            bool jumpedToTarget(IWebDriver driver)
-            {
-                var doc = new HtmlDocument();
-                doc.LoadHtml(driver.PageSource);
-                var xVal = MapParser.GetXInput(doc)?.GetAttributeValue("value", "");
-                var yVal = MapParser.GetYInput(doc)?.GetAttributeValue("value", "");
-                return xVal == $"{x}" && yVal == $"{y}";
-            }
-
-            var jumpWaitResult = await browser.Wait(jumpedToTarget, cancellationToken);
-            if (jumpWaitResult.IsFailed)
-            {
-                return Retry.Error.WithErrors(jumpWaitResult.Errors)
-                    .WithError($"Map never jumped to ({x}|{y}) after clicking Go.");
-            }
+            // ⚠️ CORRECTED (2026-08-17, live failure): a previous version of this fix assumed
+            // clicking Go causes a full page reload (based on the form's method="get"
+            // action="/karte.php") and waited up to 180s for the coordinate inputs' "value"
+            // attribute to be rewritten by the server. That assumption was never actually
+            // confirmed - it was inferred from a static HTML snapshot, not from observing the
+            // navigation itself - and it turned out wrong: live testing showed the wait always
+            // times out, meaning Go most likely triggers a JS/AJAX map shift with no page
+            // reload (consistent with the rest of the map being entirely JS-driven), so that
+            // attribute is never rewritten at all. Replaced with the same delayService.DelayClick
+            // pattern already used elsewhere in this codebase to let a click's AJAX effect settle
+            // (see ClaimQuestCommand) - the actual success check remains the linkAppeared wait
+            // below, which verifies the real outcome instead of a guessed mechanism.
+            await delayService.DelayClick(cancellationToken);
 
             // CONFIRMED (2026-08-17, real page capture): the map has no per-tile DOM elements
             // (see MapParser.GetMapContainer) - jumping to a coordinate only re-centers the map
