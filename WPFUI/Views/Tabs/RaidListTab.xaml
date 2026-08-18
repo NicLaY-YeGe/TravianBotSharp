@@ -1,0 +1,76 @@
+﻿<v:RaidListTabBase
+    x:Class="WPFUI.Views.Tabs.RaidListTab"
+    xmlns:v="clr-namespace:WPFUI.Views.Tabs"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:local="clr-namespace:WPFUI.Views.Tabs"
+    mc:Ignorable="d"
+    xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+    d:DesignHeight="650" d:DesignWidth="900">
+    <Grid Background="#FFE5E5E5" Margin="5">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Add a new raid row -->
+        <Border Style="{DynamicResource Box}" Grid.Row="0" Padding="10">
+            <StackPanel Orientation="Vertical">
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                    <Label Content="Source village:" VerticalAlignment="Center" />
+                    <ComboBox x:Name="VillageComboBox" Width="180" Margin="10,0,0,0" DisplayMemberPath="VillageName" />
+
+                    <Label Content="Target coordinates:" VerticalAlignment="Center" Margin="30,0,0,0" />
+                    <TextBox x:Name="TargetX" materialDesign:HintAssist.Hint="X" Style="{DynamicResource MaterialDesignFloatingHintTextBox}" Width="70" Margin="10,0,0,0" />
+                    <TextBox x:Name="TargetY" materialDesign:HintAssist.Hint="Y" Style="{DynamicResource MaterialDesignFloatingHintTextBox}" Width="70" Margin="10,0,0,0" />
+
+                    <CheckBox x:Name="IncludeHeroCheckBox" Content="Send hero" VerticalAlignment="Center" Margin="30,0,0,0" />
+                </StackPanel>
+
+                <ItemsControl x:Name="TroopSlotsList" Margin="0,0,0,10">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,15,4">
+                                <Label Content="{Binding TroopName}" Width="120" VerticalAlignment="Center" />
+                                <TextBox Text="{Binding Amount, Mode=TwoWay}" Width="70" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <StackPanel Orientation="Horizontal">
+                    <Label Content="Resend interval (minutes):" VerticalAlignment="Center" />
+                    <TextBox x:Name="IntervalMinMinutes" materialDesign:HintAssist.Hint="Min" Style="{DynamicResource MaterialDesignFloatingHintTextBox}" Width="60" Margin="10,0,0,0" />
+                    <Label Content="-" VerticalAlignment="Center" Margin="5,0,5,0" />
+                    <TextBox x:Name="IntervalMaxMinutes" materialDesign:HintAssist.Hint="Max" Style="{DynamicResource MaterialDesignFloatingHintTextBox}" Width="60" />
+
+                    <Button x:Name="AddButton" Content="Add raid" Margin="30,0,0,0" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- Existing raid rows: select one, then Toggle/Delete acts on the selection -->
+        <Border Style="{DynamicResource Box}" Grid.Row="1" Margin="0,5,0,0" Padding="10">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <ListBox x:Name="EntriesGrid" Grid.Row="0" SelectionMode="Single" ItemTemplate="{DynamicResource ListBoxColorItem}" />
+
+                <StackPanel Orientation="Horizontal" Grid.Row="1" Margin="0,10,0,0">
+                    <Button x:Name="ToggleActiveButton" Content="Toggle active / paused" />
+                    <Button x:Name="DeleteButton" Content="Delete" Margin="10,0,0,0" />
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</v:RaidListTabBase>

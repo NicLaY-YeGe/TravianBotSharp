@@ -30,9 +30,10 @@ namespace MainCore.UI.Stores
         private readonly FarmingViewModel _farmingViewModel;
         private readonly SyncAttackViewModel _syncAttackViewModel;
         private readonly WaveAttackViewModel _waveAttackViewModel;
+        private readonly RaidListViewModel _raidListViewModel;
         private readonly DebugViewModel _debugViewModel;
 
-        public AccountTabStore(NoAccountViewModel noAccountViewModel, AddAccountViewModel addAccountViewModel, AddAccountsViewModel addAccountsViewModel, EditAccountViewModel editAccountViewModel, DebugViewModel debugViewModel, AccountSettingViewModel accountSettingViewModel, VillageViewModel villageViewModel, FarmingViewModel farmingViewModel, SyncAttackViewModel syncAttackViewModel, WaveAttackViewModel waveAttackViewModel)
+        public AccountTabStore(NoAccountViewModel noAccountViewModel, AddAccountViewModel addAccountViewModel, AddAccountsViewModel addAccountsViewModel, EditAccountViewModel editAccountViewModel, DebugViewModel debugViewModel, AccountSettingViewModel accountSettingViewModel, VillageViewModel villageViewModel, FarmingViewModel farmingViewModel, SyncAttackViewModel syncAttackViewModel, WaveAttackViewModel waveAttackViewModel, RaidListViewModel raidListViewModel)
         {
             _noAccountViewModel = noAccountViewModel;
             _addAccountViewModel = addAccountViewModel;
@@ -44,6 +45,7 @@ namespace MainCore.UI.Stores
             _farmingViewModel = farmingViewModel;
             _syncAttackViewModel = syncAttackViewModel;
             _waveAttackViewModel = waveAttackViewModel;
+            _raidListViewModel = raidListViewModel;
         }
 
         public void SetTabType(AccountTabType tabType)
@@ -102,5 +104,6 @@ namespace MainCore.UI.Stores
         public FarmingViewModel FarmingViewModel => _farmingViewModel;
         public SyncAttackViewModel SyncAttackViewModel => _syncAttackViewModel;
         public WaveAttackViewModel WaveAttackViewModel => _waveAttackViewModel;
+        public RaidListViewModel RaidListViewModel => _raidListViewModel;
     }
 }

@@ -76,6 +76,9 @@
                 <TabItem x:Name="WaveAttackTab" Header="Wave attack">
                     <v_tab:WaveAttackTab x:Name="WaveAttack" />
                 </TabItem>
+                <TabItem x:Name="RaidListTab" Header="Raid list">
+                    <v_tab:RaidListTab x:Name="RaidList" />
+                </TabItem>
                 <TabItem x:Name="EditAccountTab" Header="Edit account">
                     <v_tab:EditAccountTab x:Name="EditAccount" />
                 </TabItem>
