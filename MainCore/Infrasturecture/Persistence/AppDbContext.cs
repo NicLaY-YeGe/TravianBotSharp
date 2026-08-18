@@ -25,6 +25,7 @@ namespace MainCore.Infrasturecture.Persistence
         public DbSet<Storage> Storages { get; set; }
         public DbSet<VillageSetting> VillagesSetting { get; set; }
         public DbSet<Farm> FarmLists { get; set; }
+        public DbSet<RaidListEntry> RaidListEntries { get; set; }
 
         #endregion table
 
@@ -277,5 +278,48 @@ namespace MainCore.Infrasturecture.Persistence
         }
 
         #endregion village setting
+
+        #region schema patches
+
+        // This project has no EF Core migrations (see MainViewModel.Load: EnsureCreatedAsync is
+        // the only schema mechanism, and it only creates the schema for a brand-new/empty
+        // database - on an existing user's DB it does nothing). RaidListEntry (added
+        // 2026-08-18, for the Raid List feature) is a genuinely NEW TABLE, unlike every setting
+        // added before it (those just added new AccountSettingEnums/VillageSettingEnums values
+        // into the existing generic Setting/Value tables via Fill*Settings() above - no schema
+        // change needed). Without this, every existing install would crash the first time
+        // RaidListEntries is queried, since the table would simply never get created for them.
+        //
+        // Rather than hand-typing a CREATE TABLE statement (risking a mismatch with whatever EF
+        // Core's own conventions actually produce - column types, constraint names, index
+        // names), GenerateCreateScript() asks EF Core itself for the exact DDL it would use for
+        // the full current model; this pulls out just the statement(s) that mention
+        // RaidListEntries and runs those standalone, rewritten to be idempotent
+        // (IF NOT EXISTS) so it's safe to call unconditionally on every startup.
+        public void EnsureRaidListEntriesTableExists()
+        {
+            var fullScript = Database.GenerateCreateScript();
+            var statements = fullScript.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+            foreach (var statement in statements)
+            {
+                if (!statement.Contains("\"RaidListEntries\"", StringComparison.Ordinal)) continue;
+
+                var idempotent = statement switch
+                {
+                    _ when statement.Contains("CREATE TABLE", StringComparison.Ordinal)
+                        => statement.Replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS"),
+                    _ when statement.Contains("CREATE UNIQUE INDEX", StringComparison.Ordinal)
+                        => statement.Replace("CREATE UNIQUE INDEX", "CREATE UNIQUE INDEX IF NOT EXISTS"),
+                    _ when statement.Contains("CREATE INDEX", StringComparison.Ordinal)
+                        => statement.Replace("CREATE INDEX", "CREATE INDEX IF NOT EXISTS"),
+                    _ => statement,
+                };
+
+                Database.ExecuteSqlRaw(idempotent);
+            }
+        }
+
+        #endregion schema patches
     }
 }

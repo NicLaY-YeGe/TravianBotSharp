@@ -46,6 +46,8 @@ namespace MainCore.UI.ViewModels
                         context.QueueBuildings
                             .Where(x => x.Level == -1)
                             .ExecuteDelete();
+
+                        context.EnsureRaidListEntriesTableExists();
                     }
                 }, RxApp.TaskpoolScheduler);
 

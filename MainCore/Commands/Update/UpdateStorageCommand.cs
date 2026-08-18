@@ -101,6 +101,31 @@
                 taskManager.Add(autoSettleTask);
             }
 
+            // Raid List: unlike every task above (one instance per village, gated by
+            // IsExist<T>(accountId, villageId)), a village can have many raid rows, each on its
+            // own independent schedule - so existence has to be checked per ROW (EntryId), not
+            // per village. Rows are re-added here at their persisted NextExecuteAt if missing
+            // from the queue (covers both a fresh app start and a brand-new row the user just
+            // added), and RaidListTask reschedules/removes itself from then on - see its
+            // comments for why no further bootstrapping is needed after this.
+            var queuedRaidEntryIds = taskManager.GetTaskList(accountId)
+                .OfType<RaidListTask.Task>()
+                .Where(x => x.VillageId == villageId)
+                .Select(x => x.EntryId.Value)
+                .ToHashSet();
+            var activeRaidEntries = context.RaidListEntries
+                .Where(x => x.VillageId == villageId.Value && x.IsActive)
+                .ToList();
+            foreach (var raidEntry in activeRaidEntries)
+            {
+                if (queuedRaidEntryIds.Contains(raidEntry.Id)) continue;
+                var raidTask = new RaidListTask.Task(accountId, villageId, new RaidListEntryId(raidEntry.Id))
+                {
+                    ExecuteAt = raidEntry.NextExecuteAt,
+                };
+                taskManager.Add(raidTask);
+            }
+
             SupplyFromHammerTask.RequestIfNeeded(context, accountId, villageId, taskManager, logger);
             SupplyForSettleTask.RequestIfNeeded(context, accountId, villageId, taskManager, logger);
         }
