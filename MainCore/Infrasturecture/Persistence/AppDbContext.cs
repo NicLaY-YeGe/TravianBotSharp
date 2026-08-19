@@ -188,6 +188,7 @@ namespace MainCore.Infrasturecture.Persistence
             {VillageSettingEnums.NeedExpansionClay, 0 },
             {VillageSettingEnums.NeedExpansionIron, 0 },
             {VillageSettingEnums.NeedExpansionCrop, 0 },
+            {VillageSettingEnums.AutoSettleSettlersReady, 0 },
 
             {VillageSettingEnums.AutoRefreshEnable, 0 },
             {VillageSettingEnums.AutoRefreshMin, 45 },

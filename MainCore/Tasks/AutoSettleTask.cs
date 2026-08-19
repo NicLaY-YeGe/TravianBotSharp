@@ -10,6 +10,17 @@ namespace MainCore.Tasks
     // (for training OR for the founding cost) is published via the NeedExpansion* settings so
     // SupplyForSettleTask can pull it in from sibling villages on demand - this village never
     // computes or requests from a specific sibling itself.
+    //
+    // 2026-08-18 fix: "present settler" readiness is tracked via the bot-maintained
+    // VillageSettingEnums.AutoSettleSettlersReady counter, NOT re-parsed from the page on
+    // every run - TrainTroopParser.GetPresentAmount is an unverified HTML guess and was
+    // found to misreport the count, which let this task jump straight to founding before any
+    // settler was ever trained (train+settle share one AutoSettleEnable tick, so the user has
+    // no separate way to gate one on the other), and separately kept it retrying "found
+    // village" after a coordinate was already settled. The counter is only ever advanced by
+    // this task's own confirmed actions (see HandleAsync), so it can't drift the same way.
+    // On a successful founding, AutoSettleEnable is also switched off for this village so it
+    // doesn't try to train 3 more settlers and found again at the same (now-occupied) target.
     [Handler]
     public static partial class AutoSettleTask
     {
@@ -63,7 +74,11 @@ namespace MainCore.Tasks
                 return trainPageResult;
             }
 
-            var present = TrainTroopParser.GetPresentAmount(browser.Html, settlerTroop);
+            // Authoritative: our own persisted counter (see the type comment above), not a
+            // re-parse of the page. GetUnitCost is still HTML-derived, but that's lower-risk -
+            // it only affects how much resource we ask siblings for, never the "ready to
+            // found" gate.
+            var present = context.ByName(task.VillageId, VillageSettingEnums.AutoSettleSettlersReady);
             var (unitWood, unitClay, unitIron, unitCrop) = TrainTroopParser.GetUnitCost(browser.Html, settlerTroop);
 
             if (present < 3)
@@ -77,6 +92,7 @@ namespace MainCore.Tasks
                     var trainResult = await trainSettlerCommand.HandleAsync(new(task.VillageId, settlerTroop, trainNow), cancellationToken);
                     if (trainResult.IsFailed) return trainResult;
                     present += trainNow;
+                    SetSetting(context, task.VillageId, VillageSettingEnums.AutoSettleSettlersReady, present);
                 }
 
                 var stillNeeded = 3 - present;
@@ -94,7 +110,7 @@ namespace MainCore.Tasks
                 return Result.Ok();
             }
 
-            // 3 settlers ready - check the 750-each founding cost before spending the click.
+            // 3 settlers confirmed ready - check the 750-each founding cost before spending the click.
             var storage = context.Storages.FirstOrDefault(x => x.VillageId == task.VillageId.Value);
             if (storage is null) return Skip.Error;
 
@@ -124,6 +140,13 @@ namespace MainCore.Tasks
 
             var foundResult = await foundNewVillageCommand.HandleAsync(new(task.VillageId, targetX, targetY), cancellationToken);
             if (foundResult.IsFailed) return foundResult;
+
+            // Founding confirmed - the 3 settlers are spent and this coordinate is now taken.
+            // Reset the counter and stop Auto Settle for this village so it doesn't try to
+            // train 3 more and found again at the same (now-occupied) target.
+            SetSetting(context, task.VillageId, VillageSettingEnums.AutoSettleSettlersReady, 0);
+            SetSetting(context, task.VillageId, VillageSettingEnums.AutoSettleEnable, 0);
+            logger.Information("Village {VillageId} founded a new village at ({X}|{Y}) - Auto Settle turned off for this village.", task.VillageId, targetX, targetY);
 
             return Result.Ok();
         }

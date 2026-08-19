@@ -186,5 +186,16 @@
         NeedExpansionClay,
         NeedExpansionIron,
         NeedExpansionCrop,
+
+        // Bot-maintained, authoritative count of settlers currently idle/ready in THIS
+        // village for Auto Settle (2026-08-18 fix). Deliberately NOT re-derived from
+        // TrainTroopParser.GetPresentAmount on every run - that HTML read is an unverified
+        // guess (see its own comment) and was found to misreport the count, which let
+        // AutoSettleTask skip straight to founding without ever having trained settlers, and
+        // separately made it keep retrying "found village" after a coordinate was already
+        // settled. Instead AutoSettleTask increments this itself right after a confirmed
+        // TrainSettlerCommand success (by the exact trainNow amount it just requested - no
+        // parsing involved) and resets it to 0 right after a confirmed successful founding.
+        AutoSettleSettlersReady,
     }
 }
