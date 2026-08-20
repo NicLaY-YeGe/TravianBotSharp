@@ -23,10 +23,17 @@ namespace MainCore.Tasks
     // fired (no separate cleanup pass needed).
     //
     // NOTE ON FAILURES: like every other command in this codebase, a Retry/Stop-class failure
-    // from SendTroopsCommand (e.g. not enough troops in the target slot) pauses the WHOLE bot,
-    // not just this one raid row - that's existing, consistent behavior (see TimerManager),
-    // not something special-cased here. Worth knowing before relying on a large raid list
-    // unattended: one row running out of troops stops everything until acknowledged.
+    // from SendTroopsCommand (e.g. a parser/UI problem) pauses the WHOLE bot, not just this one
+    // raid row - that's existing, consistent behavior (see TimerManager), not something
+    // special-cased here.
+    //
+    // The one deliberate exception is a village simply not having enough troops for this row
+    // right now (e.g. the previous wave hasn't returned yet) - that's routine for an unattended
+    // raid list, not a bug worth pausing the whole bot over. So troop (and, if requested, hero)
+    // availability is checked against the loaded Send Troops page BEFORE calling
+    // SendTroopsCommand; if short, this run is skipped and the row is rescheduled exactly like a
+    // normal send (see RescheduleNext), silently, with only an Information-level log line - the
+    // bot moves straight on to whatever's next in the queue.
     [Handler]
     public static partial class RaidListTask
     {
@@ -53,6 +60,7 @@ namespace MainCore.Tasks
             AppDbContext context,
             ToSendTroopsPageCommand.Handler toSendTroopsPageCommand,
             SendTroopsCommand.Handler sendTroopsCommand,
+            IChromeBrowser browser,
             ILogger logger,
             CancellationToken cancellationToken)
         {
@@ -66,11 +74,63 @@ namespace MainCore.Tasks
             if (toPageResult.IsFailed) return toPageResult;
 
             var troopAmounts = entry.GetTroopAmounts();
+
+            // Pre-check availability ourselves rather than letting SendTroopsCommand's own check
+            // fail the send - its failure there is a generic Retry (shared with every other
+            // caller, e.g. sync attack, where running short really should pause the bot), so it
+            // can't be told apart from a real problem. Checking here first lets us treat "not
+            // enough troops yet" as routine instead.
+            foreach (var (slot, amount) in troopAmounts)
+            {
+                if (amount <= 0) continue;
+
+                var available = RallyPointSendTroopsParser.GetAvailableTroopCount(browser.Html, slot);
+                if (available < amount)
+                {
+                    var skipNextAt = RescheduleNext(task, entry, context);
+                    logger.Information(
+                        "Raid list: village {VillageId} doesn't have enough troops in slot {Slot} yet (need {Needed}, have {Available}) - skipping this run, next attempt at {NextExecuteAt}.",
+                        task.VillageId, slot, amount, available, skipNextAt);
+                    return Skip.Error;
+                }
+            }
+
+            if (entry.IncludeHero)
+            {
+                const int heroSlot = 11;
+                var heroAvailable = RallyPointSendTroopsParser.GetAvailableTroopCount(browser.Html, heroSlot);
+                if (heroAvailable < 1)
+                {
+                    var skipNextAt = RescheduleNext(task, entry, context);
+                    logger.Information(
+                        "Raid list: hero requested for village {VillageId} but not available - skipping this run, next attempt at {NextExecuteAt}.",
+                        task.VillageId, skipNextAt);
+                    return Skip.Error;
+                }
+            }
+
             var sendResult = await sendTroopsCommand.HandleAsync(
                 new(task.VillageId, entry.TargetX, entry.TargetY, RallyPointEventTypeEnums.AttackRaid, troopAmounts, Confirm: true, IncludeHero: entry.IncludeHero),
                 cancellationToken);
             if (sendResult.IsFailed) return Result.Fail(sendResult.Errors);
 
+            var nextExecuteAt = RescheduleNext(task, entry, context);
+
+            logger.Information(
+                "Raid list: sent from village {VillageId} to ({X}|{Y}), next send at {NextExecuteAt}.",
+                task.VillageId, entry.TargetX, entry.TargetY, nextExecuteAt);
+
+            return Result.Ok();
+        }
+
+        // Picks the row's next fire time (its own independent random(min,max) window) and
+        // persists it both to the DB row (NextExecuteAt, so a restart doesn't lose the schedule)
+        // and the in-memory task (ExecuteAt, so TimerManager's "ExecuteAt changed -> reschedule
+        // instead of remove" rule keeps this task self-repeating - see the class-level comment).
+        // Shared by the success path and every "skip this run" path so a skipped row is
+        // rescheduled exactly like a sent one.
+        private static DateTime RescheduleNext(Task task, RaidListEntry entry, AppDbContext context)
+        {
             var minMinutes = Math.Max(1, entry.IntervalMinMinutes);
             var maxMinutes = Math.Max(minMinutes, entry.IntervalMaxMinutes);
             var delayMinutes = Random.Shared.Next(minMinutes, maxMinutes + 1);
@@ -81,11 +141,7 @@ namespace MainCore.Tasks
 
             task.ExecuteAt = nextExecuteAt;
 
-            logger.Information(
-                "Raid list: sent from village {VillageId} to ({X}|{Y}), next send at {NextExecuteAt}.",
-                task.VillageId, entry.TargetX, entry.TargetY, nextExecuteAt);
-
-            return Result.Ok();
+            return nextExecuteAt;
         }
     }
 }
