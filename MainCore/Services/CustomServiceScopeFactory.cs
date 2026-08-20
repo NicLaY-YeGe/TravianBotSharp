@@ -165,6 +165,10 @@ namespace MainCore.Services
                     var applyBuildTemplateTaskHandler = scope.GetHandler<ApplyBuildTemplateTask.Task>();
                     return await applyBuildTemplateTaskHandler.HandleAsync(applyBuildTemplateTask, cancellationToken);
 
+                case RaidListTask.Task raidListTask:
+                    var raidListTaskHandler = scope.GetHandler<RaidListTask.Task>();
+                    return await raidListTaskHandler.HandleAsync(raidListTask, cancellationToken);
+
                 default:
                     throw new NotImplementedException($"Task {task.GetType().Name} is not implemented");
             }
