@@ -87,16 +87,30 @@ namespace MainCore.Commands.Features.SyncAttack
 
             // Verify the "Send" click actually took us to the confirmation screen (not a
             // silently-rejected request that leaves us on the same form) - see CLAUDE.md §2e.
+            // Also watch for the form re-rendering with an error box (e.g. "There is no village
+            // at these coordinates.") instead - that's a definitive answer that arrives in
+            // seconds, not something worth burning the full timeout waiting out.
             var waitResult = await browser.Wait(driver =>
             {
                 var doc = new HtmlDocument();
                 doc.LoadHtml(driver.PageSource);
-                return RallyPointSendTroopsParser.IsConfirmPage(doc);
+                return RallyPointSendTroopsParser.IsConfirmPage(doc)
+                    || RallyPointSendTroopsParser.GetErrorMessage(doc) is not null;
             }, cancellationToken);
             if (waitResult.IsFailed)
             {
                 return Stop.Error.WithErrors(waitResult.Errors)
                     .WithError($"Clicked send for village {villageId} but never reached the confirmation screen - the request likely wasn't accepted.");
+            }
+
+            var errorMessage = RallyPointSendTroopsParser.GetErrorMessage(browser.Html);
+            if (errorMessage is not null)
+            {
+                // Permanent-for-now (e.g. invalid/no-longer-a-village target): the server has
+                // already given its answer, so this is a Skip, not a Stop - the whole bot
+                // pausing over one bad target isn't warranted (see RaidListTask's insufficient-
+                // troops handling for the same philosophy applied to a different failure mode).
+                return Skip.Error.WithError($"Village {villageId}: send to ({x}|{y}) rejected by the server: {errorMessage}");
             }
 
             DateTime? arrivalTime = null;

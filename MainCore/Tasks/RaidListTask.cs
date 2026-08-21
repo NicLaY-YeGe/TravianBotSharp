@@ -25,7 +25,15 @@ namespace MainCore.Tasks
     // NOTE ON FAILURES: like every other command in this codebase, a Retry/Stop-class failure
     // from SendTroopsCommand (e.g. a parser/UI problem) pauses the WHOLE bot, not just this one
     // raid row - that's existing, consistent behavior (see TimerManager), not something
-    // special-cased here.
+    // special-cased here. The one exception SendTroopsCommand itself makes is a target that the
+    // server flat-out rejects (e.g. "There is no village at these coordinates." for an
+    // abandoned/conquered farm target) - that comes back as Skip.Error, not Stop.Error, since
+    // retrying the exact same bad coordinates will never succeed. Note this Skip path does NOT
+    // call RescheduleNext (unlike the insufficient-troops Skip below), so per TimerManager's
+    // "ExecuteAt unchanged -> remove" rule this row's task is dropped from the queue rather than
+    // retried - it comes back only on the next app restart's UpdateStorageCommand bootstrap
+    // check, giving it one more attempt before being dropped again. Fixing the row's target (or
+    // disabling it) is on the user; the bot won't spin on it in the meantime.
     //
     // The one deliberate exception is a village simply not having enough troops for this row
     // right now (e.g. the previous wave hasn't returned yet) - that's routine for an unattended

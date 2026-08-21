@@ -61,6 +61,21 @@ namespace MainCore.Parsers
             return doc.GetElementbyId("ok");
         }
 
+        // The send form re-renders in place (same "errorMessage" div class UpgradeParser
+        // already relies on elsewhere in this codebase) with a red error box instead of moving
+        // on to the confirmation screen when the request can't succeed - e.g. "There is no
+        // village at these coordinates." for a raid target that's been abandoned/conquered
+        // since the row was set up. Retrying the exact same input will never change this
+        // outcome, so callers should treat it as a permanent-for-now failure rather than
+        // waiting out the full confirm-page timeout.
+        public static string? GetErrorMessage(HtmlDocument doc)
+        {
+            var node = doc.DocumentNode
+                .Descendants("div")
+                .FirstOrDefault(x => x.HasClass("errorMessage"));
+            return node?.InnerText?.Trim();
+        }
+
         // ---- Step 2: the confirmation screen ----
 
         public static bool IsConfirmPage(HtmlDocument doc)
