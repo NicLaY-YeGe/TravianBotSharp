@@ -32,6 +32,9 @@ namespace WPFUI.Views.Tabs
 
                 this.BindCommand(ViewModel, vm => vm.AddCommand, v => v.AddButton).DisposeWith(d);
 
+                this.Bind(ViewModel, vm => vm.BulkTargets, v => v.BulkTargets.Text).DisposeWith(d);
+                this.BindCommand(ViewModel, vm => vm.BulkAddCommand, v => v.BulkAddButton).DisposeWith(d);
+
                 this.OneWayBind(ViewModel, vm => vm.Entries.Items, v => v.EntriesGrid.ItemsSource).DisposeWith(d);
                 this.Bind(ViewModel, vm => vm.Entries.SelectedItem, v => v.EntriesGrid.SelectedItem).DisposeWith(d);
                 this.Bind(ViewModel, vm => vm.Entries.SelectedIndex, v => v.EntriesGrid.SelectedIndex).DisposeWith(d);

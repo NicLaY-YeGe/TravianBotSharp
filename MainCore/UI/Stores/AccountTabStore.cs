@@ -31,9 +31,10 @@ namespace MainCore.UI.Stores
         private readonly SyncAttackViewModel _syncAttackViewModel;
         private readonly WaveAttackViewModel _waveAttackViewModel;
         private readonly RaidListViewModel _raidListViewModel;
+        private readonly MapAnalysisViewModel _mapAnalysisViewModel;
         private readonly DebugViewModel _debugViewModel;
 
-        public AccountTabStore(NoAccountViewModel noAccountViewModel, AddAccountViewModel addAccountViewModel, AddAccountsViewModel addAccountsViewModel, EditAccountViewModel editAccountViewModel, DebugViewModel debugViewModel, AccountSettingViewModel accountSettingViewModel, VillageViewModel villageViewModel, FarmingViewModel farmingViewModel, SyncAttackViewModel syncAttackViewModel, WaveAttackViewModel waveAttackViewModel, RaidListViewModel raidListViewModel)
+        public AccountTabStore(NoAccountViewModel noAccountViewModel, AddAccountViewModel addAccountViewModel, AddAccountsViewModel addAccountsViewModel, EditAccountViewModel editAccountViewModel, DebugViewModel debugViewModel, AccountSettingViewModel accountSettingViewModel, VillageViewModel villageViewModel, FarmingViewModel farmingViewModel, SyncAttackViewModel syncAttackViewModel, WaveAttackViewModel waveAttackViewModel, RaidListViewModel raidListViewModel, MapAnalysisViewModel mapAnalysisViewModel)
         {
             _noAccountViewModel = noAccountViewModel;
             _addAccountViewModel = addAccountViewModel;
@@ -46,6 +47,7 @@ namespace MainCore.UI.Stores
             _syncAttackViewModel = syncAttackViewModel;
             _waveAttackViewModel = waveAttackViewModel;
             _raidListViewModel = raidListViewModel;
+            _mapAnalysisViewModel = mapAnalysisViewModel;
         }
 
         public void SetTabType(AccountTabType tabType)
@@ -105,5 +107,6 @@ namespace MainCore.UI.Stores
         public SyncAttackViewModel SyncAttackViewModel => _syncAttackViewModel;
         public WaveAttackViewModel WaveAttackViewModel => _waveAttackViewModel;
         public RaidListViewModel RaidListViewModel => _raidListViewModel;
+        public MapAnalysisViewModel MapAnalysisViewModel => _mapAnalysisViewModel;
     }
 }

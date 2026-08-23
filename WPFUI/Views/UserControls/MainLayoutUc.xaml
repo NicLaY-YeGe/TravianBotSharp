@@ -79,6 +79,9 @@
                 <TabItem x:Name="RaidListTab" Header="Raid list">
                     <v_tab:RaidListTab x:Name="RaidList" />
                 </TabItem>
+                <TabItem x:Name="MapAnalysisTab" Header="Map analysis">
+                    <v_tab:MapAnalysisTab x:Name="MapAnalysis" />
+                </TabItem>
                 <TabItem x:Name="EditAccountTab" Header="Edit account">
                     <v_tab:EditAccountTab x:Name="EditAccount" />
                 </TabItem>

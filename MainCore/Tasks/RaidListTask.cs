@@ -81,7 +81,11 @@ namespace MainCore.Tasks
             var toPageResult = await toSendTroopsPageCommand.HandleAsync(new(task.VillageId), cancellationToken);
             if (toPageResult.IsFailed) return toPageResult;
 
-            var troopAmounts = entry.GetTroopAmounts();
+            // Rolled ONCE per run (not per-slot as each is checked) so the amount we check
+            // availability against is exactly the amount we send - see RollTroopAmounts.
+            // Each row's Min/Max range (2026-08-22) means this genuinely varies run to run,
+            // unlike the old fixed-amount behavior it falls back to for pre-2026-08-22 rows.
+            var troopAmounts = entry.RollTroopAmounts(Random.Shared);
 
             // Pre-check availability ourselves rather than letting SendTroopsCommand's own check
             // fail the send - its failure there is a generic Retry (shared with every other

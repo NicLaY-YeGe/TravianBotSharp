@@ -61,18 +61,30 @@ namespace MainCore.Parsers
             return doc.GetElementbyId("ok");
         }
 
-        // The send form re-renders in place (same "errorMessage" div class UpgradeParser
-        // already relies on elsewhere in this codebase) with a red error box instead of moving
-        // on to the confirmation screen when the request can't succeed - e.g. "There is no
-        // village at these coordinates." for a raid target that's been abandoned/conquered
-        // since the row was set up. Retrying the exact same input will never change this
-        // outcome, so callers should treat it as a permanent-for-now failure rather than
-        // waiting out the full confirm-page timeout.
+        // The send form re-renders in place with a red error box instead of moving on to the
+        // confirmation screen when the request can't succeed - e.g. "There is no village at
+        // these coordinates." for a raid target that's been abandoned/conquered since the row
+        // was set up. Retrying the exact same input will never change this outcome, so callers
+        // should treat it as a permanent-for-now failure rather than waiting out the full
+        // confirm-page timeout.
+        //
+        // CORRECTED against a real page capture (2026-08-22, English client): on this page the
+        // error is NOT the "errorMessage" div class that UpgradeParser relies on elsewhere in
+        // this codebase - it's <p class="error">...</p>, sitting right after the closing
+        // </form>, e.g.:
+        //   <p class="error">There is no village at these coordinates.</p>
+        // The original 2026-08-21 fix assumed "errorMessage" (untested live) and never matched
+        // this real markup, so the 180s confirm-page timeout kept firing for every empty-target
+        // send instead of a fast Skip - see CHANGELOG.md 2026-08-22. Kept the old div.errorMessage
+        // check too (harmless, matches nothing extra here) in case a different error condition on
+        // this same page ever renders that way instead.
         public static string? GetErrorMessage(HtmlDocument doc)
         {
             var node = doc.DocumentNode
-                .Descendants("div")
-                .FirstOrDefault(x => x.HasClass("errorMessage"));
+                .Descendants()
+                .FirstOrDefault(x =>
+                    (x.Name == "p" && x.HasClass("error"))
+                    || (x.Name == "div" && x.HasClass("errorMessage")));
             return node?.InnerText?.Trim();
         }
 

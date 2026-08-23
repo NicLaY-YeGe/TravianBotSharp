@@ -321,6 +321,26 @@ namespace MainCore.Infrasturecture.Persistence
             }
         }
 
+        // TroopAmountRangesJson (added 2026-08-22 for randomized-per-send troop amounts) is a
+        // NEW COLUMN on a table that, for anyone who already used the Raid List feature between
+        // 2026-08-18 and now, already exists - so EnsureRaidListEntriesTableExists() above is a
+        // no-op for them (its CREATE TABLE IF NOT EXISTS only helps a table that doesn't exist
+        // yet at all). Same "no EF Core migrations" constraint as that method; same fix shape:
+        // check for the column by hand and ALTER TABLE it in if missing. A brand-new install's
+        // table already has the column for free (it's part of the current model, so it's in
+        // GenerateCreateScript()'s CREATE TABLE above) - this only ever does real work once per
+        // existing database.
+        public void EnsureRaidListEntriesTroopAmountRangesColumnExists()
+        {
+            var hasColumn = Database
+                .SqlQueryRaw<string>("SELECT name FROM pragma_table_info('RaidListEntries') WHERE name = 'TroopAmountRangesJson'")
+                .AsEnumerable()
+                .Any();
+            if (hasColumn) return;
+
+            Database.ExecuteSqlRaw("ALTER TABLE \"RaidListEntries\" ADD COLUMN \"TroopAmountRangesJson\" TEXT NULL");
+        }
+
         #endregion schema patches
     }
 }

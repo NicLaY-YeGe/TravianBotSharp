@@ -1,0 +1,37 @@
+<v:MapAnalysisTabBase
+    x:Class="WPFUI.Views.Tabs.MapAnalysisTab"
+    xmlns:v="clr-namespace:WPFUI.Views.Tabs"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:local="clr-namespace:WPFUI.Views.Tabs"
+    mc:Ignorable="d"
+    xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+    d:DesignHeight="650" d:DesignWidth="900">
+    <Grid Background="#FFE5E5E5" Margin="5">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Target coordinate + search -->
+        <Border Style="{DynamicResource Box}" Grid.Row="0" Padding="10">
+            <StackPanel Orientation="Horizontal">
+                <Label Content="Target coordinates:" VerticalAlignment="Center" />
+                <TextBox x:Name="TargetX" materialDesign:HintAssist.Hint="X" Style="{DynamicResource MaterialDesignFloatingHintTextBox}" Width="70" Margin="10,0,0,0" />
+                <TextBox x:Name="TargetY" materialDesign:HintAssist.Hint="Y" Style="{DynamicResource MaterialDesignFloatingHintTextBox}" Width="70" Margin="10,0,0,0" />
+
+                <Label Content="Max results:" VerticalAlignment="Center" Margin="30,0,0,0" />
+                <TextBox x:Name="MaxResults" materialDesign:HintAssist.Hint="Max results" Style="{DynamicResource MaterialDesignFloatingHintTextBox}" Width="70" Margin="10,0,0,0" />
+
+                <Button x:Name="SearchButton" Content="Search" Margin="30,0,0,0" />
+            </StackPanel>
+        </Border>
+
+        <!-- Results: nearest villages first, one line each -->
+        <Border Style="{DynamicResource Box}" Grid.Row="1" Margin="0,5,0,0" Padding="10">
+            <ListBox x:Name="ResultsList" />
+        </Border>
+    </Grid>
+</v:MapAnalysisTabBase>

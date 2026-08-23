@@ -47,6 +47,7 @@ namespace WPFUI.Views.UserControls
                 this.OneWayBind(ViewModel, vm => vm.AccountTabStore.SyncAttackViewModel, v => v.SyncAttack.ViewModel).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.AccountTabStore.WaveAttackViewModel, v => v.WaveAttack.ViewModel).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.AccountTabStore.RaidListViewModel, v => v.RaidList.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.AccountTabStore.MapAnalysisViewModel, v => v.MapAnalysis.ViewModel).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.AccountTabStore.DebugViewModel, v => v.Debug.ViewModel).DisposeWith(d);
 
                 // visible
@@ -60,6 +61,7 @@ namespace WPFUI.Views.UserControls
                 this.OneWayBind(ViewModel, vm => vm.AccountTabStore.IsNormalTabVisible, v => v.SyncAttackTab.Visibility).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.AccountTabStore.IsNormalTabVisible, v => v.WaveAttackTab.Visibility).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.AccountTabStore.IsNormalTabVisible, v => v.RaidListTab.Visibility).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.AccountTabStore.IsNormalTabVisible, v => v.MapAnalysisTab.Visibility).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.AccountTabStore.IsNormalTabVisible, v => v.DebugTab.Visibility).DisposeWith(d);
 
                 // selected
@@ -73,6 +75,7 @@ namespace WPFUI.Views.UserControls
                 this.Bind(ViewModel, vm => vm.AccountTabStore.SyncAttackViewModel.IsActive, v => v.SyncAttackTab.IsSelected).DisposeWith(d);
                 this.Bind(ViewModel, vm => vm.AccountTabStore.WaveAttackViewModel.IsActive, v => v.WaveAttackTab.IsSelected).DisposeWith(d);
                 this.Bind(ViewModel, vm => vm.AccountTabStore.RaidListViewModel.IsActive, v => v.RaidListTab.IsSelected).DisposeWith(d);
+                this.Bind(ViewModel, vm => vm.AccountTabStore.MapAnalysisViewModel.IsActive, v => v.MapAnalysisTab.IsSelected).DisposeWith(d);
                 this.Bind(ViewModel, vm => vm.AccountTabStore.DebugViewModel.IsActive, v => v.DebugTab.IsSelected).DisposeWith(d);
             });
         }

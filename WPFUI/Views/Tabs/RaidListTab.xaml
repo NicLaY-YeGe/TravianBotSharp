@@ -39,7 +39,9 @@
                         <DataTemplate>
                             <StackPanel Orientation="Horizontal" Margin="0,0,15,4">
                                 <Label Content="{Binding TroopName}" Width="120" VerticalAlignment="Center" />
-                                <TextBox Text="{Binding Amount, Mode=TwoWay}" Width="70" />
+                                <TextBox Text="{Binding AmountMin, Mode=TwoWay}" Width="55" materialDesign:HintAssist.Hint="Min" />
+                                <Label Content="-" VerticalAlignment="Center" Margin="4,0,4,0" />
+                                <TextBox Text="{Binding AmountMax, Mode=TwoWay}" Width="55" materialDesign:HintAssist.Hint="Max" />
                             </StackPanel>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
@@ -52,6 +54,14 @@
                     <TextBox x:Name="IntervalMaxMinutes" materialDesign:HintAssist.Hint="Max" Style="{DynamicResource MaterialDesignFloatingHintTextBox}" Width="60" />
 
                     <Button x:Name="AddButton" Content="Add raid" Margin="30,0,0,0" />
+                </StackPanel>
+
+                <Separator Margin="0,10,0,10" />
+
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="Bulk add: paste one target per line (e.g. [40|-2] or 40|-2) - uses the source village / troop ranges / hero / interval above for every row." TextWrapping="Wrap" Width="420" VerticalAlignment="Center" />
+                    <TextBox x:Name="BulkTargets" AcceptsReturn="True" TextWrapping="NoWrap" VerticalScrollBarVisibility="Auto" Width="200" Height="90" Margin="10,0,0,0" />
+                    <Button x:Name="BulkAddButton" Content="Bulk add" Margin="10,0,0,0" VerticalAlignment="Bottom" />
                 </StackPanel>
             </StackPanel>
         </Border>
