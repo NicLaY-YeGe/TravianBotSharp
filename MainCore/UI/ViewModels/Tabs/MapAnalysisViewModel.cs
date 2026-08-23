@@ -3,7 +3,6 @@ using MainCore.UI.ViewModels.Abstract;
 using Microsoft.Extensions.DependencyInjection;
 using System.Collections.ObjectModel;
 using System.Net.Http;
-using System.Reactive.Concurrency;
 
 namespace MainCore.UI.ViewModels.Tabs
 {
@@ -35,36 +34,54 @@ namespace MainCore.UI.ViewModels.Tabs
         [Reactive]
         private string _maxResults = "50";
 
+        [Reactive]
+        private string _statusText = "";
+
+        // Backs CanSearch below - disables the Search button while a search is already in
+        // flight, so the button isn't clickable again mid-download and (more importantly, see
+        // 2026-08-23 user report) so there's some visible sign that something is happening
+        // instead of the UI looking unchanged while map.sql downloads.
+        private readonly ObservableAsPropertyHelper<bool> _canSearchHelper;
+
+        [ObservableAsProperty]
+        private bool _canSearch;
+
         public MapAnalysisViewModel(IDialogService dialogService, ICustomServiceScopeFactory serviceScopeFactory)
         {
             _dialogService = dialogService;
             _serviceScopeFactory = serviceScopeFactory;
 
+            _canSearchHelper = SearchCommand.IsExecuting.Select(x => !x).ToProperty(this, vm => vm.CanSearch);
+
             SearchCommand.Subscribe(rows =>
             {
                 Results.Clear();
                 foreach (var row in rows) Results.Add(row);
+                StatusText = rows.Count == 0 ? "" : $"{rows.Count} sonuç bulundu.";
             });
         }
 
         protected override async Task Load(AccountId accountId)
         {
+            // Intentionally does nothing to Results: this used to clear the list on every tab
+            // activation, which wiped out a completed search's results if the user switched
+            // away and back before checking them (2026-08-23 user report - Search keeps
+            // running in the background regardless of which tab is visible, since nothing
+            // cancels it on deactivation, so results could finish while the user was on a
+            // different tab). Results are now only cleared when a new search actually starts,
+            // in SearchCommand's Subscribe above - so a finished search's results persist
+            // across tab switches until the user searches again.
             await Task.CompletedTask;
-
-            // Load() runs on RxApp.TaskpoolScheduler (see AccountTabViewModelBase), not the
-            // WPF dispatcher thread - ObservableCollection mutations must be marshaled back to
-            // the UI thread explicitly here, unlike Search's own results (which go through
-            // ReactiveCommand's Subscribe in the constructor and are already main-thread by
-            // default). Clears any results left over from a previous account when switching
-            // accounts/tabs.
-            RxApp.MainThreadScheduler.Schedule(() => Results.Clear());
         }
 
         [ReactiveCommand]
         private async Task<List<string>> Search()
         {
+            StatusText = "Aranıyor...";
+
             if (!int.TryParse(TargetX, out var targetX) || !int.TryParse(TargetY, out var targetY))
             {
+                StatusText = "";
                 await _dialogService.MessageBox.Handle(new MessageBoxData("Error", "Enter valid X/Y target coordinates."));
                 return [];
             }
@@ -84,6 +101,7 @@ namespace MainCore.UI.ViewModels.Tabs
                 var account = context.Accounts.FirstOrDefault(x => x.Id == AccountId.Value);
                 if (account is null || string.IsNullOrWhiteSpace(account.Server))
                 {
+                    StatusText = "";
                     await _dialogService.MessageBox.Handle(new MessageBoxData("Error", "Could not find this account's server address."));
                     return [];
                 }
@@ -98,6 +116,7 @@ namespace MainCore.UI.ViewModels.Tabs
             }
             catch (Exception ex)
             {
+                StatusText = "";
                 await _dialogService.MessageBox.Handle(new MessageBoxData("Error", $"Could not download map.sql from the server: {ex.Message}"));
                 return [];
             }
@@ -105,6 +124,7 @@ namespace MainCore.UI.ViewModels.Tabs
             var villages = MapSqlParser.Parse(content);
             if (villages.Count == 0)
             {
+                StatusText = "";
                 await _dialogService.MessageBox.Handle(new MessageBoxData("Warning", "map.sql was downloaded but no villages could be parsed from it - this server may not publish the map in the expected format."));
                 return [];
             }

@@ -24,6 +24,8 @@ namespace WPFUI.Views.Tabs
                 this.Bind(ViewModel, vm => vm.MaxResults, v => v.MaxResults.Text).DisposeWith(d);
 
                 this.BindCommand(ViewModel, vm => vm.SearchCommand, v => v.SearchButton).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.CanSearch, v => v.SearchButton.IsEnabled).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.StatusText, v => v.StatusText.Text).DisposeWith(d);
 
                 this.OneWayBind(ViewModel, vm => vm.Results, v => v.ResultsList.ItemsSource).DisposeWith(d);
             });

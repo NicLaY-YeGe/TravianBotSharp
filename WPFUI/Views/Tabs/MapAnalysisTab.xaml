@@ -26,6 +26,7 @@
                 <TextBox x:Name="MaxResults" materialDesign:HintAssist.Hint="Max results" Style="{DynamicResource MaterialDesignFloatingHintTextBox}" Width="70" Margin="10,0,0,0" />
 
                 <Button x:Name="SearchButton" Content="Search" Margin="30,0,0,0" />
+                <TextBlock x:Name="StatusText" VerticalAlignment="Center" Margin="15,0,0,0" FontStyle="Italic" />
             </StackPanel>
         </Border>
 
