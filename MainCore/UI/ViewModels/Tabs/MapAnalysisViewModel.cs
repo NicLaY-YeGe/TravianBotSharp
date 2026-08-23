@@ -3,6 +3,7 @@ using MainCore.UI.ViewModels.Abstract;
 using Microsoft.Extensions.DependencyInjection;
 using System.Collections.ObjectModel;
 using System.Net.Http;
+using System.Reactive.Concurrency;
 
 namespace MainCore.UI.ViewModels.Tabs
 {
@@ -50,6 +51,14 @@ namespace MainCore.UI.ViewModels.Tabs
         {
             await Task.CompletedTask;
             Results.Clear();
+
+            // Load() runs on RxApp.TaskpoolScheduler (see AccountTabViewModelBase), not the
+            // WPF dispatcher thread - ObservableCollection mutations must be marshaled back to
+            // the UI thread explicitly here, unlike Search's own results (which go through
+            // ReactiveCommand's Subscribe in the constructor and are already main-thread by
+            // default). Clears any results left over from a previous account when switching
+            // accounts/tabs.
+            RxApp.MainThreadScheduler.Schedule(() => Results.Clear());
         }
 
         [ReactiveCommand]
