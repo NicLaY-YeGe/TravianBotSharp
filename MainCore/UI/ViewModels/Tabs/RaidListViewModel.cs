@@ -167,7 +167,7 @@ namespace MainCore.UI.ViewModels.Tabs
             var ranges = TroopSlots
                 .Select(s => (s.Slot, Range: s.GetRange()))
                 .Where(s => s.Range is not null)
-                .ToDictionary(s => s.Slot, s => s.Range!.Value);
+                .ToDictionary(s => s.Slot, s => s.Range!);
 
             if (ranges.Count == 0)
             {
