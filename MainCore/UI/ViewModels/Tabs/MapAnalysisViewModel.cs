@@ -50,7 +50,6 @@ namespace MainCore.UI.ViewModels.Tabs
         protected override async Task Load(AccountId accountId)
         {
             await Task.CompletedTask;
-            Results.Clear();
 
             // Load() runs on RxApp.TaskpoolScheduler (see AccountTabViewModelBase), not the
             // WPF dispatcher thread - ObservableCollection mutations must be marshaled back to
