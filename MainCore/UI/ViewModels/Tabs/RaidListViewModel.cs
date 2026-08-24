@@ -391,5 +391,100 @@ namespace MainCore.UI.ViewModels.Tabs
 
             await LoadEntriesCommand.Execute(AccountId);
         }
+
+        // Account-wide controls below - unlike ToggleActive/Delete above (which act on the
+        // single selected row), these three act on every RaidListEntry belonging to this
+        // account at once, so the user isn't forced to select+toggle a hundred rows one by
+        // one to pause/resume/clear the whole list (2026-08-24 user request).
+
+        [ReactiveCommand]
+        private async Task PauseAll()
+        {
+            using (var scope = _serviceScopeFactory.CreateScope(AccountId))
+            {
+                var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+                var entries = context.RaidListEntries
+                    .Where(x => x.AccountId == AccountId.Value && x.IsActive)
+                    .ToList();
+
+                foreach (var entry in entries)
+                {
+                    entry.IsActive = false;
+
+                    var queuedTask = _taskManager.GetTaskList(AccountId)
+                        .OfType<RaidListTask.Task>()
+                        .FirstOrDefault(t => t.EntryId.Value == entry.Id);
+                    if (queuedTask is not null) _taskManager.Remove(AccountId, queuedTask);
+                }
+
+                context.SaveChanges();
+            }
+
+            await LoadEntriesCommand.Execute(AccountId);
+        }
+
+        [ReactiveCommand]
+        private async Task PlayAll()
+        {
+            using (var scope = _serviceScopeFactory.CreateScope(AccountId))
+            {
+                var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+                var entries = context.RaidListEntries
+                    .Where(x => x.AccountId == AccountId.Value && !x.IsActive)
+                    .ToList();
+
+                foreach (var entry in entries)
+                {
+                    entry.IsActive = true;
+                    if (entry.NextExecuteAt < DateTime.Now) entry.NextExecuteAt = DateTime.Now;
+
+                    var queuedTask = _taskManager.GetTaskList(AccountId)
+                        .OfType<RaidListTask.Task>()
+                        .FirstOrDefault(t => t.EntryId.Value == entry.Id);
+                    if (queuedTask is null)
+                    {
+                        _taskManager.Add(new RaidListTask.Task(AccountId, new VillageId(entry.VillageId), new RaidListEntryId(entry.Id))
+                        {
+                            ExecuteAt = entry.NextExecuteAt,
+                        });
+                    }
+                }
+
+                context.SaveChanges();
+            }
+
+            await LoadEntriesCommand.Execute(AccountId);
+        }
+
+        [ReactiveCommand]
+        private async Task ClearAll()
+        {
+            var confirm = await _dialogService.ConfirmBox.Handle(new MessageBoxData("Warning", "Delete ALL raid list entries for this account? This cannot be undone."));
+            if (!confirm) return;
+
+            using (var scope = _serviceScopeFactory.CreateScope(AccountId))
+            {
+                var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+                var entryIds = context.RaidListEntries
+                    .Where(x => x.AccountId == AccountId.Value)
+                    .Select(x => x.Id)
+                    .ToList();
+
+                var queuedTasks = _taskManager.GetTaskList(AccountId)
+                    .OfType<RaidListTask.Task>()
+                    .Where(t => entryIds.Contains(t.EntryId.Value))
+                    .ToList();
+                foreach (var task in queuedTasks) _taskManager.Remove(AccountId, task);
+
+                context.RaidListEntries
+                    .Where(x => x.AccountId == AccountId.Value)
+                    .ExecuteDelete();
+            }
+
+            await LoadEntriesCommand.Execute(AccountId);
+        }
     }
 }

@@ -41,6 +41,10 @@ namespace WPFUI.Views.Tabs
 
                 this.BindCommand(ViewModel, vm => vm.ToggleActiveCommand, v => v.ToggleActiveButton).DisposeWith(d);
                 this.BindCommand(ViewModel, vm => vm.DeleteCommand, v => v.DeleteButton).DisposeWith(d);
+
+                this.BindCommand(ViewModel, vm => vm.PauseAllCommand, v => v.PauseAllButton).DisposeWith(d);
+                this.BindCommand(ViewModel, vm => vm.PlayAllCommand, v => v.PlayAllButton).DisposeWith(d);
+                this.BindCommand(ViewModel, vm => vm.ClearAllCommand, v => v.ClearAllButton).DisposeWith(d);
             });
         }
     }

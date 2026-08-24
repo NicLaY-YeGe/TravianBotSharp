@@ -66,17 +66,27 @@
             </StackPanel>
         </Border>
 
-        <!-- Existing raid rows: select one, then Toggle/Delete acts on the selection -->
+        <!-- Existing raid rows: select one, then Toggle/Delete acts on the selection. The
+             Pause all / Play all / Clear all row above the list instead acts on every row
+             for this account at once, so the whole list can be controlled without selecting
+             rows one by one. -->
         <Border Style="{DynamicResource Box}" Grid.Row="1" Margin="0,5,0,0" Padding="10">
             <Grid>
                 <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <ListBox x:Name="EntriesGrid" Grid.Row="0" SelectionMode="Single" ItemTemplate="{DynamicResource ListBoxColorItem}" />
+                <StackPanel Orientation="Horizontal" Grid.Row="0" Margin="0,0,0,10">
+                    <Button x:Name="PauseAllButton" Content="Pause all" />
+                    <Button x:Name="PlayAllButton" Content="Play all" Margin="10,0,0,0" />
+                    <Button x:Name="ClearAllButton" Content="Clear all" Margin="10,0,0,0" />
+                </StackPanel>
 
-                <StackPanel Orientation="Horizontal" Grid.Row="1" Margin="0,10,0,0">
+                <ListBox x:Name="EntriesGrid" Grid.Row="1" SelectionMode="Single" ItemTemplate="{DynamicResource ListBoxColorItem}" />
+
+                <StackPanel Orientation="Horizontal" Grid.Row="2" Margin="0,10,0,0">
                     <Button x:Name="ToggleActiveButton" Content="Toggle active / paused" />
                     <Button x:Name="DeleteButton" Content="Delete" Margin="10,0,0,0" />
                 </StackPanel>

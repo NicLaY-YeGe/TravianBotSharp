@@ -47,17 +47,5 @@
         </Grid>
 
         <TextBox x:Name="DevToolsEndpointAddress" Grid.Row="1" materialDesign:HintAssist.Hint="Devtools endpoint address" Style="{DynamicResource MaterialDesignFloatingHintTextBox}" Margin="5" IsReadOnly="True" />
-
-        <!-- ⚠️ PROOF OF CONCEPT ONLY (2026-08-15) - see MainCore/Services/Playwright. Opens a
-             separate Playwright browser, unrelated to the account's real Selenium session. -->
-        <Border Style="{DynamicResource Box}" Grid.Row="2" Padding="10" Margin="0,5,0,0">
-            <StackPanel Orientation="Horizontal">
-                <Label Content="Playwright PoC - target X/Y:" VerticalAlignment="Center" />
-                <TextBox x:Name="PlaywrightPocX" Width="60" Margin="10,0,0,0" />
-                <TextBox x:Name="PlaywrightPocY" Width="60" Margin="10,0,0,0" />
-                <Button x:Name="PlaywrightPocButton" Content="Run Playwright PoC (Found new village)" Margin="15,0,0,0" />
-                <Label x:Name="PlaywrightPocStatusLabel" VerticalAlignment="Center" Margin="15,0,0,0" />
-            </StackPanel>
-        </Border>
     </Grid>
 </v:DebugTagBase>
