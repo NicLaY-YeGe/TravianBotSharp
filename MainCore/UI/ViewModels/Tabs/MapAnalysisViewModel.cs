@@ -41,8 +41,6 @@ namespace MainCore.UI.ViewModels.Tabs
         // flight, so the button isn't clickable again mid-download and (more importantly, see
         // 2026-08-23 user report) so there's some visible sign that something is happening
         // instead of the UI looking unchanged while map.sql downloads.
-        private readonly ObservableAsPropertyHelper<bool> _canSearchHelper;
-
         [ObservableAsProperty]
         private bool _canSearch;
 
