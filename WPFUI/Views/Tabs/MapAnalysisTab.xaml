@@ -32,7 +32,13 @@
 
         <!-- Results: nearest villages first, one line each -->
         <Border Style="{DynamicResource Box}" Grid.Row="1" Margin="0,5,0,0" Padding="10">
-            <ListBox x:Name="ResultsList" />
+            <ListBox x:Name="ResultsList">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding}" Foreground="Black" />
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
         </Border>
     </Grid>
 </v:MapAnalysisTabBase>
