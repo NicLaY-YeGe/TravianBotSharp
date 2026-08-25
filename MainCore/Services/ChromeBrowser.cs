@@ -133,14 +133,66 @@ namespace MainCore.Services
         public async Task<Result> Refresh(CancellationToken cancellationToken)
         {
             if (_context is null) return Stop.DriverNotReady;
-            await _context.ReloadAsync(new() { Wait = ReadinessState.Complete });
-            return Result.Ok();
+
+            try
+            {
+                await _context.ReloadAsync(new() { Wait = ReadinessState.Complete });
+                return Result.Ok();
+            }
+            catch (BiDiException ex) when (ex.Message.Contains("no such frame", StringComparison.OrdinalIgnoreCase))
+            {
+                var refreshResult = await RefreshContextAsync();
+                if (refreshResult.IsFailed) return refreshResult;
+
+                await _context!.ReloadAsync(new() { Wait = ReadinessState.Complete });
+                return Result.Ok();
+            }
         }
 
         public async Task<Result> Navigate(string url, CancellationToken cancellationToken)
         {
             if (_context is null) return Stop.DriverNotReady;
-            await _context.NavigateAsync(url, new() { Wait = ReadinessState.Complete });
+
+            try
+            {
+                await _context.NavigateAsync(url, new() { Wait = ReadinessState.Complete });
+                return Result.Ok();
+            }
+            catch (BiDiException ex) when (ex.Message.Contains("no such frame", StringComparison.OrdinalIgnoreCase))
+            {
+                // The browsing context we cached once in Setup() (the tab that was open when the
+                // driver started) no longer exists - closed or replaced (crash, popup, manual
+                // close, etc). 2026-08-25: a real user log showed this exact
+                // "no such frame: Context ... not found" during StartAdventureTask -
+                // CheckHeroHealthCommand's Navigate, and since _context never changes on its own,
+                // Polly kept retrying the SAME dead context 3 times before permanently pausing the
+                // bot - a context that's gone will never come back, so that retry was guaranteed
+                // to fail. Re-resolve the CURRENT top-level context from the live browser and
+                // retry this navigation once against it instead. If there's truly no context left
+                // (the whole browser window is gone), RefreshContextAsync returns a Stop with a
+                // clear message instead of leaving the user to decode a raw BiDi stack trace.
+                var refreshResult = await RefreshContextAsync();
+                if (refreshResult.IsFailed) return refreshResult;
+
+                await _context!.NavigateAsync(url, new() { Wait = ReadinessState.Complete });
+                return Result.Ok();
+            }
+        }
+
+        // Re-resolves _context to whatever the browser's current top-level browsing context is
+        // right now, for recovering after the cached one has been closed/replaced. Used by both
+        // Navigate and Refresh above - see their comments for why this exists.
+        private async Task<Result> RefreshContextAsync()
+        {
+            if (_bidi is null) return Stop.Error.WithError("Browser session is gone (no BiDi connection) - the browser window was likely closed. Restart the bot for this account.");
+
+            var contexts = await _bidi.BrowsingContext.GetTreeAsync();
+            if (contexts.Contexts.Count == 0)
+            {
+                return Stop.Error.WithError("Browser has no open windows/tabs left - it was likely closed. Restart the bot for this account.");
+            }
+
+            _context = contexts.Contexts[0].Context;
             return Result.Ok();
         }
 
