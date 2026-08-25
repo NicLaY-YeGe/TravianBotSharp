@@ -12,6 +12,13 @@ namespace MainCore.Tasks
     // wait, FixJobsCommand would find no "Site" placeholders to match locations against and
     // filter out every single job.
     //
+    // "Scanned" specifically means location 40 (the wall plot) is present, not just any
+    // building row: dorf1 (resource fields) and dorf2 (village center) are scanned as separate
+    // pages, so a village can have resource-field rows well before its village-center rows
+    // (main building/rally point/wall, locations 26/39/40) exist. FixJobsCommand.Modify reads
+    // location 40 for every wall-type job in the template, so we wait for that specific
+    // location rather than "any row at all" (2026-08-25 fix - see CHANGELOG).
+    //
     // No enable/disable setting by design (2026-08-15 decision): the template is always the
     // embedded default and always gets applied to every new village. CanStart's own "does this
     // village already have jobs" check is what keeps this idempotent - it never reapplies, and
@@ -32,8 +39,8 @@ namespace MainCore.Tasks
                 var alreadyHasJobs = context.Jobs.Any(x => x.VillageId == VillageId.Value);
                 if (alreadyHasJobs) return false;
 
-                var buildingsScanned = context.Buildings.Any(x => x.VillageId == VillageId.Value);
-                return buildingsScanned;
+                var wallLocationScanned = context.Buildings.Any(x => x.VillageId == VillageId.Value && x.Location == 40);
+                return wallLocationScanned;
             }
         }
 

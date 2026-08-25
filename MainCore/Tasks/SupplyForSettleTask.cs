@@ -127,7 +127,18 @@ namespace MainCore.Tasks
             var reservePercent = context.ByName(task.VillageId, VillageSettingEnums.ExpansionSupplyReservePercent);
 
             var pageResult = await toSendResourcePageCommand.HandleAsync(new(task.VillageId), cancellationToken);
-            if (pageResult.IsFailed) return Stop.Error.WithErrors(pageResult.Errors);
+            if (pageResult.IsFailed)
+            {
+                if (pageResult.HasError<MissingBuilding>())
+                {
+                    // This sibling has no marketplace (yet) - it just can't act as a resource
+                    // source. Not the target's fault and not worth stopping the whole bot for;
+                    // RequestIfNeeded will simply pick a different candidate next time.
+                    logger.Warning("No marketplace in {VillageId}, cannot supply {Target} for settling.", task.VillageId, task.TargetVillageId);
+                    return Skip.Error.WithErrors(pageResult.Errors);
+                }
+                return Stop.Error.WithErrors(pageResult.Errors);
+            }
 
             var freeMerchants = SendResourceParser.GetFreeMerchants(browser.Html);
             if (freeMerchants <= 0)

@@ -117,8 +117,11 @@ namespace MainCore.Commands.UI.Villages.BuildViewModel
             {
                 if (plan.Type.IsWall())
                 {
-                    var wall = buildings.First(x => x.Location == 40);
-                    if (plan.Type != wall.Type)
+                    // Location 40 should always be scanned before this runs (see
+                    // ApplyBuildTemplateTask.CanStart), but fall back to the plan's own type
+                    // rather than crash if it isn't there yet.
+                    var wall = buildings.Find(x => x.Location == 40);
+                    if (wall is not null && plan.Type != wall.Type)
                     {
                         plan.Type = wall.Type;
                     }
