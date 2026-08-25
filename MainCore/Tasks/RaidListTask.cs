@@ -39,11 +39,13 @@ namespace MainCore.Tasks
     //
     // The one deliberate exception is a village simply not having enough troops for this row
     // right now (e.g. the previous wave hasn't returned yet) - that's routine for an unattended
-    // raid list, not a bug worth pausing the whole bot over. So troop (and, if requested, hero)
-    // availability is checked against the loaded Send Troops page BEFORE calling
-    // SendTroopsCommand; if short, this run is skipped and the row is rescheduled exactly like a
-    // normal send (see RescheduleNext), silently, with only an Information-level log line - the
-    // bot moves straight on to whatever's next in the queue.
+    // raid list, not a ban-risk bug like the empty-target case above. Troop (and, if requested,
+    // hero) availability is checked against the loaded Send Troops page BEFORE calling
+    // SendTroopsCommand; if short, this run is skipped. BUT (2026-08-25, user request) rather
+    // than silently rescheduling just this one row and moving on, the bot now pauses the ENTIRE
+    // raid list (every active row for the account, same effect as RaidListViewModel's "Pause
+    // all") and sends a Telegram notification (if NotifyOnPause is enabled) - see
+    // PauseWholeListAndNotify below. Only the raid list feature is paused, not the whole bot.
     [Handler]
     public static partial class RaidListTask
     {
@@ -71,6 +73,8 @@ namespace MainCore.Tasks
             ToSendTroopsPageCommand.Handler toSendTroopsPageCommand,
             SendTroopsCommand.Handler sendTroopsCommand,
             IChromeBrowser browser,
+            ITaskManager taskManager,
+            ITelegramNotifier telegramNotifier,
             ILogger logger,
             CancellationToken cancellationToken)
         {
@@ -101,10 +105,8 @@ namespace MainCore.Tasks
                 var available = RallyPointSendTroopsParser.GetAvailableTroopCount(browser.Html, slot);
                 if (available < amount)
                 {
-                    var skipNextAt = RescheduleNext(task, entry, context);
-                    logger.Information(
-                        "Raid list: village {VillageId} doesn't have enough troops in slot {Slot} yet (need {Needed}, have {Available}) - skipping this run, next attempt at {NextExecuteAt}.",
-                        task.VillageId, slot, amount, available, skipNextAt);
+                    var reason = $"village {task.VillageId} doesn't have enough troops in slot {slot} (needs {amount}, has {available})";
+                    await PauseWholeListAndNotify(task, context, taskManager, telegramNotifier, logger, reason, cancellationToken);
                     return Skip.Error;
                 }
             }
@@ -115,10 +117,8 @@ namespace MainCore.Tasks
                 var heroAvailable = RallyPointSendTroopsParser.GetAvailableTroopCount(browser.Html, heroSlot);
                 if (heroAvailable < 1)
                 {
-                    var skipNextAt = RescheduleNext(task, entry, context);
-                    logger.Information(
-                        "Raid list: hero requested for village {VillageId} but not available - skipping this run, next attempt at {NextExecuteAt}.",
-                        task.VillageId, skipNextAt);
+                    var reason = $"hero requested for village {task.VillageId} but not available";
+                    await PauseWholeListAndNotify(task, context, taskManager, telegramNotifier, logger, reason, cancellationToken);
                     return Skip.Error;
                 }
             }
@@ -164,8 +164,8 @@ namespace MainCore.Tasks
         // persists it both to the DB row (NextExecuteAt, so a restart doesn't lose the schedule)
         // and the in-memory task (ExecuteAt, so TimerManager's "ExecuteAt changed -> reschedule
         // instead of remove" rule keeps this task self-repeating - see the class-level comment).
-        // Shared by the success path and every "skip this run" path so a skipped row is
-        // rescheduled exactly like a sent one.
+        // Only called on the success path now - see PauseWholeListAndNotify below for what
+        // happens on an insufficient-troops "skip" instead (2026-08-25 change).
         private static DateTime RescheduleNext(Task task, RaidListEntry entry, AppDbContext context)
         {
             var minMinutes = Math.Max(1, entry.IntervalMinMinutes);
@@ -179,6 +179,54 @@ namespace MainCore.Tasks
             task.ExecuteAt = nextExecuteAt;
 
             return nextExecuteAt;
+        }
+
+        // 2026-08-25, user request: running out of troops for a raid isn't itself a ban risk (it
+        // was previously just a silent per-row skip+reschedule - see the class-level comment,
+        // now stale on this point), but the user wants to be alerted rather than have the bot
+        // quietly keep trying other rows while a village sits empty-handed. So instead of
+        // skipping just this one row, EVERY active row for this account is paused (same DB +
+        // in-memory effect as RaidListViewModel's existing "Pause all" button - IsActive=false
+        // and the queued RaidListTask.Task removed for each), and a Telegram message is sent (if
+        // the account has NotifyOnPause enabled). This only pauses the raid list feature - unlike
+        // the empty-target case above, the rest of the bot (building, adventures, etc.) is
+        // untouched, since this is routine/expected (troops out on a wave) rather than a sign of
+        // something wrong with the account.
+        private static async System.Threading.Tasks.Task PauseWholeListAndNotify(
+            Task task,
+            AppDbContext context,
+            ITaskManager taskManager,
+            ITelegramNotifier telegramNotifier,
+            ILogger logger,
+            string reason,
+            CancellationToken cancellationToken)
+        {
+            var entries = context.RaidListEntries
+                .Where(x => x.AccountId == task.AccountId.Value && x.IsActive)
+                .ToList();
+
+            foreach (var entry in entries)
+            {
+                entry.IsActive = false;
+
+                var queuedTask = taskManager.GetTaskList(task.AccountId)
+                    .OfType<Task>()
+                    .FirstOrDefault(t => t.EntryId.Value == entry.Id);
+                if (queuedTask is not null) taskManager.Remove(task.AccountId, queuedTask);
+            }
+
+            context.SaveChanges();
+
+            logger.Warning(
+                "Raid list: {Reason} - pausing the whole raid list ({Count} active row(s)) instead of just skipping this one.",
+                reason, entries.Count);
+
+            var telegramSetting = telegramNotifier.Get(task.AccountId);
+            if (telegramSetting.NotifyOnPause)
+            {
+                var username = context.Accounts.FirstOrDefault(x => x.Id == task.AccountId.Value)?.Username ?? $"{task.AccountId}";
+                await telegramNotifier.NotifyAsync(task.AccountId, $"\u26D4 {username} - yagma listesi durduruldu: {reason}", cancellationToken);
+            }
         }
     }
 }
