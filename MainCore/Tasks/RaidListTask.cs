@@ -25,15 +25,17 @@ namespace MainCore.Tasks
     // NOTE ON FAILURES: like every other command in this codebase, a Retry/Stop-class failure
     // from SendTroopsCommand (e.g. a parser/UI problem) pauses the WHOLE bot, not just this one
     // raid row - that's existing, consistent behavior (see TimerManager), not something
-    // special-cased here. The one exception SendTroopsCommand itself makes is a target that the
-    // server flat-out rejects (e.g. "There is no village at these coordinates." for an
-    // abandoned/conquered farm target) - that comes back as Skip.Error, not Stop.Error, since
-    // retrying the exact same bad coordinates will never succeed. Note this Skip path does NOT
-    // call RescheduleNext (unlike the insufficient-troops Skip below), so per TimerManager's
-    // "ExecuteAt unchanged -> remove" rule this row's task is dropped from the queue rather than
-    // retried - it comes back only on the next app restart's UpdateStorageCommand bootstrap
-    // check, giving it one more attempt before being dropped again. Fixing the row's target (or
-    // disabling it) is on the user; the bot won't spin on it in the meantime.
+    // special-cased here. SendTroopsCommand itself still classifies a server rejection (e.g.
+    // "There is no village at these coordinates." for an abandoned/conquered farm target) as a
+    // Skip, not a Stop, since retrying the exact same bad coordinates will never succeed on its
+    // own. BUT specifically for this "no village at these coordinates" case, RaidListTask
+    // upgrades it to a Stop here (2026-08-25, user request): repeatedly hitting empty/abandoned
+    // coordinates unattended looked like a real ban-risk pattern in the user's own logs (two
+    // dead rows kept firing every few minutes all morning), so this row is deleted from the DB
+    // outright and the whole bot is paused so the user notices and can review the rest of the
+    // list, rather than silently dropping just this one task and moving on. Any OTHER rejection
+    // reason (e.g. an alliance-protection message) still falls through to the generic
+    // Result.Fail(...) below, unchanged.
     //
     // The one deliberate exception is a village simply not having enough troops for this row
     // right now (e.g. the previous wave hasn't returned yet) - that's routine for an unattended
@@ -124,7 +126,30 @@ namespace MainCore.Tasks
             var sendResult = await sendTroopsCommand.HandleAsync(
                 new(task.VillageId, entry.TargetX, entry.TargetY, RallyPointEventTypeEnums.AttackRaid, troopAmounts, Confirm: true, IncludeHero: entry.IncludeHero),
                 cancellationToken);
-            if (sendResult.IsFailed) return Result.Fail(sendResult.Errors);
+            if (sendResult.IsFailed)
+            {
+                // "No village at these coordinates" means the target is permanently dead
+                // (abandoned/conquered) - retrying it on schedule forever, unattended, is exactly
+                // the kind of repeated-empty-coordinate pattern that risks flagging the account.
+                // Delete the row so it can never fire again, and Stop the whole bot (not just
+                // skip this row) so the user notices and reviews the rest of their raid list.
+                var isEmptyTarget = sendResult.Errors.Any(e =>
+                    e.Message.Contains("no village at these coordinates", StringComparison.OrdinalIgnoreCase));
+
+                if (isEmptyTarget)
+                {
+                    context.RaidListEntries.Where(x => x.Id == task.EntryId.Value).ExecuteDelete();
+
+                    logger.Warning(
+                        "Raid list: ({X}|{Y}) from village {VillageId} has no village there (abandoned/conquered) - deleting this raid list row and stopping the bot so you can review the rest of the list.",
+                        entry.TargetX, entry.TargetY, task.VillageId);
+
+                    return Stop.Error.WithErrors(sendResult.Errors)
+                        .WithError($"Raid list row targeting ({entry.TargetX}|{entry.TargetY}) was deleted - no village at that target.");
+                }
+
+                return Result.Fail(sendResult.Errors);
+            }
 
             var nextExecuteAt = RescheduleNext(task, entry, context);
 
