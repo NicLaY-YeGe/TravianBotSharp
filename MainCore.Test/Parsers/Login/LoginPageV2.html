@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<!-- 2026-08-26: real capture of Travian's redesigned login/lobby screen (Europe 11).
+     Every class name in this markup is suffixed "V2" (formV2, textButtonV2, ...) and the
+     old fixed container id="loginScene" is gone - the wrapper here is id="dialogContent".
+     See LoginParser.GetLoginButton for why it now anchors on the password input instead. -->
+<html lang="en-US">
+<body>
+<div class="content" id="dialogContent">
+  <h1>Log in to Europe 11</h1>
+  <div class="formV2">
+    <label class="input fixed ">
+      <input placeholder="Email address / account name" type="text" name="name">
+      <div class="label">Enter your email address or account name:</div>
+      <div class="validation" data-rule="notEmpty">Please enter your email address or account name</div>
+    </label>
+    <label class="input fixed">
+      <input placeholder="Password" type="password" name="password">
+      <div class="label">Enter your password:</div>
+      <div class="validation" data-rule="notEmpty">Please enter your password</div>
+    </label>
+    <label class="checkbox">
+      <input type="checkbox" value="1" checked="" name="mobileOptimizations">
+      <div class="label">Log in with mobile version</div>
+    </label>
+    <div id="recaptcha" data-sitekey="6LfNjW0sAAAAAIZWD2v1AzTyFPrR3fXWysghexK8"></div>
+    <div class="centeredText">
+      <button class="textButtonV2 buttonFramed rectangle withText withLoadingIndicator green" type="submit"><div>Login</div></button>
+      <div>Forgot your password? <a href="#">Recover</a></div>
+    </div>
+    <div class="lobbyAccountInfoBanner">
+      <div class="description">Access all your game worlds with a single login.</div>
+      <a class="textButtonV2 buttonSecondary rectangle withText green" href="#"><div>Create lobby account</div></a>
+    </div>
+  </div>
+</div>
+</body>
+</html>
