@@ -100,7 +100,16 @@ namespace MainCore.Tasks
                 {
                     UpdateNeedExpansion(context, task.AccountId, task.VillageId, taskManager, logger,
                         unitWood * stillNeeded, unitClay * stillNeeded, unitIron * stillNeeded, unitCrop * stillNeeded);
-                    logger.Information("Village {VillageId} needs resources for {Count} more settler(s).", task.VillageId, stillNeeded);
+                    // 2026-08-26: log the counter itself alongside how many more are wanted -
+                    // a real user report showed 3 settlers physically sitting in the village
+                    // (visible in-game) while this line kept saying "needs 3 more", and without
+                    // the actual counter value in the log there was no way to tell it apart from
+                    // a normal in-progress case. See VillageSettingInput.AutoSettleSettlersReady
+                    // for how to correct the counter by hand if it's out of sync with reality -
+                    // it's only ever advanced by this task's own confirmed training, so settlers
+                    // trained manually or already present before AutoSettleEnable was turned on
+                    // are never counted.
+                    logger.Information("Village {VillageId} has {Present}/3 settlers ready (bot's own count), needs resources for {Count} more.", task.VillageId, present, stillNeeded);
                 }
                 else
                 {

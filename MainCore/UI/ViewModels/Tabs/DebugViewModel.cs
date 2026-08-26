@@ -16,6 +16,16 @@ namespace MainCore.UI.ViewModels.Tabs
         private static readonly ExpressionTemplate _template = new("{@t:HH:mm:ss} [{@l:u3}] {@m}\n{@x}");
 
         public ObservableCollection<TaskItem> Tasks { get; } = [];
+
+        // 2026-08-25: was a plain LinkedList<LogEvent> with no synchronization, written from
+        // LogEmitted (fires on whatever thread emits a log line - background bot task threads,
+        // not the UI thread) while ReloadLog (scheduled on RxApp.TaskpoolScheduler, throttled
+        // every 100ms) and LoadLog (Clear() + rebuild) could read/write it concurrently. A real
+        // crash log showed ReloadLog's foreach throwing "Collection was modified after the
+        // enumerator was instantiated" - LinkedList<T> isn't thread-safe, so any two of these
+        // three running at once corrupts it. _logLock serializes all three access points below.
+        private readonly object _logLock = new();
+
         private LinkedList<LogEvent> _logEvents = [];
 
         [Reactive]
@@ -96,7 +106,10 @@ namespace MainCore.UI.ViewModels.Tabs
             var (accountId, logEvent) = notification;
             if (accountId != AccountId) return false;
 
-            _logEvents.AddFirst(logEvent);
+            lock (_logLock)
+            {
+                _logEvents.AddFirst(logEvent);
+            }
             return true;
         }
 
@@ -131,11 +144,14 @@ namespace MainCore.UI.ViewModels.Tabs
         {
             var logs = _logSink.GetLogs(accountId);
             using var sw = new StringWriter(new StringBuilder());
-            _logEvents.Clear();
-            foreach (var log in logs)
+            lock (_logLock)
             {
-                _template.Format(log, sw);
-                _logEvents.AddFirst(log);
+                _logEvents.Clear();
+                foreach (var log in logs)
+                {
+                    _template.Format(log, sw);
+                    _logEvents.AddFirst(log);
+                }
             }
             return sw.ToString();
         }
@@ -143,8 +159,17 @@ namespace MainCore.UI.ViewModels.Tabs
         [ReactiveCommand]
         private string ReloadLog()
         {
+            // Snapshot under the lock, format outside it - keeps the lock held only for the
+            // cheap copy, not for _template.Format's string-building work (see _logLock comment
+            // above for why this needs to be locked at all).
+            LogEvent[] snapshot;
+            lock (_logLock)
+            {
+                snapshot = [.. _logEvents];
+            }
+
             using var sw = new StringWriter(new StringBuilder());
-            foreach (var log in _logEvents)
+            foreach (var log in snapshot)
             {
                 _template.Format(log, sw);
             }

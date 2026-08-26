@@ -69,6 +69,7 @@ namespace WPFUI.Views.Tabs.Villages
                 this.Bind(ViewModel, vm => vm.VillageSettingInput.AutoSettleEnable, v => v.AutoSettleEnable.IsChecked).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.AutoSettleTargetX, v => v.AutoSettleTargetX.ViewModel).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.AutoSettleTargetY, v => v.AutoSettleTargetY.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.AutoSettleSettlersReady, v => v.AutoSettleSettlersReady.ViewModel).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.ExpansionSupplyReservePercent, v => v.ExpansionSupplyReservePercent.ViewModel).DisposeWith(d);
 
                 this.Bind(ViewModel, vm => vm.VillageSettingInput.SmithyUpgradeEnable, v => v.SmithyUpgradeEnable.IsChecked).DisposeWith(d);

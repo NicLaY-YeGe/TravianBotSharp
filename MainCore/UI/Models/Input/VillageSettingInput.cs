@@ -81,6 +81,15 @@ namespace MainCore.UI.Models.Input
 
         public AmountInputViewModel AutoSettleTargetX { get; } = new();
         public AmountInputViewModel AutoSettleTargetY { get; } = new();
+
+        // 2026-08-26: exposed so the user can correct the bot's own tracked count when it
+        // doesn't match reality - e.g. settlers trained manually or left over from before
+        // AutoSettleEnable was turned on for this village never increment this counter (see
+        // AutoSettleTask.cs's type comment for why it's a persisted counter, not a page
+        // re-read), so without a way to edit it directly the task keeps requesting resources
+        // for settlers that already physically exist, and never reaches founding.
+        public AmountInputViewModel AutoSettleSettlersReady { get; } = new();
+
         public AmountInputViewModel ExpansionSupplyReservePercent { get; } = new();
 
         [Reactive]
@@ -189,6 +198,7 @@ namespace MainCore.UI.Models.Input
             AutoSettleEnable = settings.GetValueOrDefault(VillageSettingEnums.AutoSettleEnable) == 1;
             AutoSettleTargetX.Set(settings.GetValueOrDefault(VillageSettingEnums.AutoSettleTargetX));
             AutoSettleTargetY.Set(settings.GetValueOrDefault(VillageSettingEnums.AutoSettleTargetY));
+            AutoSettleSettlersReady.Set(settings.GetValueOrDefault(VillageSettingEnums.AutoSettleSettlersReady));
             ExpansionSupplyReservePercent.Set(settings.GetValueOrDefault(VillageSettingEnums.ExpansionSupplyReservePercent));
 
             SmithyUpgradeEnable = settings.GetValueOrDefault(VillageSettingEnums.SmithyUpgradeEnable) == 1;
@@ -263,6 +273,7 @@ namespace MainCore.UI.Models.Input
             var autoSettleEnable = AutoSettleEnable ? 1 : 0;
             var autoSettleTargetX = AutoSettleTargetX.Get();
             var autoSettleTargetY = AutoSettleTargetY.Get();
+            var autoSettleSettlersReady = AutoSettleSettlersReady.Get();
             var expansionSupplyReservePercent = ExpansionSupplyReservePercent.Get();
 
             var smithyUpgradeEnable = SmithyUpgradeEnable ? 1 : 0;
@@ -339,6 +350,7 @@ namespace MainCore.UI.Models.Input
                 { VillageSettingEnums.AutoSettleEnable, autoSettleEnable },
                 { VillageSettingEnums.AutoSettleTargetX, autoSettleTargetX },
                 { VillageSettingEnums.AutoSettleTargetY, autoSettleTargetY },
+                { VillageSettingEnums.AutoSettleSettlersReady, autoSettleSettlersReady },
                 { VillageSettingEnums.ExpansionSupplyReservePercent, expansionSupplyReservePercent },
 
                 { VillageSettingEnums.SmithyUpgradeEnable, smithyUpgradeEnable },

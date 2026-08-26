@@ -101,6 +101,13 @@ namespace MainCore.Services
 
         public ChromeDriver? Driver => _driver;
 
+        // True once Setup() has produced a live driver and stays true until Close() (or the
+        // total-death path in RefreshContextAsync, which now also calls Close()) tears it
+        // down again. TimerManager checks this before running the next queued task so a
+        // browser that's gone - closed by hand, crashed, or never launched yet - gets
+        // relaunched automatically instead of the task failing against a dead driver.
+        public bool IsOpen => _driver is not null;
+
         public HtmlDocument Html
         {
             get
@@ -123,11 +130,26 @@ namespace MainCore.Services
 
         public async Task<string> Screenshot()
         {
-            var screenshot = Driver?.GetScreenshot();
-            var fileName = Path.Combine(AppContext.BaseDirectory, "Screenshots", $"{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.png");
-            Directory.CreateDirectory(Path.GetDirectoryName(fileName)!);
-            await File.WriteAllBytesAsync(fileName, screenshot?.AsByteArray ?? Array.Empty<byte>(), CancellationToken.None);
-            return fileName;
+            try
+            {
+                var screenshot = Driver?.GetScreenshot();
+                var fileName = Path.Combine(AppContext.BaseDirectory, "Screenshots", $"{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.png");
+                Directory.CreateDirectory(Path.GetDirectoryName(fileName)!);
+                await File.WriteAllBytesAsync(fileName, screenshot?.AsByteArray ?? Array.Empty<byte>(), CancellationToken.None);
+                return fileName;
+            }
+            catch (Exception ex)
+            {
+                // 2026-08-25: Driver being non-null doesn't mean the browser is still there -
+                // if it was closed externally (user closed the window, crash, killed process),
+                // GetScreenshot() throws instead of returning null. This call used to be
+                // unguarded and the exception escaped all the way up through TimerManager's
+                // async timer event handler, which crashes the entire app (no way to catch an
+                // exception that escapes an async void event handler) instead of just pausing
+                // the account. Swallow it here and let the caller carry on without a screenshot.
+                Logger?.Warning("Could not capture screenshot, browser is likely gone: {Message}", ex.Message);
+                return "";
+            }
         }
 
         public async Task<Result> Refresh(CancellationToken cancellationToken)
@@ -139,8 +161,12 @@ namespace MainCore.Services
                 await _context.ReloadAsync(new() { Wait = ReadinessState.Complete });
                 return Result.Ok();
             }
-            catch (BiDiException ex) when (ex.Message.Contains("no such frame", StringComparison.OrdinalIgnoreCase))
+            catch (BiDiException)
             {
+                // 2026-08-25: widened from just "no such frame" - a fully closed browser
+                // (whole window/process gone, not just this frame) can surface as a different
+                // BiDiException message or as the transport itself failing, and
+                // RefreshContextAsync already handles both cases safely either way.
                 var refreshResult = await RefreshContextAsync();
                 if (refreshResult.IsFailed) return refreshResult;
 
@@ -158,7 +184,7 @@ namespace MainCore.Services
                 await _context.NavigateAsync(url, new() { Wait = ReadinessState.Complete });
                 return Result.Ok();
             }
-            catch (BiDiException ex) when (ex.Message.Contains("no such frame", StringComparison.OrdinalIgnoreCase))
+            catch (BiDiException)
             {
                 // The browsing context we cached once in Setup() (the tab that was open when the
                 // driver started) no longer exists - closed or replaced (crash, popup, manual
@@ -169,8 +195,14 @@ namespace MainCore.Services
                 // bot - a context that's gone will never come back, so that retry was guaranteed
                 // to fail. Re-resolve the CURRENT top-level context from the live browser and
                 // retry this navigation once against it instead. If there's truly no context left
-                // (the whole browser window is gone), RefreshContextAsync returns a Stop with a
-                // clear message instead of leaving the user to decode a raw BiDi stack trace.
+                // (the whole browser window is gone), RefreshContextAsync returns BrowserClosed
+                // instead of leaving the user to decode a raw BiDi stack trace - TimerManager
+                // relaunches Chrome automatically from there (2026-08-25).
+                //
+                // Widened from just "no such frame" (2026-08-25, second pass) - a fully closed
+                // browser (whole window/process gone, not just this frame) can surface as a
+                // different BiDiException message, and RefreshContextAsync already handles that
+                // case safely too (see its own comments).
                 var refreshResult = await RefreshContextAsync();
                 if (refreshResult.IsFailed) return refreshResult;
 
@@ -184,16 +216,37 @@ namespace MainCore.Services
         // Navigate and Refresh above - see their comments for why this exists.
         private async Task<Result> RefreshContextAsync()
         {
-            if (_bidi is null) return Stop.Error.WithError("Browser session is gone (no BiDi connection) - the browser window was likely closed. Restart the bot for this account.");
-
-            var contexts = await _bidi.BrowsingContext.GetTreeAsync();
-            if (contexts.Contexts.Count == 0)
+            if (_bidi is null)
             {
-                return Stop.Error.WithError("Browser has no open windows/tabs left - it was likely closed. Restart the bot for this account.");
+                await Close();
+                return BrowserClosed.Error;
             }
 
-            _context = contexts.Contexts[0].Context;
-            return Result.Ok();
+            try
+            {
+                var contexts = await _bidi.BrowsingContext.GetTreeAsync();
+                if (contexts.Contexts.Count == 0)
+                {
+                    // 2026-08-25: used to return Stop.Error here and tell the user to restart
+                    // the bot manually. Now returns BrowserClosed instead - TimerManager
+                    // relaunches Chrome automatically on the next tick, so no manual restart
+                    // is needed anymore.
+                    await Close();
+                    return BrowserClosed.Error;
+                }
+
+                _context = contexts.Contexts[0].Context;
+                return Result.Ok();
+            }
+            catch
+            {
+                // The BiDi connection itself is dead (the whole browser process is gone, not
+                // just the one tab/frame we were tracking) - GetTreeAsync can throw instead of
+                // returning an empty list in that case. Same outcome as the empty-tree branch
+                // above: nothing left to recover here.
+                await Close();
+                return BrowserClosed.Error;
+            }
         }
 
         public async Task<Result<IWebElement>> GetElement(By by, CancellationToken cancellationToken, [CallerArgumentExpression("by")] string? expression = null)
@@ -349,6 +402,18 @@ namespace MainCore.Services
             catch
             {
                 // ignore
+            }
+            finally
+            {
+                // 2026-08-25: null these out so IsOpen (and RefreshContextAsync's "_bidi is
+                // null" check) accurately reflect that nothing usable is left, whether Close()
+                // was called on purpose (SleepCommand's cycle) or as recovery from finding the
+                // browser already dead. Setup() always overwrites all four fresh, so there's
+                // nothing that still needs the old references after this.
+                _driver = null;
+                _bidi = null;
+                _context = null;
+                _authIntercept = null;
             }
         }
 

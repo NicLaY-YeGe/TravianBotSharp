@@ -7,6 +7,7 @@ namespace MainCore.Services
     {
         string CurrentUrl { get; }
         ChromeDriver? Driver { get; }
+        bool IsOpen { get; }
         HtmlDocument Html { get; }
         ILogger Logger { get; set; }
 

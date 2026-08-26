@@ -102,6 +102,30 @@ namespace MainCore.Services
             var browser = scope.ServiceProvider.GetRequiredService<IChromeBrowser>();
             var logger = browser.Logger;
 
+            if (!browser.IsOpen)
+            {
+                var opened = await EnsureBrowserOpen(accountId, scope, browser, cts.Token);
+                if (!opened)
+                {
+                    // Chrome is closed (never opened yet, closed by hand, crashed) and we
+                    // couldn't relaunch it this tick - most commonly because there's no
+                    // working network/proxy access right now. Don't touch the queue or pause
+                    // the account: back off and let the next tick try again, so a dropped
+                    // connection recovers on its own once it's back instead of requiring a
+                    // manual restart (2026-08-25).
+                    task.Stage = StageEnums.Waiting;
+                    _rxQueue.Enqueue(new TasksModified(accountId));
+
+                    taskQueue.IsExecuting = false;
+                    cts.Dispose();
+                    taskQueue.CancellationTokenSource = null;
+
+                    var retryDelayService = scope.ServiceProvider.GetRequiredService<IDelayService>();
+                    await retryDelayService.DelayTask();
+                    return;
+                }
+            }
+
             var contextData = new ContextData(task.Description, browser);
 
             ///===========================================================///
@@ -158,7 +182,16 @@ namespace MainCore.Services
                         logger.Warning("{Message}", message);
                     }
 
-                    if (result.HasError<Stop>() || result.HasError<Retry>())
+                    if (result.HasError<BrowserClosed>())
+                    {
+                        // 2026-08-25: browser died mid-task (closed manually, crashed, or the
+                        // connection dropped). Don't pause the account or remove/reorder the
+                        // task - leave it at the head of the queue so the next tick's
+                        // browser-open check (above) relaunches Chrome and retries it
+                        // automatically instead of requiring the user to notice and restart.
+                        logger.Warning("Browser was closed mid-task - will reopen automatically and retry.");
+                    }
+                    else if (result.HasError<Stop>() || result.HasError<Retry>())
                     {
                         var filename = await browser.Screenshot();
                         logger.Information(messageTemplate: "Screenshot saved as {FileName}", filename);
@@ -199,6 +232,40 @@ namespace MainCore.Services
 
             var delayService = scope.ServiceProvider.GetRequiredService<IDelayService>();
             await delayService.DelayTask();
+        }
+
+        // Chrome can end up closed for reasons outside the bot's control - the user closes it
+        // by accident, it crashes, or this is simply the first task ever run for the account.
+        // Called before running the next queued task (see Execute) so it gets relaunched
+        // automatically instead of failing against a dead/missing driver. GetValidAccessCommand
+        // already checks connectivity through the account's proxy as part of picking an access,
+        // so a dropped network surfaces here as "no working access yet" rather than a launch
+        // failure - either way we just report false and let the caller back off and retry on
+        // the next tick, no upper limit (2026-08-25).
+        private static async Task<bool> EnsureBrowserOpen(AccountId accountId, IServiceScope scope, IChromeBrowser browser, CancellationToken cancellationToken)
+        {
+            var getAccessQuery = scope.ServiceProvider.GetRequiredService<GetValidAccessCommand.Handler>();
+            var openBrowserCommand = scope.ServiceProvider.GetRequiredService<OpenBrowserCommand.Handler>();
+
+            var accessResult = await getAccessQuery.HandleAsync(new(accountId), cancellationToken);
+            if (accessResult.IsFailed)
+            {
+                var message = string.Join(' ', accessResult.Errors.Select(e => e.Message));
+                browser.Logger.Warning("Browser is closed and no working access is available yet ({Message}), will keep trying.", message);
+                return false;
+            }
+
+            try
+            {
+                await openBrowserCommand.HandleAsync(new(accountId, accessResult.Value), cancellationToken);
+                browser.Logger.Information("Browser was closed - reopened it automatically.");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                browser.Logger.Warning("Could not reopen browser yet ({Message}), will keep trying.", ex.Message);
+                return false;
+            }
         }
 
         private async Task NotifyPaused(AccountId accountId, IServiceScope scope, string reason)

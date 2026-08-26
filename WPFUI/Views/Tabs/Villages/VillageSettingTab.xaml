@@ -113,6 +113,7 @@
                         <CheckBox x:Name="AutoSettleEnable" Content="Train settlers/chieftains in this village's Residence/Palace and found a new village once 3 are ready" />
                         <uc:AmountInputUc x:Name="AutoSettleTargetX" Text="New village target X" Unit="" />
                         <uc:AmountInputUc x:Name="AutoSettleTargetY" Text="New village target Y" Unit="" />
+                        <uc:AmountInputUc x:Name="AutoSettleSettlersReady" Text="Settlers/chieftains already trained and ready (bot won't recount these itself - fix here if it's out of sync, e.g. 3 already sitting in the village)" Unit="" />
                         <uc:AmountInputUc x:Name="ExpansionSupplyReservePercent" Text="Keep this village's own storage above this % when helping another village settle" Unit="%" />
                     </StackPanel>
                 </Border>
