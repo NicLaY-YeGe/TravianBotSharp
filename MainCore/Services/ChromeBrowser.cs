@@ -112,7 +112,32 @@ namespace MainCore.Services
         {
             get
             {
-                if (_driver is not null) _htmlDoc.LoadHtml(_driver.PageSource);
+                if (_driver is not null)
+                {
+                    try
+                    {
+                        _htmlDoc.LoadHtml(_driver.PageSource);
+                    }
+                    catch (WebDriverException)
+                    {
+                        // 2026-08-26: a real user log showed "invalid session id" thrown
+                        // straight out of PageSource - the ChromeDriver session had died
+                        // (process crashed / remote-debugging pipe dropped) while _driver
+                        // was still non-null, so IsOpen kept reporting true and every
+                        // caller reading Html (starting with AccountTaskBehavior's very
+                        // first ingame/login check, on every task) got an unhandled
+                        // exception instead of a normal "page state" result - Polly caught
+                        // it several layers up and paused the whole account, which is a
+                        // worse outcome than the retry loop in AccountTaskBehavior was
+                        // meant to prevent (that loop never even got a chance to run since
+                        // this throws before its first check). Treat a dead session exactly
+                        // like Close(): drop the driver so IsOpen goes false and
+                        // TimerManager's existing "browser is gone, relaunch it" path
+                        // (already used for manual/crash closes) picks it up on the next
+                        // tick, no extra recovery path needed here.
+                        _driver = null;
+                    }
+                }
                 return _htmlDoc;
             }
         }
