@@ -13,14 +13,16 @@ namespace MainCore.Behaviors
         private readonly UpdateAccountInfoCommand.Handler _updateAccountInfoCommand;
         private readonly UpdateVillageListCommand.Handler _updateVillageListCommand;
         private readonly UpdateAdventureCommand.Handler _updateAdventureCommand;
+        private readonly DismissCookieConsentCommand.Handler _dismissCookieConsentCommand;
 
-        public AccountTaskBehavior(IChromeBrowser browser, ITaskManager taskManager, UpdateAccountInfoCommand.Handler updateAccountInfoCommand, UpdateVillageListCommand.Handler updateVillageListCommand, UpdateAdventureCommand.Handler updateAdventureCommand)
+        public AccountTaskBehavior(IChromeBrowser browser, ITaskManager taskManager, UpdateAccountInfoCommand.Handler updateAccountInfoCommand, UpdateVillageListCommand.Handler updateVillageListCommand, UpdateAdventureCommand.Handler updateAdventureCommand, DismissCookieConsentCommand.Handler dismissCookieConsentCommand)
         {
             _browser = browser;
             _taskManager = taskManager;
             _updateAccountInfoCommand = updateAccountInfoCommand;
             _updateVillageListCommand = updateVillageListCommand;
             _updateAdventureCommand = updateAdventureCommand;
+            _dismissCookieConsentCommand = dismissCookieConsentCommand;
         }
 
         public override async ValueTask<TResponse> HandleAsync(TRequest request, CancellationToken cancellationToken)
@@ -43,6 +45,10 @@ namespace MainCore.Behaviors
 
             if (LoginParser.IsIngamePage(_browser.Html))
             {
+                // #servertime (what IsIngamePage checks) stays in the DOM even when the
+                // consent overlay is covering the page, so this branch alone won't catch
+                // it — the dismiss check below is what actually handles that case.
+                await _dismissCookieConsentCommand.HandleAsync(new(), cancellationToken);
                 await _updateAccountInfoCommand.HandleAsync(new(accountId), cancellationToken);
                 await _updateVillageListCommand.HandleAsync(new(accountId), cancellationToken);
             }
