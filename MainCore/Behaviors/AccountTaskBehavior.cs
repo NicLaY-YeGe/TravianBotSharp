@@ -28,6 +28,16 @@ namespace MainCore.Behaviors
         public override async ValueTask<TResponse> HandleAsync(TRequest request, CancellationToken cancellationToken)
         {
             var accountId = request.AccountId;
+
+            // Runs unconditionally, before the ingame/login-page branching below. The
+            // consent overlay can appear on the LOGIN page too (before #servertime even
+            // exists in the DOM), not just post-login — if this were gated behind
+            // IsIngamePage, a modal sitting on top of the login form would never get
+            // dismissed, and LoginCommand's subsequent browser.Click() on the login
+            // button would silently land on the overlay instead (no exception, page never
+            // navigates, WaitPageChanged("dorf") just times out).
+            await _dismissCookieConsentCommand.HandleAsync(new(), cancellationToken);
+
             if (!LoginParser.IsIngamePage(_browser.Html))
             {
                 if (!LoginParser.IsLoginPage(_browser.Html))
@@ -45,10 +55,6 @@ namespace MainCore.Behaviors
 
             if (LoginParser.IsIngamePage(_browser.Html))
             {
-                // #servertime (what IsIngamePage checks) stays in the DOM even when the
-                // consent overlay is covering the page, so this branch alone won't catch
-                // it — the dismiss check below is what actually handles that case.
-                await _dismissCookieConsentCommand.HandleAsync(new(), cancellationToken);
                 await _updateAccountInfoCommand.HandleAsync(new(accountId), cancellationToken);
                 await _updateVillageListCommand.HandleAsync(new(accountId), cancellationToken);
             }
