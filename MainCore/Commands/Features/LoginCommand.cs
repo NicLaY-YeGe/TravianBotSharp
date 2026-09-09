@@ -17,17 +17,26 @@
 
             Result result;
 
-            var (_, isFailed, element, errors) = await browser.GetElement(doc => LoginParser.GetUsernameInput(doc), cancellationToken);
+            // Username/password/login-button used to be located via a positional XPath
+            // computed by HtmlAgilityPack over driver.PageSource, then re-queried against
+            // the live DOM through Selenium. That breaks on pages with an inline SVG before
+            // the form (e.g. this server's SVG logo): HtmlAgilityPack parses SVG without
+            // namespace-awareness, so its node count diverges from the real DOM's, the
+            // computed XPath points at nothing, and GetElement spins for the full 3-minute
+            // wait finding zero elements. Using native Selenium By locators here instead
+            // queries the live DOM directly and never goes through HtmlAgilityPack, so it's
+            // immune to that mismatch regardless of what markup sits before the form.
+            var (_, isFailed, element, errors) = await browser.GetElement(By.Name("name"), cancellationToken);
             if (isFailed) return Result.Fail(errors);
             result = await browser.Input(element, username, cancellationToken);
             if (result.IsFailed) return result;
 
-            (_, isFailed, element, errors) = await browser.GetElement(doc => LoginParser.GetPasswordInput(doc), cancellationToken);
+            (_, isFailed, element, errors) = await browser.GetElement(By.Name("password"), cancellationToken);
             if (isFailed) return Result.Fail(errors);
             result = await browser.Input(element, password, cancellationToken);
             if (result.IsFailed) return result;
 
-            (_, isFailed, element, errors) = await browser.GetElement(doc => LoginParser.GetLoginButton(doc), cancellationToken);
+            (_, isFailed, element, errors) = await browser.GetElement(By.XPath("//input[@name='password']/ancestor::form[1]//button[contains(@class,'green')]"), cancellationToken);
             if (isFailed) return Result.Fail(errors);
             result = await browser.Click(element, cancellationToken);
             if (result.IsFailed) return result;
