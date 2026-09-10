@@ -29,43 +29,71 @@ namespace MainCore.Behaviors
         {
             var accountId = request.AccountId;
 
-            // Runs unconditionally, before the ingame/login-page branching below. The
-            // consent overlay can appear on the LOGIN page too (before #servertime even
-            // exists in the DOM), not just post-login — if this were gated behind
-            // IsIngamePage, a modal sitting on top of the login form would never get
-            // dismissed, and LoginCommand's subsequent browser.Click() on the login
-            // button would silently land on the overlay instead (no exception, page never
-            // navigates, WaitPageChanged("dorf") just times out).
-            await _dismissCookieConsentCommand.HandleAsync(new(), cancellationToken);
-
-            if (!LoginParser.IsIngamePage(_browser.Html))
+            // 2026-08-26: a real "invalid session id" log showed the browser session dying
+            // remotely (chromedriver/Chrome side) while _driver stays non-null locally, so
+            // IsOpen (just a null check) doesn't catch it - the first _browser.Html read below
+            // then throws a raw WebDriverException that nothing was catching, and the bot
+            // paused the account instead of going through the BrowserClosed auto-recovery path
+            // that already exists for the equivalent BiDi-side failure (see ChromeBrowser).
+            // 2026-09-09: this protection had been lost from a later restructuring (the
+            // unconditional DismissCookieConsentCommand call was added ahead of it without
+            // being folded into the try) - restored, and widened to cover that call too, since
+            // it also touches the driver (reads browser.Html - see DismissCookieConsentCommand
+            // - and runs a JS script) and is now the very first thing every single task cycle
+            // does, unconditionally.
+            try
             {
-                if (!LoginParser.IsLoginPage(_browser.Html))
+                // Runs unconditionally, before the ingame/login-page branching below. The
+                // consent overlay can appear on the LOGIN page too (before #servertime even
+                // exists in the DOM), not just post-login — if this were gated behind
+                // IsIngamePage, a modal sitting on top of the login form would never get
+                // dismissed, and LoginCommand's subsequent browser.Click() on the login
+                // button would silently land on the overlay instead (no exception, page never
+                // navigates, WaitPageChanged("dorf") just times out).
+                await _dismissCookieConsentCommand.HandleAsync(new(), cancellationToken);
+
+                if (!LoginParser.IsIngamePage(_browser.Html))
                 {
-                    return (TResponse)Stop.Error.WithError("Travian is not ingame nor login page. Please check browser");
+                    if (!LoginParser.IsLoginPage(_browser.Html))
+                    {
+                        return (TResponse)Stop.Error.WithError("Travian is not ingame nor login page. Please check browser");
+                    }
+
+                    if (request is not LoginTask.Task)
+                    {
+                        _taskManager.AddOrUpdate<LoginTask.Task>(new(accountId), first: true);
+                        request.ExecuteAt = request.ExecuteAt.AddSeconds(1);
+                        return (TResponse)Skip.Error.WithError("Account is logout. Re-login now");
+                    }
                 }
 
-                if (request is not LoginTask.Task)
+                if (LoginParser.IsIngamePage(_browser.Html))
                 {
-                    _taskManager.AddOrUpdate<LoginTask.Task>(new(accountId), first: true);
-                    request.ExecuteAt = request.ExecuteAt.AddSeconds(1);
-                    return (TResponse)Skip.Error.WithError("Account is logout. Re-login now");
+                    await _updateAccountInfoCommand.HandleAsync(new(accountId), cancellationToken);
+                    await _updateVillageListCommand.HandleAsync(new(accountId), cancellationToken);
                 }
             }
-
-            if (LoginParser.IsIngamePage(_browser.Html))
+            catch (WebDriverException)
             {
-                await _updateAccountInfoCommand.HandleAsync(new(accountId), cancellationToken);
-                await _updateVillageListCommand.HandleAsync(new(accountId), cancellationToken);
+                await _browser.Close();
+                return (TResponse)BrowserClosed.Error;
             }
 
             var response = await Next(request, cancellationToken);
 
-            if (LoginParser.IsIngamePage(_browser.Html))
+            try
             {
-                await _updateAccountInfoCommand.HandleAsync(new(accountId), cancellationToken);
-                await _updateVillageListCommand.HandleAsync(new(accountId), cancellationToken);
-                await _updateAdventureCommand.HandleAsync(new(accountId), cancellationToken);
+                if (LoginParser.IsIngamePage(_browser.Html))
+                {
+                    await _updateAccountInfoCommand.HandleAsync(new(accountId), cancellationToken);
+                    await _updateVillageListCommand.HandleAsync(new(accountId), cancellationToken);
+                    await _updateAdventureCommand.HandleAsync(new(accountId), cancellationToken);
+                }
+            }
+            catch (WebDriverException)
+            {
+                await _browser.Close();
+                return (TResponse)BrowserClosed.Error;
             }
 
             return response;
