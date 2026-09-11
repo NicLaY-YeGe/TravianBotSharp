@@ -15,6 +15,15 @@ namespace MainCore.Commands.UI.Villages.BuildViewModel
         {
             var (villageId, plan) = command;
 
+            // The Level field this plan came from (BuildTab.xaml's NormalLevel TextBox) has no
+            // upper-bound validation, so a manually-typed or template-imported value can exceed
+            // what the building can actually reach in-game. Clamp it here, at the single point
+            // every NormalBuildPlan passes through before being queued, rather than trying to
+            // catch it in every UI entry path. ValidatePlanCompleteCommand also has its own
+            // defensive check for jobs that slipped through before this fix, or came from
+            // elsewhere.
+            if (plan.Level > plan.Type.GetMaxLevel()) plan.Level = plan.Type.GetMaxLevel();
+
             var buildings = await getLayoutBuildingsQuery.HandleAsync(new(villageId));
             var building = buildings.Find(x => x.Location == plan.Location);
 

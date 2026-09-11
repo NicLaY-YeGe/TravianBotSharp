@@ -21,6 +21,16 @@
 
             if (oldBuilding is not null && oldBuilding.Type == plan.Type)
             {
+                // Safety net: a plan whose target level is above the building's real in-game cap
+                // (e.g. a manually-typed value in the Level textbox, which has no upper bound - see
+                // BuildTab.xaml's NormalLevel TextBox) can never be satisfied - Travian stops showing
+                // an upgrade button once a building hits GetMaxLevel(), so without this check the plan
+                // stays "not yet complete" (oldBuilding.Level >= plan.Level never becomes true) and
+                // HandleUpgradeCommand/UpgradeParser.GetUpgradeButton retries forever, timing out every
+                // 180s. If the building is already at its true max, the job is done no matter what was
+                // asked for.
+                if (oldBuilding.Level >= oldBuilding.Type.GetMaxLevel()) return false;
+
                 if (oldBuilding.Level >= plan.Level) return false;
 
                 var queueBuilding = queueBuildings
