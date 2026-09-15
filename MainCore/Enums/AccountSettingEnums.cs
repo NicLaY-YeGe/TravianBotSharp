@@ -36,5 +36,12 @@
         // (0-100). Default = 0, meaning no restriction (always send when an adventure
         // is available). Checked live on the hero/attributes page before departure.
         MinHeroHealthPercent,
+
+        // 2026-09-12: opt-in master switch for HeroReviveTask's 3-tier auto-revive (own bag ->
+        // sibling villages -> NPC trade with gold). Default OFF (opt-in), unlike
+        // VillageSettingEnums.AutoApplyBuildTemplateEnable - this is a brand-new automation,
+        // not a replacement for prior always-on behavior, so there's no "must default true to
+        // avoid a regression" concern here.
+        EnableAutoHeroRevive,
     }
 }

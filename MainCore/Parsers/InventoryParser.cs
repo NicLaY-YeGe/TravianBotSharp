@@ -2,12 +2,19 @@
 {
     public static class InventoryParser
     {
+        // Checks the tab whose TEXT is "Inventory" specifically, not just whichever tabItem
+        // happens to be first in the DOM (2026-09-12 hardening). The original version checked
+        // heroDiv.Descendants("a").FirstOrDefault(HasClass "tabItem") - i.e. whatever tab
+        // happens to be first in document order - which only worked because Inventory happens
+        // to render first among the hero's tabs (Inventory/Attributes/Appearance). If Travian
+        // ever reorders those tabs, or renders a different tab first for some hero state, that
+        // version would silently start reading the wrong tab's "active" flag.
         public static bool IsInventoryPage(HtmlDocument doc)
         {
             var heroDiv = doc.GetElementbyId("heroV2");
             if (heroDiv is null) return false;
             var aNode = heroDiv.Descendants("a")
-                .FirstOrDefault(x => x.HasClass("tabItem"));
+                .FirstOrDefault(x => x.HasClass("tabItem") && x.InnerText.Trim().Equals("Inventory", StringComparison.OrdinalIgnoreCase));
             if (aNode is null) return false;
             return aNode.HasClass("active");
         }

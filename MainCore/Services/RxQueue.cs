@@ -49,6 +49,15 @@ namespace MainCore.Services
             {
                 taskManager.Add(startAdventureTask);
             }
+
+            // 2026-09-12: hero revival's 3-tier fallback (see HeroReviveTask) - opt-in
+            // (EnableAutoHeroRevive, default off), same conditional-add pattern as
+            // StartAdventureTask right above.
+            var heroReviveTask = new HeroReviveTask.Task(accountId);
+            if (heroReviveTask.CanStart(context) && !taskManager.IsExist<HeroReviveTask.Task>(accountId))
+            {
+                taskManager.Add(heroReviveTask);
+            }
             var villagesSpec = new VillagesSpec(accountId);
             var villages = context.Villages
                 .WithSpecification(villagesSpec)

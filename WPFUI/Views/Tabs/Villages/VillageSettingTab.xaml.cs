@@ -67,10 +67,12 @@ namespace WPFUI.Views.Tabs.Villages
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.DodgeRecallSecondsAfterSend, v => v.DodgeRecallSecondsAfterSend.ViewModel).DisposeWith(d);
 
                 this.Bind(ViewModel, vm => vm.VillageSettingInput.AutoSettleEnable, v => v.AutoSettleEnable.IsChecked).DisposeWith(d);
+                this.Bind(ViewModel, vm => vm.VillageSettingInput.AutoApplyBuildTemplateEnable, v => v.AutoApplyBuildTemplateEnable.IsChecked).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.AutoSettleTargetX, v => v.AutoSettleTargetX.ViewModel).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.AutoSettleTargetY, v => v.AutoSettleTargetY.ViewModel).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.AutoSettleSettlersReady, v => v.AutoSettleSettlersReady.ViewModel).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.ExpansionSupplyReservePercent, v => v.ExpansionSupplyReservePercent.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.ReviveSupplyReservePercent, v => v.ReviveSupplyReservePercent.ViewModel).DisposeWith(d);
 
                 this.Bind(ViewModel, vm => vm.VillageSettingInput.SmithyUpgradeEnable, v => v.SmithyUpgradeEnable.IsChecked).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.SmithyUpgradeTroopSlot, v => v.SmithyUpgradeTroopSlot.ViewModel).DisposeWith(d);

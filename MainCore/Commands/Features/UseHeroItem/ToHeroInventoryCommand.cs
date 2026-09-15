@@ -19,15 +19,25 @@ namespace MainCore.Commands.Features.UseHeroItem
             var result = await browser.Click(element, cancellationToken);
             if (result.IsFailed) return result;
 
+            // 2026-09-12: also accept landing on the dead-hero Attributes screen as a valid
+            // wait outcome - clicking the hero avatar while the hero is dead goes there
+            // instead of Inventory, and without this the wait below would sit until the
+            // WebDriver timeout every single time (see CLAUDE.md note), since IsInventoryPage
+            // can never become true in that state.
             static bool TabActived(IWebDriver driver)
             {
                 var doc = new HtmlDocument();
                 doc.LoadHtml(driver.PageSource);
-                return InventoryParser.IsInventoryPage(doc) && InventoryParser.IsInventoryLoaded(doc);
+                return (InventoryParser.IsInventoryPage(doc) && InventoryParser.IsInventoryLoaded(doc)) || HeroParser.IsHeroDead(doc);
             }
 
             result = await browser.Wait(TabActived, cancellationToken);
             if (result.IsFailed) return result;
+
+            if (HeroParser.IsHeroDead(browser.Html))
+            {
+                return HeroDead.Error;
+            }
 
             await delayService.DelayTask(cancellationToken);
 

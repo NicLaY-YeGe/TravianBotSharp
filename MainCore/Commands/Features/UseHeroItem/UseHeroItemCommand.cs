@@ -69,7 +69,11 @@
                 { HeroItemEnums.Crop, "crop" },
             };
 
-        private static async Task<Result> EnterAmount(
+        // internal, not private: reused as-is by UseHeroReviveResourceCommand (2026-09-12) -
+        // once the resourceTransferDialog is open, filling amounts in and confirming works
+        // identically whether it was opened from the Inventory tab's item grid (here) or from
+        // the hero revival screen's resource icons (HeroParser.GetReviveResourceIcon).
+        internal static async Task<Result> EnterAmount(
             IChromeBrowser browser,
             HeroItemEnums item,
             long amount,
@@ -84,7 +88,7 @@
             return Result.Ok();
         }
 
-        private static async Task<Result> Confirm(
+        internal static async Task<Result> Confirm(
             IChromeBrowser browser,
             CancellationToken cancellationToken)
         {

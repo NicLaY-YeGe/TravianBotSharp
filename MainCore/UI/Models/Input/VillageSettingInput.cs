@@ -91,6 +91,7 @@ namespace MainCore.UI.Models.Input
         public AmountInputViewModel AutoSettleSettlersReady { get; } = new();
 
         public AmountInputViewModel ExpansionSupplyReservePercent { get; } = new();
+        public AmountInputViewModel ReviveSupplyReservePercent { get; } = new();
 
         [Reactive]
         private bool _smithyUpgradeEnable;
@@ -196,10 +197,15 @@ namespace MainCore.UI.Models.Input
             DodgeRecallSecondsAfterSend.Set(settings.GetValueOrDefault(VillageSettingEnums.DodgeRecallSecondsAfterSend));
 
             AutoSettleEnable = settings.GetValueOrDefault(VillageSettingEnums.AutoSettleEnable) == 1;
+            // Unset row (village never explicitly saved this) defaults to checked/enabled -
+            // see ApplyBuildTemplateTask's own CanStart comment for why (opt-out toggle,
+            // must not silently disable the feature for every pre-existing village).
+            AutoApplyBuildTemplateEnable = settings.GetValueOrDefault(VillageSettingEnums.AutoApplyBuildTemplateEnable, 1) == 1;
             AutoSettleTargetX.Set(settings.GetValueOrDefault(VillageSettingEnums.AutoSettleTargetX));
             AutoSettleTargetY.Set(settings.GetValueOrDefault(VillageSettingEnums.AutoSettleTargetY));
             AutoSettleSettlersReady.Set(settings.GetValueOrDefault(VillageSettingEnums.AutoSettleSettlersReady));
             ExpansionSupplyReservePercent.Set(settings.GetValueOrDefault(VillageSettingEnums.ExpansionSupplyReservePercent));
+            ReviveSupplyReservePercent.Set(settings.GetValueOrDefault(VillageSettingEnums.ReviveSupplyReservePercent));
 
             SmithyUpgradeEnable = settings.GetValueOrDefault(VillageSettingEnums.SmithyUpgradeEnable) == 1;
             SmithyUpgradeTroopSlot.Set(settings.GetValueOrDefault(VillageSettingEnums.SmithyUpgradeTroopSlot));
@@ -271,10 +277,12 @@ namespace MainCore.UI.Models.Input
             var dodgeRecallSecondsAfterSend = DodgeRecallSecondsAfterSend.Get();
 
             var autoSettleEnable = AutoSettleEnable ? 1 : 0;
+            var autoApplyBuildTemplateEnable = AutoApplyBuildTemplateEnable ? 1 : 0;
             var autoSettleTargetX = AutoSettleTargetX.Get();
             var autoSettleTargetY = AutoSettleTargetY.Get();
             var autoSettleSettlersReady = AutoSettleSettlersReady.Get();
             var expansionSupplyReservePercent = ExpansionSupplyReservePercent.Get();
+            var reviveSupplyReservePercent = ReviveSupplyReservePercent.Get();
 
             var smithyUpgradeEnable = SmithyUpgradeEnable ? 1 : 0;
             var smithyUpgradeTroopSlot = SmithyUpgradeTroopSlot.Get();
@@ -348,10 +356,12 @@ namespace MainCore.UI.Models.Input
                 { VillageSettingEnums.DodgeRecallSecondsAfterSend, dodgeRecallSecondsAfterSend },
 
                 { VillageSettingEnums.AutoSettleEnable, autoSettleEnable },
+                { VillageSettingEnums.AutoApplyBuildTemplateEnable, autoApplyBuildTemplateEnable },
                 { VillageSettingEnums.AutoSettleTargetX, autoSettleTargetX },
                 { VillageSettingEnums.AutoSettleTargetY, autoSettleTargetY },
                 { VillageSettingEnums.AutoSettleSettlersReady, autoSettleSettlersReady },
                 { VillageSettingEnums.ExpansionSupplyReservePercent, expansionSupplyReservePercent },
+                { VillageSettingEnums.ReviveSupplyReservePercent, reviveSupplyReservePercent },
 
                 { VillageSettingEnums.SmithyUpgradeEnable, smithyUpgradeEnable },
                 { VillageSettingEnums.SmithyUpgradeTroopSlot, smithyUpgradeTroopSlot },

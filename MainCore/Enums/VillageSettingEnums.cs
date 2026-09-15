@@ -197,5 +197,36 @@
         // TrainSettlerCommand success (by the exact trainNow amount it just requested - no
         // parsing involved) and resets it to 0 right after a confirmed successful founding.
         AutoSettleSettlersReady,
+
+        // 2026-09-12: opt-out toggle for ApplyBuildTemplateTask (was hardcoded always-on,
+        // see that task's own comment). Added at the END of the enum (never insert in the
+        // middle - some settings stores key by ordinal, and this keeps existing saved rows
+        // for every other setting intact regardless). A village that has never explicitly
+        // saved this setting has NO row for it at all - ApplyBuildTemplateTask.CanStart treats
+        // that "row missing" case as enabled (see its own comment), and VillageSettingInput's
+        // loader defaults an unset row to 1/checked, so the checkbox and the task agree on
+        // "on unless a village explicitly turned it off".
+        AutoApplyBuildTemplateEnable,
+
+        // Tier 2 of hero revival's 3-tier fallback (2026-09-12, see HeroReviveTask): mirrors
+        // NeedExpansion*/ExpansionSupplyReservePercent exactly, but for "this village's hero
+        // is dead and short these amounts to revive" instead of settler/founding cost. Written
+        // by HeroReviveTask on the hero's HOME village, read by SupplyForReviveTask on every
+        // other village. 0 = nothing currently needed.
+        NeedReviveWood,
+        NeedReviveClay,
+        NeedReviveIron,
+        NeedReviveCrop,
+
+        // % of THIS village's own warehouse/granary capacity to keep in reserve when a
+        // sibling's hero-revival request comes in - same role as ExpansionSupplyReservePercent.
+        ReviveSupplyReservePercent,
+
+        // Bot-maintained counter (HeroReviveTask): consecutive cycles this village's hero has
+        // been dead with sibling supply requests outstanding but not yet fully delivered.
+        // Gates tier 3 (NPC trade, costs gold) - only escalates once siblings have had a few
+        // cycles' fair chance to actually deliver. Reset to 0 once the gap closes (bag +
+        // siblings caught up, or the hero revived).
+        ReviveWaitingCycles,
     }
 }
