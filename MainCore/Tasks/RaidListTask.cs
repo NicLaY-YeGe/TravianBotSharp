@@ -46,6 +46,18 @@ namespace MainCore.Tasks
     // raid list (every active row for the account, same effect as RaidListViewModel's "Pause
     // all") and sends a Telegram notification (if NotifyOnPause is enabled) - see
     // PauseWholeListAndNotify below. Only the raid list feature is paused, not the whole bot.
+    //
+    // ACCOUNT-WIDE SEND GATE (2026-09-16, user request): each row still keeps its own
+    // IntervalMinMinutes/IntervalMaxMinutes and reschedules ITSELF via RescheduleNext exactly
+    // as before, but a send is now also gated behind a single account-wide "earliest allowed
+    // next send" timestamp (AccountSettingEnums.RaidListNextAllowedSendAtMinutes - see its own
+    // comment for why). If this row's turn comes up before that gate, it doesn't hit the Rally
+    // Point at all - it just re-parks itself at the gate time (same Skip.Error + mutate
+    // ExecuteAt deferral pattern already used elsewhere, e.g. AccountTaskBehavior's 30-minute
+    // retry) and tries again later. Every successful send - from ANY row - pushes the gate
+    // forward by a fresh random(that row's own Min, Max). Net effect: a big bulk-added list no
+    // longer fires several rows within seconds of each other by chance; the whole list behaves
+    // like one continuous, randomly-spaced chain, same as a human clicking raids by hand.
     [Handler]
     public static partial class RaidListTask
     {
@@ -82,6 +94,28 @@ namespace MainCore.Tasks
             if (entry is null || !entry.IsActive)
             {
                 return Skip.Error;
+            }
+
+            // Account-wide gate check - see class-level comment. Deliberately done BEFORE
+            // navigating to the Send Troops page at all: if this row is going to be deferred
+            // anyway, there's no reason to load a page and burn browser activity for it.
+            var gateMinutes = context.ByName(task.AccountId, AccountSettingEnums.RaidListNextAllowedSendAtMinutes);
+            if (gateMinutes > 0)
+            {
+                var gateTime = FromEpochMinutes(gateMinutes);
+                if (DateTime.Now < gateTime)
+                {
+                    entry.NextExecuteAt = gateTime;
+                    context.SaveChanges();
+
+                    task.ExecuteAt = gateTime;
+
+                    logger.Information(
+                        "Raid list: village {VillageId} -> ({X}|{Y}) is due, but another row already claimed the next send slot - deferring to {GateTime}.",
+                        task.VillageId, entry.TargetX, entry.TargetY, gateTime);
+
+                    return Skip.Error;
+                }
             }
 
             var toPageResult = await toSendTroopsPageCommand.HandleAsync(new(task.VillageId), cancellationToken);
@@ -152,10 +186,11 @@ namespace MainCore.Tasks
             }
 
             var nextExecuteAt = RescheduleNext(task, entry, context);
+            var gateAdvancedTo = AdvanceGlobalSendGate(context, task.AccountId, entry);
 
             logger.Information(
-                "Raid list: sent from village {VillageId} to ({X}|{Y}), next send at {NextExecuteAt}.",
-                task.VillageId, entry.TargetX, entry.TargetY, nextExecuteAt);
+                "Raid list: sent from village {VillageId} to ({X}|{Y}), this row's next send at {NextExecuteAt}, next send for ANY row not before {GateTime}.",
+                task.VillageId, entry.TargetX, entry.TargetY, nextExecuteAt, gateAdvancedTo);
 
             return Result.Ok();
         }
@@ -180,6 +215,50 @@ namespace MainCore.Tasks
 
             return nextExecuteAt;
         }
+
+        // Pushes the account-wide send gate forward by random(entry's own Min, Max) from now -
+        // called once, right after a successful send. Uses the SAME row's interval that just
+        // fired (rather than some separate global setting) so the "how far apart should raids
+        // be" number the user already set per row is exactly what governs the gap between ANY
+        // two raids in the list, with no new setting for the user to configure. Stored as
+        // whole minutes since the Unix epoch in AccountSetting.Value (a plain int - see
+        // AccountSettingEnums.RaidListNextAllowedSendAtMinutes) since this project has no
+        // dedicated DateTime-valued setting column; minutes-since-epoch comfortably fits an
+        // int32 for the next ~4000 years and keeps this a normal key/value setting like every
+        // other AccountSettingEnums entry (no schema change, auto-seeded via
+        // AppDbContext.AccountDefaultSettings/FillAccountSettings for existing accounts too).
+        private static DateTime AdvanceGlobalSendGate(AppDbContext context, AccountId accountId, RaidListEntry entry)
+        {
+            var minMinutes = Math.Max(1, entry.IntervalMinMinutes);
+            var maxMinutes = Math.Max(minMinutes, entry.IntervalMaxMinutes);
+            var gapMinutes = Random.Shared.Next(minMinutes, maxMinutes + 1);
+            var gateTime = DateTime.Now.AddMinutes(gapMinutes);
+
+            var setting = context.AccountsSetting.FirstOrDefault(x =>
+                x.AccountId == accountId.Value && x.Setting == AccountSettingEnums.RaidListNextAllowedSendAtMinutes);
+
+            if (setting is null)
+            {
+                context.AccountsSetting.Add(new AccountSetting
+                {
+                    AccountId = accountId.Value,
+                    Setting = AccountSettingEnums.RaidListNextAllowedSendAtMinutes,
+                    Value = ToEpochMinutes(gateTime),
+                });
+            }
+            else
+            {
+                setting.Value = ToEpochMinutes(gateTime);
+            }
+
+            context.SaveChanges();
+
+            return gateTime;
+        }
+
+        private static int ToEpochMinutes(DateTime dt) => (int)(new DateTimeOffset(dt).ToUnixTimeSeconds() / 60);
+
+        private static DateTime FromEpochMinutes(int minutes) => DateTimeOffset.FromUnixTimeSeconds((long)minutes * 60).LocalDateTime;
 
         // 2026-08-25, user request: running out of troops for a raid isn't itself a ban risk (it
         // was previously just a silent per-row skip+reschedule - see the class-level comment,

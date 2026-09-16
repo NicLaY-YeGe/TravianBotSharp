@@ -7,7 +7,7 @@ namespace MainCore.Commands.Features.OasisScout
     {
         public sealed record Command : ICommand;
 
-        private static async ValueTask<r> HandleAsync(
+        private static async ValueTask<Result> HandleAsync(
             Command command,
             IChromeBrowser browser,
             CancellationToken cancellationToken)

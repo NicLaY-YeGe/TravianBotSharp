@@ -14,10 +14,13 @@ namespace MainCore.Entities
     // a troop composition to send there as a raid (RallyPointEventTypeEnums.AttackRaid), and
     // this row's OWN randomized resend interval - unlike Travian's native Farm List (which is a
     // gold-only feature and fires the whole list together on one shared interval, see
-    // StartFarmListTask), every row here is scheduled completely independently by
-    // RaidListTask: after each send, NextExecuteAt is set to
-    // now + random(IntervalMinMinutes, IntervalMaxMinutes), so a 100-row list ends up staggered
-    // rather than firing in one batch.
+    // StartFarmListTask), every row here has its own candidate schedule in RaidListTask: after
+    // each send, NextExecuteAt is set to now + random(IntervalMinMinutes, IntervalMaxMinutes).
+    // BUT (2026-09-16) an actual send is also gated behind a single account-wide "not before"
+    // timestamp shared by every row of the account (see
+    // AccountSettingEnums.RaidListNextAllowedSendAtMinutes / RaidListTask's class comment) - so
+    // a big list doesn't fire several rows within seconds of each other just because their
+    // independent random offsets happened to land close together.
     public class RaidListEntry
     {
         public int Id { get; set; }

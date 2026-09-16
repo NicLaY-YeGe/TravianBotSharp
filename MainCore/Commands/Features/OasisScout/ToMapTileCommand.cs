@@ -17,7 +17,7 @@ namespace MainCore.Commands.Features.OasisScout
     {
         public sealed record Command(int X, int Y) : ICommand;
 
-        private static async ValueTask<r> HandleAsync(
+        private static async ValueTask<Result> HandleAsync(
             Command command,
             IChromeBrowser browser,
             IDelayService delayService,
