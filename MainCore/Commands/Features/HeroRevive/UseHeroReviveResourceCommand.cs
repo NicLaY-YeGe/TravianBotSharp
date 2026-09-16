@@ -1,4 +1,6 @@
-﻿namespace MainCore.Commands.Features.HeroRevive
+﻿using MainCore.Commands.Features.UseHeroItem;
+
+namespace MainCore.Commands.Features.HeroRevive
 {
     // Tier 1 of hero revival's 3-tier fallback (2026-09-12, user-requested order: hero's own
     // bag -> sibling villages -> NPC trade with gold - see HeroReviveTask). Feeds the hero's

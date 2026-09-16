@@ -129,6 +129,13 @@ namespace MainCore.UI.Models.Input
         [Reactive]
         private int _completeImmediatelyTime;
 
+        // 2026-09-12: opt-out toggle for ApplyBuildTemplateTask (default ON) - see that
+        // task's CanStart comment. Missing from the original hero-revive delivery, which
+        // referenced this property in Set()/Get() and in VillageSettingTab.xaml.cs's binding
+        // without ever declaring the backing reactive field - caused CS0103 at build.
+        [Reactive]
+        private bool _autoApplyBuildTemplateEnable;
+
         public void Set(Dictionary<VillageSettingEnums, int> settings)
         {
             var tribe = (TribeEnums)settings.GetValueOrDefault(VillageSettingEnums.Tribe);
