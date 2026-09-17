@@ -169,6 +169,25 @@ namespace MainCore.Services
                     var raidListTaskHandler = scope.GetHandler<RaidListTask.Task>();
                     return await raidListTaskHandler.HandleAsync(raidListTask, cancellationToken);
 
+                // 2026-09-17, live bug: hero-revive-2026-09-12.zip ve oasis-scout-2026-09-15.zip
+                // patch'leri kendi Task tiplerini (HeroReviveTask, SupplyForReviveTask,
+                // OasisScoutTask) eklerken bu switch'e hiç dokunmamıştı - RaidListTask'ın
+                // 2026-08-20'de yaşadığı AYNI hatanın tekrarı: "NotImplementedException: Task
+                // Task is not implemented", HeroReviveTask her tetiklendiğinde (retry log'unda
+                // "Revive hero will retry..." görülüyor) botu durduruyordu. Üç case de eksikti,
+                // üçü de eklendi.
+                case HeroReviveTask.Task heroReviveTask:
+                    var heroReviveTaskHandler = scope.GetHandler<HeroReviveTask.Task>();
+                    return await heroReviveTaskHandler.HandleAsync(heroReviveTask, cancellationToken);
+
+                case SupplyForReviveTask.Task supplyForReviveTask:
+                    var supplyForReviveTaskHandler = scope.GetHandler<SupplyForReviveTask.Task>();
+                    return await supplyForReviveTaskHandler.HandleAsync(supplyForReviveTask, cancellationToken);
+
+                case OasisScoutTask.Task oasisScoutTask:
+                    var oasisScoutTaskHandler = scope.GetHandler<OasisScoutTask.Task>();
+                    return await oasisScoutTaskHandler.HandleAsync(oasisScoutTask, cancellationToken);
+
                 default:
                     throw new NotImplementedException($"Task {task.GetType().Name} is not implemented");
             }
