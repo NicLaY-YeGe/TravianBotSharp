@@ -74,6 +74,14 @@ namespace MainCore.Services
                 {
                     taskManager.Add(trainTroopTask);
                 }
+
+                // 2026-09-15, user request: Oasis Scout (see OasisScoutTask) - same
+                // conditional-add pattern as updateVillageTask/trainTroopTask right above.
+                var oasisScoutTask = new OasisScoutTask.Task(accountId, village);
+                if (oasisScoutTask.CanStart(context) && !taskManager.IsExist<OasisScoutTask.Task>(accountId, village))
+                {
+                    taskManager.Add(oasisScoutTask);
+                }
             }
             var hasBuildJobVillagesSpec = new HasBuildJobVillagesSpec(accountId);
             var hasBuildJobVillages = context.Villages

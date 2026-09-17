@@ -92,6 +92,15 @@ namespace WPFUI.Views.Tabs.Villages
                 this.Bind(ViewModel, vm => vm.VillageSettingInput.AutoRefreshEnable, v => v.AutoRefreshEnable.IsChecked).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.AutoRefreshTime, v => v.AutoRefreshTime.ViewModel).DisposeWith(d);
 
+                this.Bind(ViewModel, vm => vm.VillageSettingInput.EnableOasisScout, v => v.EnableOasisScout.IsChecked).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.OasisScoutMaxDistance, v => v.OasisScoutMaxDistance.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.OasisScoutIntervalMin, v => v.OasisScoutIntervalMin.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.OasisScoutIntervalMax, v => v.OasisScoutIntervalMax.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.OasisScoutTroopSlot, v => v.OasisScoutTroopSlot.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.OasisScoutMinTroops, v => v.OasisScoutMinTroops.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.OasisScoutMaxTroops, v => v.OasisScoutMaxTroops.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.OasisScoutHeroPowerThreshold, v => v.OasisScoutHeroPowerThreshold.ViewModel).DisposeWith(d);
+
                 this.Bind(ViewModel, vm => vm.VillageSettingInput.AutoClaimQuestEnable, v => v.AutoClaimQuestEnable.IsChecked).DisposeWith(d);
             });
         }

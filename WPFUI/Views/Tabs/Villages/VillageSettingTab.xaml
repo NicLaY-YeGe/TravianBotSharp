@@ -55,6 +55,19 @@
                 </Border>
                 <Border Style="{DynamicResource Box}">
                     <StackPanel>
+                        <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Oasis scout" VerticalAlignment="Center" FontWeight="Bold" />
+                        <CheckBox x:Name="EnableOasisScout" Content="Enable oasis scout" />
+                        <uc:AmountInputUc x:Name="OasisScoutMaxDistance" Text="Max distance" Unit="fields" />
+                        <uc:AmountInputUc x:Name="OasisScoutIntervalMin" Text="Scan every (min)" Unit="minutes" />
+                        <uc:AmountInputUc x:Name="OasisScoutIntervalMax" Text="Scan every (max)" Unit="minutes" />
+                        <uc:AmountInputUc x:Name="OasisScoutTroopSlot" Text="Troop slot for empty oases (1-10)" Unit="" />
+                        <uc:AmountInputUc x:Name="OasisScoutMinTroops" Text="Min troops" Unit="" />
+                        <uc:AmountInputUc x:Name="OasisScoutMaxTroops" Text="Max troops" Unit="" />
+                        <uc:AmountInputUc x:Name="OasisScoutHeroPowerThreshold" Text="Hero safety threshold" Unit="% of hero power" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{DynamicResource Box}">
+                    <StackPanel>
                         <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="NPC Crop exchange settings" VerticalAlignment="Center" FontWeight="Bold" />
                         <CheckBox x:Name="AutoNPCEnable" Content="Enable NPC Crop exchange" />
                         <CheckBox x:Name="AutoNPCOverflow" Content="Despite warehouse overflow" />

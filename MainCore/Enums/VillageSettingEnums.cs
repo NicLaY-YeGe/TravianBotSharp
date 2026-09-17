@@ -228,5 +228,18 @@
         // cycles' fair chance to actually deliver. Reset to 0 once the gap closes (bag +
         // siblings caught up, or the hero revived).
         ReviveWaitingCycles,
+
+        // Oasis Scout (2026-09-15): scans /report/surrounding for nearby oasis coordinates,
+        // opens each on the map, and sends the hero alone (if the estimated animal power is
+        // low enough) or a configured troop slot (if empty).
+        EnableOasisScout,
+
+        OasisScoutMaxDistance,
+        OasisScoutIntervalMin,
+        OasisScoutIntervalMax,
+        OasisScoutTroopSlot,
+        OasisScoutMinTroops,
+        OasisScoutMaxTroops,
+        OasisScoutHeroPowerThreshold,
     }
 }

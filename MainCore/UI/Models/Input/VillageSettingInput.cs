@@ -136,6 +136,17 @@ namespace MainCore.UI.Models.Input
         [Reactive]
         private bool _autoApplyBuildTemplateEnable;
 
+        [Reactive]
+        private bool _enableOasisScout;
+
+        public AmountInputViewModel OasisScoutMaxDistance { get; } = new();
+        public AmountInputViewModel OasisScoutIntervalMin { get; } = new();
+        public AmountInputViewModel OasisScoutIntervalMax { get; } = new();
+        public AmountInputViewModel OasisScoutTroopSlot { get; } = new();
+        public AmountInputViewModel OasisScoutMinTroops { get; } = new();
+        public AmountInputViewModel OasisScoutMaxTroops { get; } = new();
+        public AmountInputViewModel OasisScoutHeroPowerThreshold { get; } = new();
+
         public void Set(Dictionary<VillageSettingEnums, int> settings)
         {
             var tribe = (TribeEnums)settings.GetValueOrDefault(VillageSettingEnums.Tribe);
@@ -236,6 +247,15 @@ namespace MainCore.UI.Models.Input
 
             AutoClaimQuestEnable = settings.GetValueOrDefault(VillageSettingEnums.AutoClaimQuestEnable) == 1;
             CompleteImmediatelyTime = settings.GetValueOrDefault(VillageSettingEnums.CompleteImmediatelyTime);
+
+            EnableOasisScout = settings.GetValueOrDefault(VillageSettingEnums.EnableOasisScout) == 1;
+            OasisScoutMaxDistance.Set(settings.GetValueOrDefault(VillageSettingEnums.OasisScoutMaxDistance));
+            OasisScoutIntervalMin.Set(settings.GetValueOrDefault(VillageSettingEnums.OasisScoutIntervalMin));
+            OasisScoutIntervalMax.Set(settings.GetValueOrDefault(VillageSettingEnums.OasisScoutIntervalMax));
+            OasisScoutTroopSlot.Set(settings.GetValueOrDefault(VillageSettingEnums.OasisScoutTroopSlot));
+            OasisScoutMinTroops.Set(settings.GetValueOrDefault(VillageSettingEnums.OasisScoutMinTroops));
+            OasisScoutMaxTroops.Set(settings.GetValueOrDefault(VillageSettingEnums.OasisScoutMaxTroops));
+            OasisScoutHeroPowerThreshold.Set(settings.GetValueOrDefault(VillageSettingEnums.OasisScoutHeroPowerThreshold));
         }
 
         public Dictionary<VillageSettingEnums, int> Get()
@@ -311,6 +331,15 @@ namespace MainCore.UI.Models.Input
 
             var autoClaimQuestEnable = AutoClaimQuestEnable ? 1 : 0;
             var completeImmediatelyTime = CompleteImmediatelyTime;
+
+            var enableOasisScout = EnableOasisScout ? 1 : 0;
+            var oasisScoutMaxDistance = OasisScoutMaxDistance.Get();
+            var oasisScoutIntervalMin = OasisScoutIntervalMin.Get();
+            var oasisScoutIntervalMax = OasisScoutIntervalMax.Get();
+            var oasisScoutTroopSlot = OasisScoutTroopSlot.Get();
+            var oasisScoutMinTroops = OasisScoutMinTroops.Get();
+            var oasisScoutMaxTroops = OasisScoutMaxTroops.Get();
+            var oasisScoutHeroPowerThreshold = OasisScoutHeroPowerThreshold.Get();
 
             var settings = new Dictionary<VillageSettingEnums, int>()
             {
@@ -389,6 +418,15 @@ namespace MainCore.UI.Models.Input
                 { VillageSettingEnums.AutoRefreshMax, autoRefreshMax },
                 { VillageSettingEnums.AutoClaimQuestEnable, autoClaimQuestEnable },
                 { VillageSettingEnums.CompleteImmediatelyTime, completeImmediatelyTime },
+
+                { VillageSettingEnums.EnableOasisScout, enableOasisScout },
+                { VillageSettingEnums.OasisScoutMaxDistance, oasisScoutMaxDistance },
+                { VillageSettingEnums.OasisScoutIntervalMin, oasisScoutIntervalMin },
+                { VillageSettingEnums.OasisScoutIntervalMax, oasisScoutIntervalMax },
+                { VillageSettingEnums.OasisScoutTroopSlot, oasisScoutTroopSlot },
+                { VillageSettingEnums.OasisScoutMinTroops, oasisScoutMinTroops },
+                { VillageSettingEnums.OasisScoutMaxTroops, oasisScoutMaxTroops },
+                { VillageSettingEnums.OasisScoutHeroPowerThreshold, oasisScoutHeroPowerThreshold },
             };
             return settings;
         }

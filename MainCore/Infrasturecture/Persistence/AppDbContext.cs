@@ -52,6 +52,7 @@ namespace MainCore.Infrasturecture.Persistence
             {AccountSettingEnums.HammerReservePercent, 50 },
             {AccountSettingEnums.OnlineHoursMask, OnlineHoursMaskAll },
             {AccountSettingEnums.MinHeroHealthPercent, 0 },
+            {AccountSettingEnums.EnableAutoHeroRevive, 0 },
             {AccountSettingEnums.RaidListNextAllowedSendAtMinutes, 0 },
         }.ToImmutableDictionary();
 
@@ -197,6 +198,33 @@ namespace MainCore.Infrasturecture.Persistence
 
             {VillageSettingEnums.AutoClaimQuestEnable, 0 },
             {VillageSettingEnums.CompleteImmediatelyTime, 20 },
+
+            // Opt-out (default ON) - see ApplyBuildTemplateTask's own comment for why. This
+            // dictionary entry is the proper long-term fix (MainViewModel calls
+            // context.FillVillageSettings() at startup, backfilling this row for every
+            // pre-existing village); ApplyBuildTemplateTask.CanStart's "row missing = enabled"
+            // check and VillageSettingInput's GetValueOrDefault(..., 1) default stay in place
+            // too as a defensive fallback for the window before that backfill has run.
+            {VillageSettingEnums.AutoApplyBuildTemplateEnable, 1 },
+
+            // Hero revival tiers 2/3 (2026-09-12, see HeroReviveTask/SupplyForReviveTask).
+            {VillageSettingEnums.NeedReviveWood, 0 },
+            {VillageSettingEnums.NeedReviveClay, 0 },
+            {VillageSettingEnums.NeedReviveIron, 0 },
+            {VillageSettingEnums.NeedReviveCrop, 0 },
+            {VillageSettingEnums.ReviveSupplyReservePercent, 30 },
+            {VillageSettingEnums.ReviveWaitingCycles, 0 },
+
+            // Oasis Scout (2026-09-15). Defaults: off, 10-field scan radius, every 20-40
+            // minutes, 3-8 troops sent to an empty oasis.
+            {VillageSettingEnums.EnableOasisScout, 0 },
+            {VillageSettingEnums.OasisScoutMaxDistance, 10 },
+            {VillageSettingEnums.OasisScoutIntervalMin, 20 },
+            {VillageSettingEnums.OasisScoutIntervalMax, 40 },
+            {VillageSettingEnums.OasisScoutTroopSlot, 0 },
+            {VillageSettingEnums.OasisScoutMinTroops, 3 },
+            {VillageSettingEnums.OasisScoutMaxTroops, 8 },
+            {VillageSettingEnums.OasisScoutHeroPowerThreshold, 100 },
         }.ToImmutableDictionary();
 
         private List<VillageSettingEnums> GetMissingVillageSettings()
