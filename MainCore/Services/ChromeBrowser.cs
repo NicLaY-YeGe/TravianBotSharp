@@ -23,6 +23,16 @@ namespace MainCore.Services
         private BrowsingContext? _context;
         private Intercept? _authIntercept;
 
+        // 2026-09-18: added after a live log showed Navigate's retry (below) failing with the
+        // SAME stale context ID as the original failure, even though RefreshContextAsync's
+        // GetTreeAsync is a genuine live round-trip to the browser (verified against Selenium's
+        // own source - browsingContext.getTree is not client-cached), not a stale local read.
+        // That means the browser itself was still reporting the dying context as current -
+        // most likely queried mid-teardown, in the brief window between the old context being
+        // invalidated and a replacement becoming current. A short pause before retrying gives
+        // that transition a moment to settle instead of re-querying into the same race.
+        private static readonly TimeSpan ContextRefreshRetryDelay = TimeSpan.FromMilliseconds(750);
+
         public ChromeBrowser(string[] extensionsPath)
         {
             _extensionsPath = extensionsPath;
@@ -170,6 +180,10 @@ namespace MainCore.Services
                 var refreshResult = await RefreshContextAsync();
                 if (refreshResult.IsFailed) return refreshResult;
 
+                // 2026-09-18: see ContextRefreshRetryDelay's own comment - give a possible
+                // mid-teardown context transition a moment to finish before retrying.
+                await Task.Delay(ContextRefreshRetryDelay, cancellationToken);
+
                 try
                 {
                     await _context!.ReloadAsync(new() { Wait = ReadinessState.Complete });
@@ -215,6 +229,13 @@ namespace MainCore.Services
                 // case safely too (see its own comments).
                 var refreshResult = await RefreshContextAsync();
                 if (refreshResult.IsFailed) return refreshResult;
+
+                // 2026-09-18: see ContextRefreshRetryDelay's own comment - give a possible
+                // mid-teardown context transition a moment to finish before retrying. This is
+                // the exact scenario a real log caught: the retry below hit "no such frame"
+                // with the SAME context ID as the original failure, meaning the re-resolve
+                // above found the browser still reporting a context that was mid-death.
+                await Task.Delay(ContextRefreshRetryDelay, cancellationToken);
 
                 try
                 {
