@@ -170,8 +170,18 @@ namespace MainCore.Services
                 var refreshResult = await RefreshContextAsync();
                 if (refreshResult.IsFailed) return refreshResult;
 
-                await _context!.ReloadAsync(new() { Wait = ReadinessState.Complete });
-                return Result.Ok();
+                try
+                {
+                    await _context!.ReloadAsync(new() { Wait = ReadinessState.Complete });
+                    return Result.Ok();
+                }
+                catch (BiDiException retryEx)
+                {
+                    // 2026-09-17 - same fix as Navigate's retry below, applied here for
+                    // consistency: this inner call had no try/catch either, so a second
+                    // stale-context hit here would propagate uncaught too.
+                    return Retry.Error.WithError($"Refresh failed twice in a row (context kept going stale): {retryEx.Message}");
+                }
             }
         }
 
@@ -206,8 +216,28 @@ namespace MainCore.Services
                 var refreshResult = await RefreshContextAsync();
                 if (refreshResult.IsFailed) return refreshResult;
 
-                await _context!.NavigateAsync(url, new() { Wait = ReadinessState.Complete });
-                return Result.Ok();
+                try
+                {
+                    await _context!.NavigateAsync(url, new() { Wait = ReadinessState.Complete });
+                    return Result.Ok();
+                }
+                catch (BiDiException retryEx)
+                {
+                    // 2026-09-17, real user log: the FIRST retry above (right after re-resolving
+                    // _context) hit "no such frame" a SECOND time, and because this inner
+                    // NavigateAsync call had no try/catch of its own, the exception propagated
+                    // all the way up uncaught and paused the whole bot - exactly the failure
+                    // mode the surrounding comment describes fixing, just one level too shallow.
+                    // A context that goes stale twice in a row (screenshot from that same moment
+                    // showed the destination page had actually loaded fine, so this looks like a
+                    // transient BiDi context-tracking race rather than a truly dead browser) is
+                    // still just a transient failure, not a reason to stop the account - return
+                    // Retry.Error the same way CheckHeroHealthCommand's own health-read failure
+                    // does, so the existing Polly-based task retry (see the "will retry after
+                    // ..." log lines) handles it instead of an unhandled exception reaching
+                    // TimerManager as a hard pause.
+                    return Retry.Error.WithError($"Navigate failed twice in a row (context kept going stale): {retryEx.Message}");
+                }
             }
         }
 
