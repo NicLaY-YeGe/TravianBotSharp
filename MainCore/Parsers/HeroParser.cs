@@ -4,11 +4,21 @@ namespace MainCore.Parsers
 {
     public static class HeroParser
     {
+        // 2026-09-18: a live HTML capture (shared while diagnosing a 180s CheckHeroHealthCommand
+        // timeout) showed the #content div using class "hero_inventoryAttributes" instead of
+        // "heroV2Attributes" - the ONLY class this check recognized. That single-class check
+        // meant IsAttributesPage() returned false forever on that page, even though the page was
+        // genuinely, visibly on the Attributes tab - explaining the full-length timeout despite
+        // nothing actually being wrong with the page. Root trigger (a client version rollout, an
+        // alternate navigation route, or something else) isn't confirmed, so both known class
+        // names are accepted rather than replacing one guess with another.
+        private static readonly string[] AttributesPageContentClasses = ["heroV2Attributes", "hero_inventoryAttributes"];
+
         public static bool IsAttributesPage(HtmlDocument doc)
         {
             var content = doc.GetElementbyId("content");
             if (content is null) return false;
-            return content.HasClass("heroV2Attributes");
+            return AttributesPageContentClasses.Any(content.HasClass);
         }
 
         // Health is shown as a "Health" stat block (icon "attributeHealth_medium") containing
