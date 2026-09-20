@@ -1,0 +1,10 @@
+# Repo-relative .cs files compiled together into the pure-test harness (one per line).
+# Only code with NO dependency on NuGet-generated types belongs here: parsers, pure rule
+# classes, plain entities - plus the xUnit test files that cover them.
+MainCore/Parsers/OffensiveReportParser.cs
+MainCore/Commands/Features/RaidReport/RaidReportRules.cs
+MainCore/Entities/RaidReportStats.cs
+MainCore/Entities/RaidListEntry.cs
+MainCore.Test/Parsers/OffensiveReportParserTest.cs
+MainCore.Test/Parsers/MapTilesTest.cs
+MainCore.Test/Commands/Features/RaidReporting/RaidReportRulesTest.cs

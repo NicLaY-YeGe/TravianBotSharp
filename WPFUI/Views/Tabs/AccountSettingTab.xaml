@@ -66,6 +66,7 @@
                         <CheckBox x:Name="EnableAutoStartAdventure" Content="Enable auto start adventure" />
                         <uc:AmountInputUc x:Name="MinHeroHealthPercent" Text="Don't send hero below this health % (0 = no restriction)" Unit="%" />
                         <CheckBox x:Name="EnableAutoHeroRevive" Content="Automatically revive a dead hero (own bag, then sibling villages, then NPC trade with gold)" />
+                        <CheckBox x:Name="EnableRaidReport" Content="Read raid reports and pause Raid List rows that keep losing troops" />
 
                         <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Hammer village supply" VerticalAlignment="Center" FontWeight="Bold" Margin="0,8,0,0" />
                         <uc:AmountInputUc x:Name="HammerVillageId" Text="Hammer village (Village.Id, see Villages tab)" Unit="" />
