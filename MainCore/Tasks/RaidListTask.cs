@@ -1,4 +1,5 @@
 using MainCore.Commands.Features.DodgeTroop;
+using MainCore.Commands.Features.RaidListScheduling;
 using MainCore.Commands.Features.SyncAttack;
 using MainCore.Tasks.Base;
 
@@ -50,6 +51,12 @@ namespace MainCore.Tasks
     // 2026-09-20 UPDATE 2: the "no village at these coordinates" case above no longer deletes the
     // row nor stops the bot - it marks the row IsDeadTarget (inactive) and carries on; see the
     // dead-target check in HandleAsync.
+    //
+    // 2026-09-20 UPDATE 3 (herd fix): a row that finds the gate closed no longer re-parks at the
+    // bare gate time (that woke ALL deferred rows in the same second, one sent, the rest ran a
+    // full task cycle for nothing and were deferred again). It takes the next slot of a queue
+    // that starts at the gate and is spaced by the same gap range - see ReserveDeferSlot and
+    // RaidListDeferPlanner.
     //
     // 2026-09-20 UPDATE: the gate's spacing is no longer the sent row's own interval but a
     // separate account setting in SECONDS (RaidListSendGapMin/MaxSeconds, default 30-90) - the
@@ -136,14 +143,20 @@ namespace MainCore.Tasks
                 var gateTime = FromGateSeconds(gateSeconds);
                 if (DateTime.Now < gateTime)
                 {
-                    entry.NextExecuteAt = gateTime;
+                    // 2026-09-20 (herd fix): NOT the bare gate time - every deferred row used to
+                    // re-park at the exact same second, so they all woke together, one sent and
+                    // the rest were deferred again. Each deferred row now takes the next free
+                    // slot of a queue that starts at the gate (see RaidListDeferPlanner).
+                    var slot = ReserveDeferSlot(context, task.AccountId, gateTime);
+
+                    entry.NextExecuteAt = slot;
                     context.SaveChanges();
 
-                    task.ExecuteAt = gateTime;
+                    task.ExecuteAt = slot;
 
                     logger.Information(
-                        "Raid list: village {VillageId} -> ({X}|{Y}) is due, but another row already claimed the next send slot - deferring to {GateTime}.",
-                        task.VillageId, entry.TargetX, entry.TargetY, gateTime);
+                        "Raid list: village {VillageId} -> ({X}|{Y}) is due, but another row already claimed the next send slot - queued at {Slot} (gate {GateTime}).",
+                        task.VillageId, entry.TargetX, entry.TargetY, slot, gateTime);
 
                     return Skip.Error;
                 }
@@ -288,6 +301,29 @@ namespace MainCore.Tasks
             context.SaveChanges();
 
             return gateTime;
+        }
+
+        // Last deferral slot handed out per account (key = AccountId.Value). In memory only on
+        // purpose: after a restart every row is re-added at its persisted NextExecuteAt and the
+        // queue simply rebuilds itself from the gate. Guarded by a lock - tasks of different
+        // accounts can run concurrently.
+        private static readonly object DeferSlotLock = new();
+        private static readonly Dictionary<int, DateTime> LastDeferSlots = new();
+
+        // Picks (and remembers) the slot a deferred row should wake at - see RaidListDeferPlanner.
+        private static DateTime ReserveDeferSlot(AppDbContext context, AccountId accountId, DateTime gateTime)
+        {
+            var minSeconds = Math.Max(1, context.ByName(accountId, AccountSettingEnums.RaidListSendGapMinSeconds));
+            var maxSeconds = Math.Max(minSeconds, context.ByName(accountId, AccountSettingEnums.RaidListSendGapMaxSeconds));
+            var activeRows = context.RaidListEntries.Count(x => x.AccountId == accountId.Value && x.IsActive);
+
+            lock (DeferSlotLock)
+            {
+                DateTime? lastSlot = LastDeferSlots.TryGetValue(accountId.Value, out var remembered) ? remembered : null;
+                var slot = RaidListDeferPlanner.NextSlot(gateTime, lastSlot, activeRows, minSeconds, maxSeconds, Random.Shared);
+                LastDeferSlots[accountId.Value] = slot;
+                return slot;
+            }
         }
 
         private static readonly DateTimeOffset GateEpoch = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
