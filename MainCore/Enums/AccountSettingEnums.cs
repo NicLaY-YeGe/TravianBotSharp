@@ -74,5 +74,20 @@
         // reads a report by hand. 0 = never run yet (the first run only records a baseline and
         // never pauses anything based on old history).
         RaidReportLastId,
+
+        // 2026-09-20, user request: gap between two CONSECUTIVE raid sends (any rows), in
+        // seconds, picked at random in [Min, Max] after every successful send. Before this the
+        // gap re-used the sent row's own repeat interval (IntervalMin/MaxMinutes, e.g. 30-60
+        // min), so a 50-row list took 25-50 hours per round and troops sat idle in the village.
+        // The row's own interval still decides when THAT row raids again; this only spaces the
+        // chain. Defaults 30-90 s (human-like clicking speed).
+        RaidListSendGapMinSeconds,
+        RaidListSendGapMaxSeconds,
+
+        // Internal (no UI): earliest time the next raid send is allowed, in seconds since
+        // 2026-01-01 00:00 UTC (fits int32 for ~68 years). Replaces
+        // RaidListNextAllowedSendAtMinutes, which is no longer read or written (minute
+        // resolution is too coarse for a seconds-range gap). 0 = no gate.
+        RaidListNextAllowedSendAtSeconds,
     }
 }

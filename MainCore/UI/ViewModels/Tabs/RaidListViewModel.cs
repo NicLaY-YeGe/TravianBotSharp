@@ -143,12 +143,13 @@ namespace MainCore.UI.ViewModels.Tabs
                     var heroText = entry.IncludeHero ? " + hero" : "";
                     var reportSummary = RaidReportRules.Summarize(entry.GetReportStats());
                     var reportText = string.IsNullOrEmpty(reportSummary) ? "" : $" | last report: {reportSummary}";
+                    var deadText = entry.IsDeadTarget ? " | DEAD TARGET (no village there, ignored)" : "";
 
                     return new ListBoxItem()
                     {
                         Id = entry.Id,
                         Color = entry.IsActive ? SplatColor.Green : SplatColor.Red,
-                        Content = $"{villageName} -> ({entry.TargetX}|{entry.TargetY}) | {troopSummary}{heroText} | every {entry.IntervalMinMinutes}-{entry.IntervalMaxMinutes}m | next: {entry.NextExecuteAt:g}{reportText}",
+                        Content = $"{villageName} -> ({entry.TargetX}|{entry.TargetY}) | {troopSummary}{heroText} | every {entry.IntervalMinMinutes}-{entry.IntervalMaxMinutes}m | next: {entry.NextExecuteAt:g}{reportText}{deadText}",
                     };
                 })
                 .ToList();

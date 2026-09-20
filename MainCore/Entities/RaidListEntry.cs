@@ -71,6 +71,15 @@ namespace MainCore.Entities
         // (EnsureRaidListEntriesReportStatsColumnExists) - see that method's comment.
         public string ReportStatsJson { get; set; }
 
+        // 2026-09-20, user request: the server answered "There is no village at these
+        // coordinates." for this row's target (abandoned/conquered). The row is KEPT (inactive)
+        // instead of deleted so the coordinate is remembered: RaidListTask skips - without
+        // touching the game and without stopping the bot - any row, old or newly entered, whose
+        // target matches a dead row of the same account. Deleting every dead row for a
+        // coordinate from the Raid List tab makes the bot forget it. A NEW COLUMN, so it needs
+        // the hand-written ALTER TABLE patch (EnsureRaidListEntriesDeadTargetColumnExists).
+        public bool IsDeadTarget { get; set; }
+
         public RaidReportStats GetReportStats()
         {
             if (string.IsNullOrWhiteSpace(ReportStatsJson)) return RaidReportStats.Empty;

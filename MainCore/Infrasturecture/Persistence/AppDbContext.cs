@@ -56,6 +56,9 @@ namespace MainCore.Infrasturecture.Persistence
             {AccountSettingEnums.RaidListNextAllowedSendAtMinutes, 0 },
             {AccountSettingEnums.EnableRaidReport, 1 },
             {AccountSettingEnums.RaidReportLastId, 0 },
+            {AccountSettingEnums.RaidListSendGapMinSeconds, 30 },
+            {AccountSettingEnums.RaidListSendGapMaxSeconds, 90 },
+            {AccountSettingEnums.RaidListNextAllowedSendAtSeconds, 0 },
         }.ToImmutableDictionary();
 
         // All 24 bits set (hour 0 .. hour 23) = no restriction, matches pre-existing behavior
@@ -386,6 +389,19 @@ namespace MainCore.Infrasturecture.Persistence
             if (hasColumn) return;
 
             Database.ExecuteSqlRaw("ALTER TABLE \"RaidListEntries\" ADD COLUMN \"ReportStatsJson\" TEXT NULL");
+        }
+
+        // IsDeadTarget (added 2026-09-20) - same situation/fix shape as the two column patches
+        // above. INTEGER NOT NULL DEFAULT 0 (SQLite bool) so existing rows read as "not dead".
+        public void EnsureRaidListEntriesDeadTargetColumnExists()
+        {
+            var hasColumn = Database
+                .SqlQueryRaw<string>("SELECT name FROM pragma_table_info('RaidListEntries') WHERE name = 'IsDeadTarget'")
+                .AsEnumerable()
+                .Any();
+            if (hasColumn) return;
+
+            Database.ExecuteSqlRaw("ALTER TABLE \"RaidListEntries\" ADD COLUMN \"IsDeadTarget\" INTEGER NOT NULL DEFAULT 0");
         }
 
         #endregion schema patches

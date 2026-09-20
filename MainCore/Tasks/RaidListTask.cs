@@ -47,6 +47,15 @@ namespace MainCore.Tasks
     // all") and sends a Telegram notification (if NotifyOnPause is enabled) - see
     // PauseWholeListAndNotify below. Only the raid list feature is paused, not the whole bot.
     //
+    // 2026-09-20 UPDATE 2: the "no village at these coordinates" case above no longer deletes the
+    // row nor stops the bot - it marks the row IsDeadTarget (inactive) and carries on; see the
+    // dead-target check in HandleAsync.
+    //
+    // 2026-09-20 UPDATE: the gate's spacing is no longer the sent row's own interval but a
+    // separate account setting in SECONDS (RaidListSendGapMin/MaxSeconds, default 30-90) - the
+    // rest of the paragraph below is the original design. The gate value moved to
+    // RaidListNextAllowedSendAtSeconds (the old Minutes key is unused now).
+    //
     // ACCOUNT-WIDE SEND GATE (2026-09-16, user request): each row still keeps its own
     // IntervalMinMinutes/IntervalMaxMinutes and reschedules ITSELF via RescheduleNext exactly
     // as before, but a send is now also gated behind a single account-wide "earliest allowed
@@ -96,13 +105,35 @@ namespace MainCore.Tasks
                 return Skip.Error;
             }
 
+            // Dead-target memory (2026-09-20, user request): this exact target already answered
+            // "no village at these coordinates" for another row of this account (or for this one,
+            // e.g. the user switched it back on). Ignore it quietly - no browser, no send, and
+            // NOT a bot stop - and switch the row off so it stops re-queueing; the task is
+            // removed by the Skip.Error (ExecuteAt untouched).
+            if (entry.IsDeadTarget || context.RaidListEntries.Any(x =>
+                    x.AccountId == entry.AccountId
+                    && x.TargetX == entry.TargetX
+                    && x.TargetY == entry.TargetY
+                    && x.IsDeadTarget))
+            {
+                entry.IsDeadTarget = true;
+                entry.IsActive = false;
+                context.SaveChanges();
+
+                logger.Information(
+                    "Raid list: ({X}|{Y}) is a known dead target (no village there) - ignoring this row without contacting the server.",
+                    entry.TargetX, entry.TargetY);
+
+                return Skip.Error;
+            }
+
             // Account-wide gate check - see class-level comment. Deliberately done BEFORE
             // navigating to the Send Troops page at all: if this row is going to be deferred
             // anyway, there's no reason to load a page and burn browser activity for it.
-            var gateMinutes = context.ByName(task.AccountId, AccountSettingEnums.RaidListNextAllowedSendAtMinutes);
-            if (gateMinutes > 0)
+            var gateSeconds = context.ByName(task.AccountId, AccountSettingEnums.RaidListNextAllowedSendAtSeconds);
+            if (gateSeconds > 0)
             {
-                var gateTime = FromEpochMinutes(gateMinutes);
+                var gateTime = FromGateSeconds(gateSeconds);
                 if (DateTime.Now < gateTime)
                 {
                     entry.NextExecuteAt = gateTime;
@@ -165,28 +196,35 @@ namespace MainCore.Tasks
                 // "No village at these coordinates" means the target is permanently dead
                 // (abandoned/conquered) - retrying it on schedule forever, unattended, is exactly
                 // the kind of repeated-empty-coordinate pattern that risks flagging the account.
-                // Delete the row so it can never fire again, and Stop the whole bot (not just
-                // skip this row) so the user notices and reviews the rest of their raid list.
+                // Mark the row as a dead target (inactive, remembered) so it can never fire
+                // again. (Until 2026-09-20 this also Stopped the whole bot; not any more.)
                 var isEmptyTarget = sendResult.Errors.Any(e =>
                     e.Message.Contains("no village at these coordinates", StringComparison.OrdinalIgnoreCase));
 
                 if (isEmptyTarget)
                 {
-                    context.RaidListEntries.Where(x => x.Id == task.EntryId.Value).ExecuteDelete();
+                    // 2026-09-20: keep the row as an inactive "dead target" marker instead of
+                    // deleting it, so the same coordinate entered again later is ignored (see the
+                    // dead-target check at the top of this method and RaidListEntry.IsDeadTarget).
+                    entry.IsDeadTarget = true;
+                    entry.IsActive = false;
+                    context.SaveChanges();
 
                     logger.Warning(
-                        "Raid list: ({X}|{Y}) from village {VillageId} has no village there (abandoned/conquered) - deleting this raid list row and stopping the bot so you can review the rest of the list.",
+                        "Raid list: ({X}|{Y}) from village {VillageId} has no village there (abandoned/conquered) - marked as a dead target (row kept inactive, coordinate ignored from now on); the bot keeps running.",
                         entry.TargetX, entry.TargetY, task.VillageId);
 
-                    return Stop.Error.WithErrors(sendResult.Errors)
-                        .WithError($"Raid list row targeting ({entry.TargetX}|{entry.TargetY}) was deleted - no village at that target.");
+                    // 2026-09-20 (later, user request): no longer a bot Stop - the row is already
+                    // switched off above, so a plain Skip.Error (ExecuteAt untouched -> this task
+                    // is removed from the queue) is enough and every other row carries on.
+                    return Skip.Error;
                 }
 
                 return Result.Fail(sendResult.Errors);
             }
 
             var nextExecuteAt = RescheduleNext(task, entry, context);
-            var gateAdvancedTo = AdvanceGlobalSendGate(context, task.AccountId, entry);
+            var gateAdvancedTo = AdvanceGlobalSendGate(context, task.AccountId);
 
             logger.Information(
                 "Raid list: sent from village {VillageId} to ({X}|{Y}), this row's next send at {NextExecuteAt}, next send for ANY row not before {GateTime}.",
@@ -216,39 +254,35 @@ namespace MainCore.Tasks
             return nextExecuteAt;
         }
 
-        // Pushes the account-wide send gate forward by random(entry's own Min, Max) from now -
-        // called once, right after a successful send. Uses the SAME row's interval that just
-        // fired (rather than some separate global setting) so the "how far apart should raids
-        // be" number the user already set per row is exactly what governs the gap between ANY
-        // two raids in the list, with no new setting for the user to configure. Stored as
-        // whole minutes since the Unix epoch in AccountSetting.Value (a plain int - see
-        // AccountSettingEnums.RaidListNextAllowedSendAtMinutes) since this project has no
-        // dedicated DateTime-valued setting column; minutes-since-epoch comfortably fits an
-        // int32 for the next ~4000 years and keeps this a normal key/value setting like every
-        // other AccountSettingEnums entry (no schema change, auto-seeded via
-        // AppDbContext.AccountDefaultSettings/FillAccountSettings for existing accounts too).
-        private static DateTime AdvanceGlobalSendGate(AppDbContext context, AccountId accountId, RaidListEntry entry)
+        // Pushes the account-wide send gate forward by random(SendGapMin, SendGapMax) SECONDS
+        // (account settings RaidListSendGapMinSeconds/MaxSeconds) from now - called once, right
+        // after a successful send. 2026-09-20, user request: this used to re-use the sent row's
+        // own repeat interval (minutes), which stretched a big list into a round of many hours
+        // and left troops idle. Now the chain spacing is its own short range, while each row
+        // still repeats on its own IntervalMin/MaxMinutes (RescheduleNext). Stored as seconds
+        // since GateEpoch in a plain int AccountSetting (see the enum comment).
+        private static DateTime AdvanceGlobalSendGate(AppDbContext context, AccountId accountId)
         {
-            var minMinutes = Math.Max(1, entry.IntervalMinMinutes);
-            var maxMinutes = Math.Max(minMinutes, entry.IntervalMaxMinutes);
-            var gapMinutes = Random.Shared.Next(minMinutes, maxMinutes + 1);
-            var gateTime = DateTime.Now.AddMinutes(gapMinutes);
+            var minSeconds = Math.Max(1, context.ByName(accountId, AccountSettingEnums.RaidListSendGapMinSeconds));
+            var maxSeconds = Math.Max(minSeconds, context.ByName(accountId, AccountSettingEnums.RaidListSendGapMaxSeconds));
+            var gapSeconds = Random.Shared.Next(minSeconds, maxSeconds + 1);
+            var gateTime = DateTime.Now.AddSeconds(gapSeconds);
 
             var setting = context.AccountsSetting.FirstOrDefault(x =>
-                x.AccountId == accountId.Value && x.Setting == AccountSettingEnums.RaidListNextAllowedSendAtMinutes);
+                x.AccountId == accountId.Value && x.Setting == AccountSettingEnums.RaidListNextAllowedSendAtSeconds);
 
             if (setting is null)
             {
                 context.AccountsSetting.Add(new AccountSetting
                 {
                     AccountId = accountId.Value,
-                    Setting = AccountSettingEnums.RaidListNextAllowedSendAtMinutes,
-                    Value = ToEpochMinutes(gateTime),
+                    Setting = AccountSettingEnums.RaidListNextAllowedSendAtSeconds,
+                    Value = ToGateSeconds(gateTime),
                 });
             }
             else
             {
-                setting.Value = ToEpochMinutes(gateTime);
+                setting.Value = ToGateSeconds(gateTime);
             }
 
             context.SaveChanges();
@@ -256,9 +290,11 @@ namespace MainCore.Tasks
             return gateTime;
         }
 
-        private static int ToEpochMinutes(DateTime dt) => (int)(new DateTimeOffset(dt).ToUnixTimeSeconds() / 60);
+        private static readonly DateTimeOffset GateEpoch = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
-        private static DateTime FromEpochMinutes(int minutes) => DateTimeOffset.FromUnixTimeSeconds((long)minutes * 60).LocalDateTime;
+        private static int ToGateSeconds(DateTime dt) => (int)(new DateTimeOffset(dt).ToUnixTimeSeconds() - GateEpoch.ToUnixTimeSeconds());
+
+        private static DateTime FromGateSeconds(int seconds) => DateTimeOffset.FromUnixTimeSeconds(GateEpoch.ToUnixTimeSeconds() + seconds).LocalDateTime;
 
         // 2026-08-25, user request: running out of troops for a raid isn't itself a ban risk (it
         // was previously just a silent per-row skip+reschedule - see the class-level comment,

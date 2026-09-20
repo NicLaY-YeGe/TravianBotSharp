@@ -18,6 +18,7 @@ namespace MainCore.UI.Models.Input
             EnableAutoHeroRevive = settings.GetValueOrDefault(AccountSettingEnums.EnableAutoHeroRevive) == 1;
             EnableRaidReport = settings.GetValueOrDefault(AccountSettingEnums.EnableRaidReport) == 1;
             MinHeroHealthPercent.Set(settings.GetValueOrDefault(AccountSettingEnums.MinHeroHealthPercent));
+            RaidSendGap.Set(settings.GetValueOrDefault(AccountSettingEnums.RaidListSendGapMinSeconds, 30), settings.GetValueOrDefault(AccountSettingEnums.RaidListSendGapMaxSeconds, 90));
             FarmInterval.Set(settings.GetValueOrDefault(AccountSettingEnums.FarmIntervalMin), settings.GetValueOrDefault(AccountSettingEnums.FarmIntervalMax));
             UseStartAllButton = settings.GetValueOrDefault(AccountSettingEnums.UseStartAllButton) == 1;
             HammerVillageId.Set(settings.GetValueOrDefault(AccountSettingEnums.HammerVillageId));
@@ -44,6 +45,7 @@ namespace MainCore.UI.Models.Input
             var hammerReservePercent = HammerReservePercent.Get();
             var onlineHoursMask = OnlineHours.Get();
             var minHeroHealthPercent = MinHeroHealthPercent.Get();
+            var (raidSendGapMin, raidSendGapMax) = RaidSendGap.Get();
 
             var settings = new Dictionary<AccountSettingEnums, int>()
             {
@@ -71,6 +73,8 @@ namespace MainCore.UI.Models.Input
                 { AccountSettingEnums.HammerReservePercent, hammerReservePercent },
                 { AccountSettingEnums.OnlineHoursMask, onlineHoursMask },
                 { AccountSettingEnums.MinHeroHealthPercent, minHeroHealthPercent },
+                { AccountSettingEnums.RaidListSendGapMinSeconds, raidSendGapMin },
+                { AccountSettingEnums.RaidListSendGapMaxSeconds, raidSendGapMax },
             };
             return settings;
         }
@@ -82,6 +86,7 @@ namespace MainCore.UI.Models.Input
         public RangeInputViewModel WorkTime { get; } = new();
         public RangeInputViewModel SleepTime { get; } = new();
         public RangeInputViewModel FarmInterval { get; } = new();
+        public RangeInputViewModel RaidSendGap { get; } = new();
 
         [Reactive]
         private bool _enableAutoLoadVillage;
