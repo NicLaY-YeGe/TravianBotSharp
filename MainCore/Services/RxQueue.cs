@@ -58,6 +58,16 @@ namespace MainCore.Services
             {
                 taskManager.Add(heroReviveTask);
             }
+
+            // 2026-09-19: reads the raid reports and pauses Raid List rows that keep losing
+            // troops (see RaidReportTask) - same conditional-add pattern as the tasks above. With
+            // no active Raid List row it re-arms itself without opening any page.
+            var raidReportTask = new RaidReportTask.Task(accountId);
+            if (raidReportTask.CanStart(context) && !taskManager.IsExist<RaidReportTask.Task>(accountId))
+            {
+                taskManager.Add(raidReportTask);
+            }
+
             var villagesSpec = new VillagesSpec(accountId);
             var villages = context.Villages
                 .WithSpecification(villagesSpec)

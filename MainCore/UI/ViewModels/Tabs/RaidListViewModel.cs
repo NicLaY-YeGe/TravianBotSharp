@@ -1,3 +1,4 @@
+using MainCore.Commands.Features.RaidReport;
 using MainCore.UI.Models.Output;
 using MainCore.UI.ViewModels.Abstract;
 using MainCore.UI.ViewModels.UserControls;
@@ -140,12 +141,14 @@ namespace MainCore.UI.ViewModels.Tabs
                             : $"slot {kv.Key}: {kv.Value.Min}-{kv.Value.Max}"));
                     if (string.IsNullOrEmpty(troopSummary)) troopSummary = "(no troops)";
                     var heroText = entry.IncludeHero ? " + hero" : "";
+                    var reportSummary = RaidReportRules.Summarize(entry.GetReportStats());
+                    var reportText = string.IsNullOrEmpty(reportSummary) ? "" : $" | last report: {reportSummary}";
 
                     return new ListBoxItem()
                     {
                         Id = entry.Id,
                         Color = entry.IsActive ? SplatColor.Green : SplatColor.Red,
-                        Content = $"{villageName} -> ({entry.TargetX}|{entry.TargetY}) | {troopSummary}{heroText} | every {entry.IntervalMinMinutes}-{entry.IntervalMaxMinutes}m | next: {entry.NextExecuteAt:g}",
+                        Content = $"{villageName} -> ({entry.TargetX}|{entry.TargetY}) | {troopSummary}{heroText} | every {entry.IntervalMinMinutes}-{entry.IntervalMaxMinutes}m | next: {entry.NextExecuteAt:g}{reportText}",
                     };
                 })
                 .ToList();

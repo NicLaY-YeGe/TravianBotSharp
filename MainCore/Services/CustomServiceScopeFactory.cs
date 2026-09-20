@@ -188,6 +188,14 @@ namespace MainCore.Services
                     var oasisScoutTaskHandler = scope.GetHandler<OasisScoutTask.Task>();
                     return await oasisScoutTaskHandler.HandleAsync(oasisScoutTask, cancellationToken);
 
+                // 2026-09-19: RaidReportTask ("Yagma organize" scope A). Every new Task type
+                // NEEDS a case here or it dies with the NotImplementedException below the first
+                // time it runs - the mistake RaidListTask (2026-08-20) and the 2026-09-17 trio
+                // already made once each.
+                case RaidReportTask.Task raidReportTask:
+                    var raidReportTaskHandler = scope.GetHandler<RaidReportTask.Task>();
+                    return await raidReportTaskHandler.HandleAsync(raidReportTask, cancellationToken);
+
                 default:
                     throw new NotImplementedException($"Task {task.GetType().Name} is not implemented");
             }

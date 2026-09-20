@@ -69,6 +69,22 @@
                     taskManager.Remove<StartAdventureTask.Task>(accountId);
                 }
             }
+
+            if (settings.ContainsKey(AccountSettingEnums.EnableRaidReport))
+            {
+                if (settings[AccountSettingEnums.EnableRaidReport] == 1)
+                {
+                    var task = new RaidReportTask.Task(accountId);
+                    if (task.CanStart(context) && !taskManager.IsExist<RaidReportTask.Task>(accountId))
+                    {
+                        taskManager.Add(task);
+                    }
+                }
+                else
+                {
+                    taskManager.Remove<RaidReportTask.Task>(accountId);
+                }
+            }
         }
     }
 }

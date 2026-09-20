@@ -64,6 +64,33 @@ namespace MainCore.Entities
 
         public bool IsActive { get; set; }
 
+        // 2026-09-19 (RaidReportTask, "Yagma organize" scope A): JSON-serialized
+        // RaidReportStats - what the last raid reports for this row's target said (outcome,
+        // loot percent, streaks). Null until the first matching report is read. A NEW COLUMN on
+        // an existing table, so it needs the hand-written ALTER TABLE patch in AppDbContext
+        // (EnsureRaidListEntriesReportStatsColumnExists) - see that method's comment.
+        public string ReportStatsJson { get; set; }
+
+        public RaidReportStats GetReportStats()
+        {
+            if (string.IsNullOrWhiteSpace(ReportStatsJson)) return RaidReportStats.Empty;
+
+            try
+            {
+                return JsonSerializer.Deserialize<RaidReportStats>(ReportStatsJson) ?? RaidReportStats.Empty;
+            }
+            catch (JsonException)
+            {
+                // Statistics only - a corrupt value must never break the Raid List itself.
+                return RaidReportStats.Empty;
+            }
+        }
+
+        public void SetReportStats(RaidReportStats stats)
+        {
+            ReportStatsJson = JsonSerializer.Serialize(stats);
+        }
+
         public IReadOnlyDictionary<int, long> GetTroopAmounts()
         {
             if (string.IsNullOrWhiteSpace(TroopAmountsJson)) return new Dictionary<int, long>();

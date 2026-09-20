@@ -23,6 +23,20 @@ namespace MainCore.Services
         private BrowsingContext? _context;
         private Intercept? _authIntercept;
 
+        // 2026-09-19, real user log (Revive hero -> CheckHeroHealthCommand -> Navigate to
+        // /hero/attributes): the BiDi context this class tracks kept failing with the SAME
+        // "no such frame: Context ... not found" id on every attempt - across all three Polly
+        // retries, over more than a minute - even though the page itself had loaded fine in
+        // the browser (screenshot from that moment). A 750 ms wait can't fix a state that
+        // doesn't clear on its own, and the exhausted retries ended in Retry.Error, which
+        // TimerManager treats as "pause the WHOLE bot". Everything else in this class (click,
+        // PageSource, screenshot, ...) goes through the classic WebDriver session, which was
+        // healthy the whole time - only Navigate/Refresh use BiDi. So once BiDi navigation has
+        // failed twice in a row while the classic session still works, this flag makes
+        // Navigate/Refresh use the classic driver directly until the browser is restarted
+        // (reset in Setup/Close). See NavigateClassic/RefreshClassic below.
+        private bool _bidiNavigationBroken;
+
         // 2026-09-18: added after a live log showed Navigate's retry (below) failing with the
         // SAME stale context ID as the original failure, even though RefreshContextAsync's
         // GetTreeAsync is a genuine live round-trip to the browser (verified against Selenium's
@@ -92,6 +106,7 @@ namespace MainCore.Services
 
             _bidi = await _driver.AsBiDiAsync();
             _context = (await _bidi.BrowsingContext.GetTreeAsync()).Contexts[0].Context;
+            _bidiNavigationBroken = false;
 
             foreach (var path in _extensionsPath)
             {
@@ -166,6 +181,8 @@ namespace MainCore.Services
         {
             if (_context is null) return Stop.DriverNotReady;
 
+            if (_bidiNavigationBroken) return await RefreshClassic(cancellationToken);
+
             try
             {
                 await _context.ReloadAsync(new() { Wait = ReadinessState.Complete });
@@ -194,7 +211,20 @@ namespace MainCore.Services
                     // 2026-09-17 - same fix as Navigate's retry below, applied here for
                     // consistency: this inner call had no try/catch either, so a second
                     // stale-context hit here would propagate uncaught too.
-                    return Retry.Error.WithError($"Refresh failed twice in a row (context kept going stale): {retryEx.Message}");
+                    //
+                    // 2026-09-19: before giving up, try the classic driver - see
+                    // _bidiNavigationBroken's comment for why that's safe and why it works.
+                    var classicResult = await RefreshClassic(cancellationToken);
+                    if (classicResult.IsSuccess)
+                    {
+                        _bidiNavigationBroken = true;
+                        Logger?.Warning("BiDi refresh failed twice ({Message}) - the classic driver worked, so page reloads will use it from now on.", retryEx.Message);
+                        return classicResult;
+                    }
+
+                    return Retry.Error
+                        .WithError($"Refresh failed twice in a row (context kept going stale): {retryEx.Message}")
+                        .WithErrors(classicResult.Errors);
                 }
             }
         }
@@ -202,6 +232,8 @@ namespace MainCore.Services
         public async Task<Result> Navigate(string url, CancellationToken cancellationToken)
         {
             if (_context is null) return Stop.DriverNotReady;
+
+            if (_bidiNavigationBroken) return await NavigateClassic(url, cancellationToken);
 
             try
             {
@@ -257,8 +289,61 @@ namespace MainCore.Services
                     // does, so the existing Polly-based task retry (see the "will retry after
                     // ..." log lines) handles it instead of an unhandled exception reaching
                     // TimerManager as a hard pause.
-                    return Retry.Error.WithError($"Navigate failed twice in a row (context kept going stale): {retryEx.Message}");
+                    //
+                    // 2026-09-19: BEFORE returning that Retry, try the classic driver once - a
+                    // real log showed this state does NOT clear on its own (same context id on
+                    // every retry for over a minute, until the retries ran out and the whole
+                    // bot paused) while the classic session and the page itself were fine. See
+                    // _bidiNavigationBroken's comment. Only if the classic driver fails too is
+                    // the browser genuinely in trouble, and only then does the old Retry apply.
+                    var classicResult = await NavigateClassic(url, cancellationToken);
+                    if (classicResult.IsSuccess)
+                    {
+                        _bidiNavigationBroken = true;
+                        Logger?.Warning("BiDi navigation failed twice ({Message}) - the classic driver worked, so navigation will use it from now on.", retryEx.Message);
+                        return classicResult;
+                    }
+
+                    return Retry.Error
+                        .WithError($"Navigate failed twice in a row (context kept going stale): {retryEx.Message}")
+                        .WithErrors(classicResult.Errors);
                 }
+            }
+        }
+
+        // 2026-09-19: classic-WebDriver equivalents of Navigate/Refresh, used as the fallback
+        // (and, once _bidiNavigationBroken is set, the primary path) - see that field's comment.
+        // GoToUrl/Refresh block until the page's load event, same as the BiDi calls'
+        // ReadinessState.Complete, and the PageLoad timeout set in Setup applies to them.
+        private async Task<Result> NavigateClassic(string url, CancellationToken cancellationToken)
+        {
+            var driver = _driver;
+            if (driver is null) return Stop.DriverNotReady;
+
+            try
+            {
+                await Task.Run(() => driver.Navigate().GoToUrl(url), cancellationToken);
+                return Result.Ok();
+            }
+            catch (WebDriverException ex)
+            {
+                return Retry.Error.WithError($"Classic navigation to {url} failed: {ex.Message}");
+            }
+        }
+
+        private async Task<Result> RefreshClassic(CancellationToken cancellationToken)
+        {
+            var driver = _driver;
+            if (driver is null) return Stop.DriverNotReady;
+
+            try
+            {
+                await Task.Run(() => driver.Navigate().Refresh(), cancellationToken);
+                return Result.Ok();
+            }
+            catch (WebDriverException ex)
+            {
+                return Retry.Error.WithError($"Classic refresh failed: {ex.Message}");
             }
         }
 
@@ -465,6 +550,7 @@ namespace MainCore.Services
                 _bidi = null;
                 _context = null;
                 _authIntercept = null;
+                _bidiNavigationBroken = false;
             }
         }
 

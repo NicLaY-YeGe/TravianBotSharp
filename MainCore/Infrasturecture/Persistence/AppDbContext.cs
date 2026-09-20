@@ -54,6 +54,8 @@ namespace MainCore.Infrasturecture.Persistence
             {AccountSettingEnums.MinHeroHealthPercent, 0 },
             {AccountSettingEnums.EnableAutoHeroRevive, 0 },
             {AccountSettingEnums.RaidListNextAllowedSendAtMinutes, 0 },
+            {AccountSettingEnums.EnableRaidReport, 1 },
+            {AccountSettingEnums.RaidReportLastId, 0 },
         }.ToImmutableDictionary();
 
         // All 24 bits set (hour 0 .. hour 23) = no restriction, matches pre-existing behavior
@@ -368,6 +370,22 @@ namespace MainCore.Infrasturecture.Persistence
             if (hasColumn) return;
 
             Database.ExecuteSqlRaw("ALTER TABLE \"RaidListEntries\" ADD COLUMN \"TroopAmountRangesJson\" TEXT NULL");
+        }
+
+        // ReportStatsJson (added 2026-09-19 for RaidReportTask) - same situation and same fix
+        // shape as EnsureRaidListEntriesTroopAmountRangesColumnExists() right above: a NEW
+        // COLUMN on a table that already exists for anyone who used the Raid List before, and
+        // this project has no EF Core migrations. A brand-new install's table already has the
+        // column (it is part of the model, so GenerateCreateScript() includes it).
+        public void EnsureRaidListEntriesReportStatsColumnExists()
+        {
+            var hasColumn = Database
+                .SqlQueryRaw<string>("SELECT name FROM pragma_table_info('RaidListEntries') WHERE name = 'ReportStatsJson'")
+                .AsEnumerable()
+                .Any();
+            if (hasColumn) return;
+
+            Database.ExecuteSqlRaw("ALTER TABLE \"RaidListEntries\" ADD COLUMN \"ReportStatsJson\" TEXT NULL");
         }
 
         #endregion schema patches

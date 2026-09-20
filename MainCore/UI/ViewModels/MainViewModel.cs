@@ -49,6 +49,7 @@ namespace MainCore.UI.ViewModels
 
                         context.EnsureRaidListEntriesTableExists();
                         context.EnsureRaidListEntriesTroopAmountRangesColumnExists();
+                        context.EnsureRaidListEntriesReportStatsColumnExists();
                     }
                 }, RxApp.TaskpoolScheduler);
 

@@ -60,5 +60,19 @@
         // IntervalMaxMinutes), turning the whole list into one serialized chain instead of
         // many independent clocks that happen to overlap.
         RaidListNextAllowedSendAtMinutes,
+
+        // 2026-09-19, user request ("Yagma organize", scope A): master switch for
+        // RaidReportTask, which reads /report/offensive, matches raid reports to Raid List rows
+        // and pauses a row that keeps losing troops (see RaidReportRules). Default ON - unlike
+        // EnableAutoHeroRevive it never sends anything or spends anything, and with no active
+        // Raid List row the task does not even open the browser page.
+        EnableRaidReport,
+
+        // Internal (no UI, not part of AccountSettingInput): the highest offensive report id
+        // RaidReportTask has already handled. Report ids grow with time, so "id > this" is a
+        // reliable "new report" test - unlike the read/unread flag, which flips when the user
+        // reads a report by hand. 0 = never run yet (the first run only records a baseline and
+        // never pauses anything based on old history).
+        RaidReportLastId,
     }
 }
