@@ -14,6 +14,25 @@ namespace MainCore.Commands.Features.RaidReport
         // not: a lone defender or a crocodile-strength oasis can cost a unit or two once.
         public const int LossyPauseAfter = 2;
 
+        // 2026-09-21, user request: auto-scale the troop amount sent to a target by how full
+        // its carry capacity has been coming back. Deliberately a "streak just reached N"
+        // trigger (==, not >=) rather than "adjust every report past N" - the streak keeps
+        // counting past the threshold and re-triggering every report would compound every
+        // single time (e.g. x0.8 x0.8 x0.8 ... after 10 low raids in a row), which is a much
+        // more aggressive curve than "rough, one-step-at-a-time" calls for.
+        public const int LowLootStreakToShrink = 3;
+        public const int FullLootStreakToGrow = 2;
+
+        // How much one shrink/grow step moves the multiplier, and the floor/ceiling it can
+        // never cross. A shrink never goes below MinTroopMultiplierPercent no matter how long
+        // the low-loot streak still runs - this multiplier alone never empties a row down to
+        // zero troops, and it does not pause anything (GetPauseReason below is unrelated,
+        // loot-percent-only, and untouched by this).
+        public const int ShrinkStepPercent = 20;
+        public const int GrowStepPercent = 25;
+        public const int MinTroopMultiplierPercent = 40;
+        public const int MaxTroopMultiplierPercent = 200;
+
         // 0-100, rounded; -1 = unknown (nothing could be carried, e.g. a hero-only raid).
         public static int LootPercent(int carried, int capacity)
         {
@@ -44,7 +63,31 @@ namespace MainCore.Commands.Features.RaidReport
                 fullLoot = lootPercent >= 100 ? fullLoot + 1 : 0;
             }
 
-            return new RaidReportStats(reportId, outcome, lootPercent, consecutiveLossy, lowLoot, fullLoot, previous.ReportCount + 1);
+            var multiplier = NextTroopMultiplierPercent(previous.EffectiveTroopMultiplierPercent, lowLoot, fullLoot);
+
+            return new RaidReportStats(reportId, outcome, lootPercent, consecutiveLossy, lowLoot, fullLoot, previous.ReportCount + 1, multiplier);
+        }
+
+        // The troop multiplier moves by one step exactly when a streak reaches its threshold -
+        // a streak that later resets to 0 (a normal-loot report breaks it) never un-does a step
+        // already taken; the multiplier only moves again on the NEXT streak reaching threshold.
+        // If both streaks reached their threshold on the same report (impossible today - low
+        // and full are mutually exclusive on any single lootPercent value - but kept safe for
+        // future loot bands) shrink wins, since sending fewer troops is the safer mistake.
+        public static int NextTroopMultiplierPercent(int currentMultiplierPercent, int lowLootStreak, int fullLootStreak)
+        {
+            var next = currentMultiplierPercent;
+
+            if (lowLootStreak == LowLootStreakToShrink)
+            {
+                next = next * (100 - ShrinkStepPercent) / 100;
+            }
+            else if (fullLootStreak == FullLootStreakToGrow)
+            {
+                next = next * (100 + GrowStepPercent) / 100;
+            }
+
+            return Math.Clamp(next, MinTroopMultiplierPercent, MaxTroopMultiplierPercent);
         }
 
         // Why this row should be paused after the latest report, or null to leave it running.
@@ -63,8 +106,8 @@ namespace MainCore.Commands.Features.RaidReport
             return null;
         }
 
-        // Short text for the Raid List row, e.g. "94% (full x2)" or "19% (low x3)"; empty until
-        // a report has been read.
+        // Short text for the Raid List row, e.g. "94% (full x2)" or "19% (low x3, troops 80%)";
+        // empty until a report has been read.
         public static string Summarize(RaidReportStats stats)
         {
             if (stats.ReportCount == 0) return "";
@@ -80,8 +123,31 @@ namespace MainCore.Commands.Features.RaidReport
             if (stats.FullLootStreak >= 2) notes.Add($"full x{stats.FullLootStreak}");
             if (stats.LowLootStreak >= 2) notes.Add($"low x{stats.LowLootStreak}");
             if (stats.LastOutcome != 1 && stats.ConsecutiveLossy >= 2) notes.Add($"lossy x{stats.ConsecutiveLossy}");
+            if (stats.EffectiveTroopMultiplierPercent != 100) notes.Add($"troops {stats.EffectiveTroopMultiplierPercent}%");
 
             return notes.Count == 0 ? basis : $"{basis} ({string.Join(", ", notes)})";
+        }
+
+        // Scales one troop-amount range by the row's current multiplier, keeping Min<=Max and
+        // never scaling a real positive amount down to 0 - a shrunk range still sends SOME
+        // troops (a target worth shrinking for is still worth raiding, just lighter); stopping
+        // entirely is GetPauseReason's job, not this one's. A configured 0 (slot not used)
+        // stays 0.
+        public static TroopAmountRange ScaleRange(TroopAmountRange range, int multiplierPercent)
+        {
+            var min = ScaleAmount(range.Min, multiplierPercent);
+            var max = ScaleAmount(range.Max, multiplierPercent);
+            if (max < min) max = min;
+
+            return new TroopAmountRange(min, max);
+        }
+
+        private static long ScaleAmount(long amount, int multiplierPercent)
+        {
+            if (amount <= 0) return amount;
+
+            var scaled = amount * multiplierPercent / 100;
+            return Math.Max(1, scaled);
         }
 
         // Rows of the Raid List whose target is (x|y). With a known source village only that

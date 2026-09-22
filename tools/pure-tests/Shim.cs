@@ -56,5 +56,9 @@ namespace Shouldly
         public static void ShouldAllBe<T>(this IEnumerable<T> actual, System.Linq.Expressions.Expression<Func<T, bool>> f)
         { var c = f.Compile(); if (!actual.All(c)) throw new ShouldAssertException("not all match"); }
         public static void ShouldBeSameAs(this object? actual, object? expected) { if (!ReferenceEquals(actual, expected)) throw new ShouldAssertException("expected same instance"); }
+        public static void ShouldBeInRange<T>(this T actual, T min, T max) where T : IComparable<T>
+        {
+            if (actual.CompareTo(min) < 0 || actual.CompareTo(max) > 0) throw new ShouldAssertException($"expected {Fmt(actual)} to be in range [{Fmt(min)}, {Fmt(max)}]");
+        }
     }
 }

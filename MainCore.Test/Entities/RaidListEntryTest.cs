@@ -1,9 +1,62 @@
+using MainCore.Commands.Features.RaidReport;
 using MainCore.Entities;
 
 namespace MainCore.Test.Entities
 {
     public class RaidListEntryTest
     {
+        [Fact]
+        public void RollTroopAmounts_NoReportStatsYet_UsesTheConfiguredRangeUnscaled()
+        {
+            var entry = new RaidListEntry();
+            entry.SetTroopAmountRanges(new Dictionary<int, TroopAmountRange> { [2] = new TroopAmountRange(10, 10) });
+
+            entry.RollTroopAmounts(Random.Shared)[2].ShouldBe(10);
+        }
+
+        [Fact]
+        public void RollTroopAmounts_ShrunkMultiplier_ScalesEverySlotDown()
+        {
+            var entry = new RaidListEntry();
+            entry.SetTroopAmountRanges(new Dictionary<int, TroopAmountRange> { [2] = new TroopAmountRange(10, 10) });
+
+            var stats = RaidReportStats.Empty;
+            stats = RaidReportRules.Apply(stats, 1, 1, 10);
+            stats = RaidReportRules.Apply(stats, 2, 1, 10);
+            stats = RaidReportRules.Apply(stats, 3, 1, 10); // three low-loot reports -> x0.8
+            entry.SetReportStats(stats);
+            stats.TroopMultiplierPercent.ShouldBe(80);
+
+            entry.RollTroopAmounts(Random.Shared)[2].ShouldBe(8);
+        }
+
+        [Fact]
+        public void RollTroopAmounts_GrownMultiplier_ScalesEverySlotUp()
+        {
+            var entry = new RaidListEntry();
+            entry.SetTroopAmountRanges(new Dictionary<int, TroopAmountRange> { [2] = new TroopAmountRange(10, 10) });
+
+            var stats = RaidReportStats.Empty;
+            stats = RaidReportRules.Apply(stats, 1, 1, 100);
+            stats = RaidReportRules.Apply(stats, 2, 1, 100); // two full-loot reports -> x1.25
+            entry.SetReportStats(stats);
+
+            entry.RollTroopAmounts(Random.Shared)[2].ShouldBe(12);
+        }
+
+        [Fact]
+        public void RollTroopAmounts_ConfiguredMinMaxInTheDatabaseIsNeverRewritten()
+        {
+            var entry = new RaidListEntry();
+            entry.SetTroopAmountRanges(new Dictionary<int, TroopAmountRange> { [2] = new TroopAmountRange(10, 10) });
+            entry.SetReportStats(RaidReportStats.Empty with { TroopMultiplierPercent = 80 });
+
+            entry.RollTroopAmounts(Random.Shared);
+
+            entry.GetTroopAmountRanges()[2].Min.ShouldBe(10); // the scaling only affects the roll, not storage
+            entry.GetTroopAmountRanges()[2].Max.ShouldBe(10);
+        }
+
         [Fact]
         public void RollTroopAmounts_StaysWithinMinMax_AcrossManyRolls()
         {

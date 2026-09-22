@@ -8,3 +8,7 @@ MainCore/Entities/RaidListEntry.cs
 MainCore.Test/Parsers/OffensiveReportParserTest.cs
 MainCore.Test/Parsers/MapTilesTest.cs
 MainCore.Test/Commands/Features/RaidReporting/RaidReportRulesTest.cs
+MainCore/Parsers/ScoutReportParser.cs
+MainCore/Commands/Features/RaidReport/ScoutReportRules.cs
+MainCore.Test/Parsers/ScoutReportParserTest.cs
+MainCore.Test/Entities/RaidListEntryTest.cs

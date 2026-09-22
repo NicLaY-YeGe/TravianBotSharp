@@ -134,12 +134,26 @@ namespace MainCore.Entities
         // inclusive (Min == Max just returns Min - no randomness needed). Called once per
         // RaidListTask run and the SAME result is used for both the pre-send availability
         // check and the actual send, so what gets checked is exactly what gets sent.
+        //
+        // 2026-09-21, user request: before rolling, each configured range is scaled by this
+        // row's current RaidReportStats.EffectiveTroopMultiplierPercent (see
+        // Commands.Features.RaidReport.RaidReportRules.ScaleRange/NextTroopMultiplierPercent) -
+        // a target that keeps coming back full sends more, one that keeps coming back
+        // near-empty sends less. 100% (the default, and every pre-2026-09-21 row) scales to
+        // exactly the configured range, unchanged. The USER'S OWN configured Min/Max is never
+        // rewritten in the database by this - only the amount picked for THIS send is scaled.
         public IReadOnlyDictionary<int, long> RollTroopAmounts(Random random)
         {
+            var multiplierPercent = GetReportStats().EffectiveTroopMultiplierPercent;
+
             var ranges = GetTroopAmountRanges();
             var result = new Dictionary<int, long>(ranges.Count);
-            foreach (var (slot, range) in ranges)
+            foreach (var (slot, rawRange) in ranges)
             {
+                var range = multiplierPercent == 100
+                    ? rawRange
+                    : Commands.Features.RaidReport.RaidReportRules.ScaleRange(rawRange, multiplierPercent);
+
                 var min = Math.Max(0, range.Min);
                 var max = Math.Max(min, range.Max);
                 result[slot] = max == min ? min : random.NextInt64(min, max + 1);

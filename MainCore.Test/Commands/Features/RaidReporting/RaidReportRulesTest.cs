@@ -115,13 +115,19 @@ namespace MainCore.Test.Commands.Features.RaidReporting
 
             stats = RaidReportRules.Apply(stats, 2, 1, 100);
             stats = RaidReportRules.Apply(stats, 3, 1, 100);
-            RaidReportRules.Summarize(stats).ShouldBe("100% (full x2)");
+            RaidReportRules.Summarize(stats).ShouldBe("100% (full x2, troops 125%)"); // FullLootStreakToGrow just hit
 
             var low = RaidReportRules.Apply(RaidReportStats.Empty, 1, 1, 19);
             low = RaidReportRules.Apply(low, 2, 1, 3);
             RaidReportRules.Summarize(low).ShouldBe("3% (low x2)");
 
             RaidReportRules.Summarize(RaidReportRules.Apply(RaidReportStats.Empty, 1, 3, -1)).ShouldBe("LOST");
+
+            var shrunk = RaidReportStats.Empty;
+            shrunk = RaidReportRules.Apply(shrunk, 1, 1, 10);
+            shrunk = RaidReportRules.Apply(shrunk, 2, 1, 10);
+            shrunk = RaidReportRules.Apply(shrunk, 3, 1, 10);
+            RaidReportRules.Summarize(shrunk).ShouldBe("10% (low x3, troops 80%)");
         }
 
         [Fact]
@@ -173,6 +179,101 @@ namespace MainCore.Test.Commands.Features.RaidReporting
 
             attacker.ShouldNotBeNull();
             MapTiles.ToCoordinates(114225, attacker.Value.Radius).ShouldBe((140, -84));
+        }
+
+        [Fact]
+        public void Apply_ThreeLowLootReportsInARow_ShrinksTheMultiplierOnce()
+        {
+            var stats = RaidReportStats.Empty;
+            stats.EffectiveTroopMultiplierPercent.ShouldBe(100);
+
+            stats = RaidReportRules.Apply(stats, 1, 1, 10);
+            stats = RaidReportRules.Apply(stats, 2, 1, 5);
+            stats.TroopMultiplierPercent.ShouldBe(100); // streak is only 2 so far
+
+            stats = RaidReportRules.Apply(stats, 3, 1, 8); // streak hits 3 -> one shrink step
+            stats.LowLootStreak.ShouldBe(3);
+            stats.TroopMultiplierPercent.ShouldBe(80);
+
+            // Streak keeps running past 3 - must NOT shrink again every report.
+            stats = RaidReportRules.Apply(stats, 4, 1, 12);
+            stats.LowLootStreak.ShouldBe(4);
+            stats.TroopMultiplierPercent.ShouldBe(80);
+        }
+
+        [Fact]
+        public void Apply_TwoFullLootReportsInARow_GrowsTheMultiplierOnce()
+        {
+            var stats = RaidReportStats.Empty;
+
+            stats = RaidReportRules.Apply(stats, 1, 1, 100);
+            stats.TroopMultiplierPercent.ShouldBe(100); // streak is only 1
+
+            stats = RaidReportRules.Apply(stats, 2, 1, 100); // streak hits 2 -> one grow step
+            stats.FullLootStreak.ShouldBe(2);
+            stats.TroopMultiplierPercent.ShouldBe(125);
+
+            stats = RaidReportRules.Apply(stats, 3, 1, 100);
+            stats.FullLootStreak.ShouldBe(3);
+            stats.TroopMultiplierPercent.ShouldBe(125); // no second step just from staying full
+        }
+
+        [Fact]
+        public void Apply_AResetStreakDoesNotUndoAMultiplierStepAlreadyTaken()
+        {
+            var stats = RaidReportStats.Empty;
+            stats = RaidReportRules.Apply(stats, 1, 1, 10);
+            stats = RaidReportRules.Apply(stats, 2, 1, 10);
+            stats = RaidReportRules.Apply(stats, 3, 1, 10); // shrink to 80
+            stats.TroopMultiplierPercent.ShouldBe(80);
+
+            stats = RaidReportRules.Apply(stats, 4, 1, 60); // breaks the low-loot streak
+            stats.LowLootStreak.ShouldBe(0);
+            stats.TroopMultiplierPercent.ShouldBe(80); // stays shrunk, not un-done
+        }
+
+        [Theory]
+        [InlineData(100, 3, 0, 80)]
+        [InlineData(50, 3, 0, 40)]     // 50*0.8=40 - lands exactly on the floor
+        [InlineData(45, 3, 0, 40)]     // 45*0.8=36 - clamped UP to the floor
+        [InlineData(100, 0, 2, 125)]
+        [InlineData(180, 0, 2, 200)]   // clamped to the ceiling
+        [InlineData(100, 0, 0, 100)]   // neither streak at its threshold - unchanged
+        [InlineData(100, 2, 0, 100)]   // streak short of threshold - unchanged
+        [InlineData(100, 6, 0, 100)]   // streak already past threshold (no == match) - unchanged
+        public void NextTroopMultiplierPercent_MovesOneStepAtThresholdAndClamps(
+            int current, int lowLootStreak, int fullLootStreak, int expected)
+        {
+            RaidReportRules.NextTroopMultiplierPercent(current, lowLootStreak, fullLootStreak).ShouldBe(expected);
+        }
+
+        [Fact]
+        public void EffectiveTroopMultiplierPercent_TreatsAMissingOrZeroValueAs100()
+        {
+            // A row's stored JSON from before this field existed deserializes with
+            // TroopMultiplierPercent==0 (System.Text.Json's constructor matching fills a
+            // missing property with the C# default, not the record's own 100 default) -
+            // EffectiveTroopMultiplierPercent must read that as "unchanged", not "send 0".
+            var beforeThisFeature = RaidReportStats.Empty with { TroopMultiplierPercent = 0 };
+
+            beforeThisFeature.EffectiveTroopMultiplierPercent.ShouldBe(100);
+            RaidReportStats.Empty.EffectiveTroopMultiplierPercent.ShouldBe(100);
+        }
+
+        [Theory]
+        [InlineData(2, 6, 100, 2, 6)]
+        [InlineData(10, 20, 80, 8, 16)]
+        [InlineData(10, 20, 125, 12, 25)]
+        [InlineData(1, 1, 40, 1, 1)]     // never scales a positive amount down to 0
+        [InlineData(0, 0, 40, 0, 0)]     // an unused slot (0/0) stays 0
+        [InlineData(3, 3, 40, 1, 1)]     // 3*0.4=1.2 -> floored to 1, Min still equals Max
+        public void ScaleRange_AppliesThePercentAndNeverZerosARealAmount(
+            long min, long max, int multiplierPercent, long expectedMin, long expectedMax)
+        {
+            var scaled = RaidReportRules.ScaleRange(new TroopAmountRange(min, max), multiplierPercent);
+
+            scaled.Min.ShouldBe(expectedMin);
+            scaled.Max.ShouldBe(expectedMax);
         }
 
         [Fact]
