@@ -230,6 +230,16 @@ namespace MainCore.Infrasturecture.Persistence
             {VillageSettingEnums.OasisScoutMinTroops, 3 },
             {VillageSettingEnums.OasisScoutMaxTroops, 8 },
             {VillageSettingEnums.OasisScoutHeroPowerThreshold, 100 },
+
+            // Trap auto-build (2026-09-22). Off by default; 5-15 traps per run, rechecked
+            // every 10-20 MINUTES (stored value * 60 = seconds, same convention as
+            // TrainTroopRepeatTimeMin/Max above - shorter than troop training's default
+            // because a trap batch itself only takes a few minutes in-game).
+            {VillageSettingEnums.TrapEnable, 0 },
+            {VillageSettingEnums.TrapAmountMin, 5 },
+            {VillageSettingEnums.TrapAmountMax, 15 },
+            {VillageSettingEnums.TrapRepeatTimeMin, 10 },
+            {VillageSettingEnums.TrapRepeatTimeMax, 20 },
         }.ToImmutableDictionary();
 
         private List<VillageSettingEnums> GetMissingVillageSettings()

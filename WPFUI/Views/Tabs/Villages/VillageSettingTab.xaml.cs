@@ -44,6 +44,10 @@ namespace WPFUI.Views.Tabs.Villages
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.WorkshopTroop, v => v.WorkshopTroop.ViewModel).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.WorkshopAmount, v => v.WorkshopAmount.ViewModel).DisposeWith(d);
 
+                this.Bind(ViewModel, vm => vm.VillageSettingInput.TrapEnable, v => v.TrapEnable.IsChecked).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.TrapRepeatTime, v => v.TrapRepeatTime.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.TrapAmount, v => v.TrapAmount.ViewModel).DisposeWith(d);
+
                 this.Bind(ViewModel, vm => vm.VillageSettingInput.AutoNPCEnable, v => v.AutoNPCEnable.IsChecked).DisposeWith(d);
                 this.Bind(ViewModel, vm => vm.VillageSettingInput.AutoNPCOverflow, v => v.AutoNPCOverflow.IsChecked).DisposeWith(d);
                 this.Bind(ViewModel, vm => vm.VillageSettingInput.AutoNPCReverse, v => v.AutoNPCReverse.IsChecked).DisposeWith(d);

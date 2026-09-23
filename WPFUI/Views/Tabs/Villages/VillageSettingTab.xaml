@@ -209,6 +209,15 @@
                         </StackPanel>
                     </StackPanel>
                 </Border>
+                <Border Style="{DynamicResource Box}">
+                    <StackPanel>
+                        <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Trap settings" VerticalAlignment="Center" FontWeight="Bold" />
+                        <CheckBox x:Name="TrapEnable" Content="Enable auto-build traps (Trapper, Gaul only)" />
+                        <uc:RangeInputUc x:Name="TrapRepeatTime" Text="Next trap build execute after" Unit="mins" />
+                        <uc:RangeInputUc x:Name="TrapAmount" Text="Build" Unit="traps" Margin="0,0,0,0" />
+                        <TextBlock TextWrapping="Wrap" Text="Never builds more traps than the Trapper's current level allows; also respects the 'Train maximum number if low on resource' setting above." FontStyle="Italic" Opacity="0.7" Margin="0,4,0,0" />
+                    </StackPanel>
+                </Border>
             </StackPanel>
         </ScrollViewer>
     </Grid>

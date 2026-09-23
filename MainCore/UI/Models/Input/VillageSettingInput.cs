@@ -147,6 +147,12 @@ namespace MainCore.UI.Models.Input
         public AmountInputViewModel OasisScoutMaxTroops { get; } = new();
         public AmountInputViewModel OasisScoutHeroPowerThreshold { get; } = new();
 
+        [Reactive]
+        private bool _trapEnable;
+
+        public RangeInputViewModel TrapAmount { get; } = new();
+        public RangeInputViewModel TrapRepeatTime { get; } = new();
+
         public void Set(Dictionary<VillageSettingEnums, int> settings)
         {
             var tribe = (TribeEnums)settings.GetValueOrDefault(VillageSettingEnums.Tribe);
@@ -256,6 +262,14 @@ namespace MainCore.UI.Models.Input
             OasisScoutMinTroops.Set(settings.GetValueOrDefault(VillageSettingEnums.OasisScoutMinTroops));
             OasisScoutMaxTroops.Set(settings.GetValueOrDefault(VillageSettingEnums.OasisScoutMaxTroops));
             OasisScoutHeroPowerThreshold.Set(settings.GetValueOrDefault(VillageSettingEnums.OasisScoutHeroPowerThreshold));
+
+            TrapEnable = settings.GetValueOrDefault(VillageSettingEnums.TrapEnable) == 1;
+            TrapAmount.Set(
+                settings.GetValueOrDefault(VillageSettingEnums.TrapAmountMin),
+                settings.GetValueOrDefault(VillageSettingEnums.TrapAmountMax));
+            TrapRepeatTime.Set(
+                settings.GetValueOrDefault(VillageSettingEnums.TrapRepeatTimeMin),
+                settings.GetValueOrDefault(VillageSettingEnums.TrapRepeatTimeMax));
         }
 
         public Dictionary<VillageSettingEnums, int> Get()
@@ -340,6 +354,10 @@ namespace MainCore.UI.Models.Input
             var oasisScoutMinTroops = OasisScoutMinTroops.Get();
             var oasisScoutMaxTroops = OasisScoutMaxTroops.Get();
             var oasisScoutHeroPowerThreshold = OasisScoutHeroPowerThreshold.Get();
+
+            var trapEnable = TrapEnable ? 1 : 0;
+            var (trapAmountMin, trapAmountMax) = TrapAmount.Get();
+            var (trapRepeatTimeMin, trapRepeatTimeMax) = TrapRepeatTime.Get();
 
             var settings = new Dictionary<VillageSettingEnums, int>()
             {
@@ -427,6 +445,12 @@ namespace MainCore.UI.Models.Input
                 { VillageSettingEnums.OasisScoutMinTroops, oasisScoutMinTroops },
                 { VillageSettingEnums.OasisScoutMaxTroops, oasisScoutMaxTroops },
                 { VillageSettingEnums.OasisScoutHeroPowerThreshold, oasisScoutHeroPowerThreshold },
+
+                { VillageSettingEnums.TrapEnable, trapEnable },
+                { VillageSettingEnums.TrapAmountMin, trapAmountMin },
+                { VillageSettingEnums.TrapAmountMax, trapAmountMax },
+                { VillageSettingEnums.TrapRepeatTimeMin, trapRepeatTimeMin },
+                { VillageSettingEnums.TrapRepeatTimeMax, trapRepeatTimeMax },
             };
             return settings;
         }

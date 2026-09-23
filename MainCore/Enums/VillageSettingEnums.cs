@@ -241,5 +241,18 @@
         OasisScoutMinTroops,
         OasisScoutMaxTroops,
         OasisScoutHeroPowerThreshold,
+
+        // Trap (Trapper building, gid=36) auto-build (2026-09-22): tops up traps the same way
+        // TrainTroopTask tops up units - target a random Min-Max amount per run, capped by
+        // however many traps the building's CURRENT level still has room for (TrapParser reads
+        // both "you currently have N traps" and the level's "maximum possible" line), and
+        // further capped by TrainWhenLowResource exactly like Barrack/Stable/etc do (shared
+        // setting, not duplicated here - see BuildTrapsCommand). RepeatTimeMin/Max are minutes
+        // (same *60-to-seconds convention as TrainTroopRepeatTimeMin/Max).
+        TrapEnable,
+        TrapAmountMin,
+        TrapAmountMax,
+        TrapRepeatTimeMin,
+        TrapRepeatTimeMax,
     }
 }

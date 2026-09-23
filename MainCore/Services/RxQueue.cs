@@ -85,6 +85,14 @@ namespace MainCore.Services
                     taskManager.Add(trainTroopTask);
                 }
 
+                // 2026-09-22, user request: auto-build traps at the Trapper (see TrapTask) -
+                // same conditional-add pattern as trainTroopTask right above.
+                var trapTask = new TrapTask.Task(accountId, village);
+                if (trapTask.CanStart(context) && !taskManager.IsExist<TrapTask.Task>(accountId, village))
+                {
+                    taskManager.Add(trapTask);
+                }
+
                 // 2026-09-15, user request: Oasis Scout (see OasisScoutTask) - same
                 // conditional-add pattern as updateVillageTask/trainTroopTask right above.
                 var oasisScoutTask = new OasisScoutTask.Task(accountId, village);

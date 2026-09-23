@@ -133,6 +133,10 @@ namespace MainCore.Services
                     var trainTroopTaskHandler = scope.GetHandler<TrainTroopTask.Task>();
                     return await trainTroopTaskHandler.HandleAsync(trainTroopTask, cancellationToken);
 
+                case TrapTask.Task trapTask:
+                    var trapTaskHandler = scope.GetHandler<TrapTask.Task>();
+                    return await trapTaskHandler.HandleAsync(trapTask, cancellationToken);
+
                 case UpdateBuildingTask.Task updateBuildingTask:
                     var updateBuildingTaskHandler = scope.GetHandler<UpdateBuildingTask.Task>();
                     return await updateBuildingTaskHandler.HandleAsync(updateBuildingTask, cancellationToken);
