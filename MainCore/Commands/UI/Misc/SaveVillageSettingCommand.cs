@@ -106,6 +106,28 @@
                 }
             }
 
+            if (settings.ContainsKey(VillageSettingEnums.CropScanEnable))
+            {
+                if (settings[VillageSettingEnums.CropScanEnable] == 1)
+                {
+                    // Deliberately no CanStart/IsExist guard bypass here beyond the usual
+                    // pattern - if a scan is already running (IsExist true), ticking the
+                    // checkbox again does nothing, same as every other one-shot/toggle task in
+                    // this method. The task itself removes itself from the queue on completion
+                    // (see CropOasisScanTask), so re-ticking after a finished scan starts a new
+                    // one with whatever parameters are currently saved.
+                    var task = new CropOasisScanTask.Task(accountId, villageId);
+                    if (task.CanStart(context) && !taskManager.IsExist<CropOasisScanTask.Task>(accountId, villageId))
+                    {
+                        taskManager.Add(task);
+                    }
+                }
+                else
+                {
+                    taskManager.Remove<CropOasisScanTask.Task>(accountId, villageId);
+                }
+            }
+
             if (settings.ContainsKey(VillageSettingEnums.AutoClaimQuestEnable))
             {
                 if (settings[VillageSettingEnums.AutoClaimQuestEnable] == 1)

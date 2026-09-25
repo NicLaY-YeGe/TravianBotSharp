@@ -153,6 +153,15 @@ namespace MainCore.UI.Models.Input
         public RangeInputViewModel TrapAmount { get; } = new();
         public RangeInputViewModel TrapRepeatTime { get; } = new();
 
+        [Reactive]
+        private bool _cropScanEnable;
+
+        public AmountInputViewModel CropScanCenterX { get; } = new();
+        public AmountInputViewModel CropScanCenterY { get; } = new();
+        public AmountInputViewModel CropScanMaxDistance { get; } = new();
+        public AmountInputViewModel CropScanMinCroplands { get; } = new();
+        public RangeInputViewModel CropScanGap { get; } = new();
+
         public void Set(Dictionary<VillageSettingEnums, int> settings)
         {
             var tribe = (TribeEnums)settings.GetValueOrDefault(VillageSettingEnums.Tribe);
@@ -270,6 +279,15 @@ namespace MainCore.UI.Models.Input
             TrapRepeatTime.Set(
                 settings.GetValueOrDefault(VillageSettingEnums.TrapRepeatTimeMin),
                 settings.GetValueOrDefault(VillageSettingEnums.TrapRepeatTimeMax));
+
+            CropScanEnable = settings.GetValueOrDefault(VillageSettingEnums.CropScanEnable) == 1;
+            CropScanCenterX.Set(settings.GetValueOrDefault(VillageSettingEnums.CropScanCenterX));
+            CropScanCenterY.Set(settings.GetValueOrDefault(VillageSettingEnums.CropScanCenterY));
+            CropScanMaxDistance.Set(settings.GetValueOrDefault(VillageSettingEnums.CropScanMaxDistance));
+            CropScanMinCroplands.Set(settings.GetValueOrDefault(VillageSettingEnums.CropScanMinCroplands));
+            CropScanGap.Set(
+                settings.GetValueOrDefault(VillageSettingEnums.CropScanGapMinSeconds),
+                settings.GetValueOrDefault(VillageSettingEnums.CropScanGapMaxSeconds));
         }
 
         public Dictionary<VillageSettingEnums, int> Get()
@@ -358,6 +376,13 @@ namespace MainCore.UI.Models.Input
             var trapEnable = TrapEnable ? 1 : 0;
             var (trapAmountMin, trapAmountMax) = TrapAmount.Get();
             var (trapRepeatTimeMin, trapRepeatTimeMax) = TrapRepeatTime.Get();
+
+            var cropScanEnable = CropScanEnable ? 1 : 0;
+            var cropScanCenterX = CropScanCenterX.Get();
+            var cropScanCenterY = CropScanCenterY.Get();
+            var cropScanMaxDistance = CropScanMaxDistance.Get();
+            var cropScanMinCroplands = CropScanMinCroplands.Get();
+            var (cropScanGapMinSeconds, cropScanGapMaxSeconds) = CropScanGap.Get();
 
             var settings = new Dictionary<VillageSettingEnums, int>()
             {
@@ -451,6 +476,14 @@ namespace MainCore.UI.Models.Input
                 { VillageSettingEnums.TrapAmountMax, trapAmountMax },
                 { VillageSettingEnums.TrapRepeatTimeMin, trapRepeatTimeMin },
                 { VillageSettingEnums.TrapRepeatTimeMax, trapRepeatTimeMax },
+
+                { VillageSettingEnums.CropScanEnable, cropScanEnable },
+                { VillageSettingEnums.CropScanCenterX, cropScanCenterX },
+                { VillageSettingEnums.CropScanCenterY, cropScanCenterY },
+                { VillageSettingEnums.CropScanMaxDistance, cropScanMaxDistance },
+                { VillageSettingEnums.CropScanMinCroplands, cropScanMinCroplands },
+                { VillageSettingEnums.CropScanGapMinSeconds, cropScanGapMinSeconds },
+                { VillageSettingEnums.CropScanGapMaxSeconds, cropScanGapMaxSeconds },
             };
             return settings;
         }

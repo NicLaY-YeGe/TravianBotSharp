@@ -48,6 +48,13 @@ namespace WPFUI.Views.Tabs.Villages
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.TrapRepeatTime, v => v.TrapRepeatTime.ViewModel).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.TrapAmount, v => v.TrapAmount.ViewModel).DisposeWith(d);
 
+                this.Bind(ViewModel, vm => vm.VillageSettingInput.CropScanEnable, v => v.CropScanEnable.IsChecked).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.CropScanCenterX, v => v.CropScanCenterX.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.CropScanCenterY, v => v.CropScanCenterY.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.CropScanMaxDistance, v => v.CropScanMaxDistance.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.CropScanMinCroplands, v => v.CropScanMinCroplands.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.CropScanGap, v => v.CropScanGap.ViewModel).DisposeWith(d);
+
                 this.Bind(ViewModel, vm => vm.VillageSettingInput.AutoNPCEnable, v => v.AutoNPCEnable.IsChecked).DisposeWith(d);
                 this.Bind(ViewModel, vm => vm.VillageSettingInput.AutoNPCOverflow, v => v.AutoNPCOverflow.IsChecked).DisposeWith(d);
                 this.Bind(ViewModel, vm => vm.VillageSettingInput.AutoNPCReverse, v => v.AutoNPCReverse.IsChecked).DisposeWith(d);

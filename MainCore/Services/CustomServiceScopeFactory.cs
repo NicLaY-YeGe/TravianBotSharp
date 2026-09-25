@@ -65,6 +65,10 @@ namespace MainCore.Services
                     var completeImmediatelyTaskHandler = scope.GetHandler<CompleteImmediatelyTask.Task>();
                     return await completeImmediatelyTaskHandler.HandleAsync(completeImmediatelyTask, cancellationToken);
 
+                case CropOasisScanTask.Task cropOasisScanTask:
+                    var cropOasisScanTaskHandler = scope.GetHandler<CropOasisScanTask.Task>();
+                    return await cropOasisScanTaskHandler.HandleAsync(cropOasisScanTask, cancellationToken);
+
                 case LoginTask.Task loginTask:
                     var loginTaskHandler = scope.GetHandler<LoginTask.Task>();
                     return await loginTaskHandler.HandleAsync(loginTask, cancellationToken);
@@ -136,6 +140,10 @@ namespace MainCore.Services
                 case TrapTask.Task trapTask:
                     var trapTaskHandler = scope.GetHandler<TrapTask.Task>();
                     return await trapTaskHandler.HandleAsync(trapTask, cancellationToken);
+
+                case CropOasisScanTask.Task cropOasisScanTask:
+                    var cropOasisScanTaskHandler = scope.GetHandler<CropOasisScanTask.Task>();
+                    return await cropOasisScanTaskHandler.HandleAsync(cropOasisScanTask, cancellationToken);
 
                 case UpdateBuildingTask.Task updateBuildingTask:
                     var updateBuildingTaskHandler = scope.GetHandler<UpdateBuildingTask.Task>();

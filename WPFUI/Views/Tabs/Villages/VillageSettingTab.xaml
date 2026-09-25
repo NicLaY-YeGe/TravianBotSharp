@@ -218,6 +218,18 @@
                         <TextBlock TextWrapping="Wrap" Text="Never builds more traps than the Trapper's current level allows; also respects the 'Train maximum number if low on resource' setting above." FontStyle="Italic" Opacity="0.7" Margin="0,4,0,0" />
                     </StackPanel>
                 </Border>
+                <Border Style="{DynamicResource Box}">
+                    <StackPanel>
+                        <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Crop oasis scan" VerticalAlignment="Center" FontWeight="Bold" />
+                        <CheckBox x:Name="CropScanEnable" Content="Start scan (one-shot - unticks itself once finished has no effect, save again to re-run)" />
+                        <uc:AmountInputUc x:Name="CropScanCenterX" Text="Center X" Unit="" />
+                        <uc:AmountInputUc x:Name="CropScanCenterY" Text="Center Y" Unit="" />
+                        <uc:AmountInputUc x:Name="CropScanMaxDistance" Text="Max distance" Unit="fields" />
+                        <uc:AmountInputUc x:Name="CropScanMinCroplands" Text="Minimum Croplands to log" Unit="" />
+                        <uc:RangeInputUc x:Name="CropScanGap" Text="Wait between tiles" Unit="secs" />
+                        <TextBlock TextWrapping="Wrap" Text="Checks one tile at a time, nearest-first, with a random wait between each - a full scan can take a long time. Results are appended live to a CSV file under the app folder's CropScans directory as they're found." FontStyle="Italic" Opacity="0.7" Margin="0,4,0,0" />
+                    </StackPanel>
+                </Border>
             </StackPanel>
         </ScrollViewer>
     </Grid>

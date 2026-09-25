@@ -254,5 +254,21 @@
         TrapAmountMax,
         TrapRepeatTimeMin,
         TrapRepeatTimeMax,
+
+        // Crop oasis scan (2026-09-24, user request): one-shot, manually-triggered scan that
+        // walks outward from CenterX/CenterY up to MaxDistance fields, opening every tile on the
+        // map and logging "Abandoned valley" oases with >= MinCroplands to a CSV (see
+        // CropOasisScanTask). GapMin/MaxSeconds is the pacing between individual tile checks -
+        // NOT minutes like TrapRepeatTime, seconds like RaidListSendGapMin/MaxSeconds. Enable is
+        // a one-shot trigger checkbox (same pattern as CompleteImmediately/TrainTroopEnable in
+        // SaveVillageSettingCommand) - ticking it queues the scan; the task removes itself from
+        // the queue on completion (see CropOasisScanTask), it does not auto-untick the setting.
+        CropScanEnable,
+        CropScanCenterX,
+        CropScanCenterY,
+        CropScanMaxDistance,
+        CropScanMinCroplands,
+        CropScanGapMinSeconds,
+        CropScanGapMaxSeconds,
     }
 }

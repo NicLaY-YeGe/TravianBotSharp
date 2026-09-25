@@ -12,3 +12,8 @@ MainCore/Parsers/ScoutReportParser.cs
 MainCore/Commands/Features/RaidReport/ScoutReportRules.cs
 MainCore.Test/Parsers/ScoutReportParserTest.cs
 MainCore.Test/Entities/RaidListEntryTest.cs
+MainCore/Parsers/OasisTileParser.cs
+MainCore/Parsers/CropOasisTileParser.cs
+MainCore/Commands/Features/CropScan/CropScanCoordinateRules.cs
+MainCore.Test/Parsers/CropOasisTileParserTest.cs
+MainCore.Test/Commands/Features/CropScan/CropScanCoordinateRulesTest.cs

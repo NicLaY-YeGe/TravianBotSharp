@@ -240,6 +240,19 @@ namespace MainCore.Infrasturecture.Persistence
             {VillageSettingEnums.TrapAmountMax, 15 },
             {VillageSettingEnums.TrapRepeatTimeMin, 10 },
             {VillageSettingEnums.TrapRepeatTimeMax, 20 },
+
+            // Crop oasis scan (2026-09-24). Off by default (one-shot trigger checkbox); center
+            // (0|0) is just a harmless placeholder - the user always fills this in themselves
+            // before ticking Enable. Max distance 15 fields, min 7 Croplands (the lowest of the
+            // game's own bonus-oasis Croplands values: 7/9/15/18), 5-15 SECOND gap between tile
+            // checks (not minutes - see VillageSettingEnums comment).
+            {VillageSettingEnums.CropScanEnable, 0 },
+            {VillageSettingEnums.CropScanCenterX, 0 },
+            {VillageSettingEnums.CropScanCenterY, 0 },
+            {VillageSettingEnums.CropScanMaxDistance, 15 },
+            {VillageSettingEnums.CropScanMinCroplands, 7 },
+            {VillageSettingEnums.CropScanGapMinSeconds, 5 },
+            {VillageSettingEnums.CropScanGapMaxSeconds, 15 },
         }.ToImmutableDictionary();
 
         private List<VillageSettingEnums> GetMissingVillageSettings()
