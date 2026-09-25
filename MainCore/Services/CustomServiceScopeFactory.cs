@@ -141,10 +141,6 @@ namespace MainCore.Services
                     var trapTaskHandler = scope.GetHandler<TrapTask.Task>();
                     return await trapTaskHandler.HandleAsync(trapTask, cancellationToken);
 
-                case CropOasisScanTask.Task cropOasisScanTask:
-                    var cropOasisScanTaskHandler = scope.GetHandler<CropOasisScanTask.Task>();
-                    return await cropOasisScanTaskHandler.HandleAsync(cropOasisScanTask, cancellationToken);
-
                 case UpdateBuildingTask.Task updateBuildingTask:
                     var updateBuildingTaskHandler = scope.GetHandler<UpdateBuildingTask.Task>();
                     return await updateBuildingTaskHandler.HandleAsync(updateBuildingTask, cancellationToken);
