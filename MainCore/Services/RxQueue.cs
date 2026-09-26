@@ -100,6 +100,26 @@ namespace MainCore.Services
                 {
                     taskManager.Add(oasisScoutTask);
                 }
+
+                // 2026-09-25, live bugfix: was deliberately left OUT of this bootstrap so a
+                // normal login wouldn't silently re-arm a scan the user hadn't re-requested -
+                // but MainLayoutViewModel.Restart() calls TaskManager.Clear() (wiping every
+                // in-flight task, this one included) and THEN raises this same AccountInit
+                // event, with no other path back in. Net effect confirmed live: a Restart
+                // during a scan checked exactly 1 of 28 queued tiles, then the task vanished
+                // for good even though CropScanEnable stayed 1 in the DB (that flag only
+                // flips back to 0 on the queue-empty/finished path, which never ran). Adding
+                // it here, same conditional-add pattern as trapTask/oasisScoutTask above, means
+                // a Clear()+AccountInit (Restart, or a real relogin) re-arms the task if the
+                // setting is still on - the in-memory coordinate queue is NOT preserved (still
+                // TASK-INSTANCE-only, see CropOasisScanTask), so this restarts the scan from
+                // the beginning rather than resuming mid-scan - safe but wasteful, same
+                // trade-off already accepted elsewhere in this task's own design comments.
+                var cropOasisScanTask = new CropOasisScanTask.Task(accountId, village);
+                if (cropOasisScanTask.CanStart(context) && !taskManager.IsExist<CropOasisScanTask.Task>(accountId, village))
+                {
+                    taskManager.Add(cropOasisScanTask);
+                }
             }
             var hasBuildJobVillagesSpec = new HasBuildJobVillagesSpec(accountId);
             var hasBuildJobVillages = context.Villages
