@@ -1,5 +1,6 @@
 using MainCore.Commands.Features.DodgeTroop;
 using MainCore.Commands.Features.RaidListScheduling;
+using MainCore.Commands.Features.RaidReport;
 using MainCore.Commands.Features.SyncAttack;
 using MainCore.Tasks.Base;
 
@@ -170,6 +171,51 @@ namespace MainCore.Tasks
             // Each row's Min/Max range (2026-08-22) means this genuinely varies run to run,
             // unlike the old fixed-amount behavior it falls back to for pre-2026-08-22 rows.
             var troopAmounts = entry.RollTroopAmounts(Random.Shared);
+
+            // 2026-09-27, user request ("raporlara göre optimize yağma otomasyonu... kabaca
+            // kayıp kazanç hesabı yapacak, buna göre asker gönderecek" - CombatDecisionRules):
+            // opt-in (AccountSettingEnums.EnableCombatCheckOnRaidList, default off). With NO
+            // fresh scouted garrison for this exact target, this is a no-op and the row sends
+            // exactly as it always has - see CombatCheckMaxAgeHours's comment for why that's the
+            // deliberate fallback, not "assume undefended". A verdict of Skip does NOT touch
+            // troops, pause the row, or pause the list - it only reschedules this one row to its
+            // own next normal interval (RescheduleNext), same as a completed cycle.
+            if (context.BooleanByName(task.AccountId, AccountSettingEnums.EnableCombatCheckOnRaidList))
+            {
+                var garrisonRow = context.ScoutedTargetGarrisons.FirstOrDefault(g =>
+                    g.AccountId == task.AccountId.Value && g.X == entry.TargetX && g.Y == entry.TargetY);
+
+                var maxAgeHours = context.ByName(task.AccountId, AccountSettingEnums.CombatCheckMaxAgeHours);
+
+                if (garrisonRow is { } garrison && (DateTime.Now - garrison.CapturedAt).TotalHours <= maxAgeHours)
+                {
+                    var tribe = (TribeEnums)context.ByName(task.AccountId, AccountSettingEnums.Tribe);
+                    var slots = RallyPointTroopSlots.GetSlots(tribe);
+
+                    var ourTroops = troopAmounts
+                        .Where(kv => kv.Key >= 1 && kv.Key <= slots.Count && kv.Value > 0)
+                        .Select(kv => (Troop: slots[kv.Key - 1], Count: kv.Value))
+                        .ToList();
+
+                    var (infantryPoints, cavalryPoints) = CombatDecisionRules.SplitAttackPoints(ourTroops);
+                    var ourAttackPoints = infantryPoints + cavalryPoints;
+                    var theirDefensePoints = CombatDecisionRules.DefensePoints(garrison.GetTroops(), infantryPoints, cavalryPoints);
+
+                    var marginPercent = context.ByName(task.AccountId, AccountSettingEnums.CombatSafetyMarginPercent);
+                    var verdict = CombatDecisionRules.Decide(ourAttackPoints, theirDefensePoints, marginPercent);
+
+                    if (verdict == CombatDecisionRules.Verdict.Skip)
+                    {
+                        var nextAt = RescheduleNext(task, entry, context);
+
+                        logger.Information(
+                            "Raid list: village {VillageId} -> ({X}|{Y}) skipped this cycle - estimated attack {Ours} vs estimated defense {Theirs} (garrison scouted {CapturedAt}); next try {NextAt}.",
+                            task.VillageId, entry.TargetX, entry.TargetY, ourAttackPoints, theirDefensePoints, garrison.CapturedAt, nextAt);
+
+                        return Skip.Error;
+                    }
+                }
+            }
 
             // Pre-check availability ourselves rather than letting SendTroopsCommand's own check
             // fail the send - its failure there is a generic Retry (shared with every other

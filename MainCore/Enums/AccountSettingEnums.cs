@@ -89,5 +89,36 @@
         // RaidListNextAllowedSendAtMinutes, which is no longer read or written (minute
         // resolution is too coarse for a seconds-range gap). 0 = no gate.
         RaidListNextAllowedSendAtSeconds,
+
+        // 2026-09-27, user request ("raporlara göre optimize yağma otomasyonu", combat-decision
+        // idea unshelved from 2026-09-21): master switch for CombatDecisionRules being consulted
+        // before a Raid List send - see RaidListTask. Default OFF, unlike EnableRaidReport: this
+        // one CAN change what gets sent (a skip), so it starts opt-in.
+        EnableCombatCheckOnRaidList,
+
+        // Same idea, for real Attack sends (SyncAttack/WaveAttack) - staged separately (not yet
+        // wired as of 2026-09-27, see TODO.md) because the same "skip and reschedule" shape
+        // RaidListTask uses doesn't map onto Sync/WaveAttackPlanTask's one-shot plans as cleanly.
+        // Default OFF.
+        EnableCombatCheckOnAttack,
+
+        // How old a ScoutedTargetGarrison row is allowed to be and still be trusted, in hours.
+        // Older than this (or no row at all for the target) = CombatDecisionRules is not
+        // consulted at all and the send behaves exactly as before this feature existed (2026-09-
+        // 27 user decision - explicit fallback, not "assume undefended"). Default 12h - long
+        // enough that a normal raid-list cadence usually still has a recent-enough scout, short
+        // enough that the target's garrison hasn't fully regrown since.
+        CombatCheckMaxAgeHours,
+
+        // Internal (no UI): the highest scouting report id RaidReportTask's scout-report pass
+        // has already handled (see ProcessScoutReports) - same "id > this" freshness test as
+        // RaidReportLastId, and same first-run behaviour (baseline only, nothing evaluated).
+        ScoutReportLastId,
+
+        // How much our (rough) attack points must exceed the target's (rough) blended defense
+        // points before sending, as a percent margin - e.g. 20 means we need our attack points
+        // to reach 120% of their defense points before sending; exact break-even (100 vs 100)
+        // skips. See CombatDecisionRules.Decide. Default 20.
+        CombatSafetyMarginPercent,
     }
 }

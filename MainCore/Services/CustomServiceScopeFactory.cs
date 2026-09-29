@@ -109,6 +109,10 @@ namespace MainCore.Services
                     var dodgeTroopTaskHandler = scope.GetHandler<DodgeTroopTask.Task>();
                     return await dodgeTroopTaskHandler.HandleAsync(dodgeTroopTask, cancellationToken);
 
+                case DefendDonateTask.Task defendDonateTask:
+                    var defendDonateTaskHandler = scope.GetHandler<DefendDonateTask.Task>();
+                    return await defendDonateTaskHandler.HandleAsync(defendDonateTask, cancellationToken);
+
                 case RecallTroopTask.Task recallTroopTask:
                     var recallTroopTaskHandler = scope.GetHandler<RecallTroopTask.Task>();
                     return await recallTroopTaskHandler.HandleAsync(recallTroopTask, cancellationToken);

@@ -69,11 +69,31 @@ namespace MainCore.Tasks
             ITelegramNotifier telegramNotifier,
             ToOffensiveReportPageCommand.Handler toOffensiveReportPageCommand,
             ToOffensiveReportDetailCommand.Handler toOffensiveReportDetailCommand,
+            ToScoutReportPageCommand.Handler toScoutReportPageCommand,
+            ToScoutReportDetailCommand.Handler toScoutReportDetailCommand,
             NextExecuteRaidReportTaskCommand.Handler nextExecuteRaidReportTaskCommand,
             ILogger logger,
             CancellationToken cancellationToken)
         {
             var accountId = task.AccountId;
+
+            var villages = context.Villages
+                .Where(x => x.AccountId == accountId.Value)
+                .ToList()
+                .Select(x => (VillageId: x.Id, x.X, x.Y))
+                .ToList();
+
+            // 2026-09-27, user request ("raporlara göre optimize yağma otomasyonu" - see
+            // CombatDecisionRules): keeps ScoutedTargetGarrison fresh whenever this task runs,
+            // independently of whether the Raid List currently has any active row - a scouted
+            // garrison is useful even with the list empty (e.g. before it's built up), and later
+            // real-Attack use (CombatCheckOnAttack) doesn't depend on the Raid List either. This
+            // is a passive cache write - it never pauses anything, unlike the offensive-report
+            // pass below.
+            var scoutResult = await ProcessScoutReports(
+                accountId, context, browser, villages,
+                toScoutReportPageCommand, toScoutReportDetailCommand, logger, cancellationToken);
+            if (scoutResult.IsFailed) return scoutResult;
 
             var activeEntries = context.RaidListEntries
                 .Where(x => x.AccountId == accountId.Value && x.IsActive)
@@ -136,12 +156,6 @@ namespace MainCore.Tasks
             // (DistinctBy: a report that arrives between two page loads shifts the list by one, so
             // the same row can show up on both pages.)
             var ordered = newRows.DistinctBy(x => x.ReportId).OrderBy(x => x.ReportId).ToList();
-
-            var villages = context.Villages
-                .Where(x => x.AccountId == accountId.Value)
-                .ToList()
-                .Select(x => (VillageId: x.Id, x.X, x.Y))
-                .ToList();
 
             var pausedRows = new List<(RaidListEntry Entry, string Reason)>();
             var detailBudget = MaxDetailPagesPerRun;
@@ -259,6 +273,159 @@ namespace MainCore.Tasks
             }
 
             return Result.Ok();
+        }
+
+        private const int MaxScoutListPages = 2;
+        private const int MaxScoutDetailPagesPerRun = 6;
+
+        // Reads /report/scouting, opens any NEW report of OUR OWN scouting (outcome 15 only -
+        // see ScoutReportParser's class comment: 16/17 are not yet confirmed, so they're left
+        // alone rather than guessed at) and, when it actually revealed the defender's troops
+        // (ReportTroopTableParser via ScoutReportDetail.DefenderTroops), upserts
+        // ScoutedTargetGarrison for that coordinate. Same "id > last handled" freshness test and
+        // first-run baseline behaviour as the offensive-report pass, tracked separately
+        // (AccountSettingEnums.ScoutReportLastId) since the two report lists are unrelated.
+        // Never pauses anything - a cache write only.
+        private static async ValueTask<Result> ProcessScoutReports(
+            AccountId accountId,
+            AppDbContext context,
+            IChromeBrowser browser,
+            IReadOnlyList<(int VillageId, int X, int Y)> villages,
+            ToScoutReportPageCommand.Handler toScoutReportPageCommand,
+            ToScoutReportDetailCommand.Handler toScoutReportDetailCommand,
+            ILogger logger,
+            CancellationToken cancellationToken)
+        {
+            var lastScoutReportId = context.ByName(accountId, AccountSettingEnums.ScoutReportLastId);
+            if (lastScoutReportId <= 0)
+            {
+                var firstPageResult = await toScoutReportPageCommand.HandleAsync(new(1), cancellationToken);
+                if (firstPageResult.IsFailed) return firstPageResult;
+
+                var newest = ScoutReportParser.GetReportRows(browser.Html)
+                    .Select(x => x.ReportId)
+                    .DefaultIfEmpty(0L)
+                    .Max();
+                if (newest > 0)
+                {
+                    SaveLastScoutReportId(context, accountId, newest);
+                    logger.Information(
+                        "Scout report: first run - report {ReportId} is the starting point, only newer reports are evaluated.",
+                        newest);
+                }
+
+                return Result.Ok();
+            }
+
+            var newRows = new List<ScoutReportRow>();
+            for (var page = 1; page <= MaxScoutListPages; page++)
+            {
+                var pageResult = await toScoutReportPageCommand.HandleAsync(new(page), cancellationToken);
+                if (pageResult.IsFailed) return pageResult;
+
+                var rows = ScoutReportParser.GetReportRows(browser.Html);
+                var fresh = rows.Where(x => x.ReportId > lastScoutReportId).ToList();
+                newRows.AddRange(fresh);
+
+                if (fresh.Count < rows.Count) break;
+            }
+
+            if (newRows.Count == 0) return Result.Ok();
+
+            var ordered = newRows.DistinctBy(x => x.ReportId).OrderBy(x => x.ReportId).ToList();
+            var detailBudget = MaxScoutDetailPagesPerRun;
+
+            foreach (var row in ordered)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                if (row.Outcome != 15)
+                {
+                    // Not our own successful-undetected scouting (see ScoutReportParser's class
+                    // comment) - nothing reliably learned from it here.
+                    SaveLastScoutReportId(context, accountId, row.ReportId);
+                    continue;
+                }
+
+                if (detailBudget <= 0) break; // picked up again next run, same as the offensive pass
+                detailBudget--;
+
+                var detailResult = await toScoutReportDetailCommand.HandleAsync(new(row.DetailHref), cancellationToken);
+                if (detailResult.IsFailed) return detailResult;
+
+                var detail = ScoutReportParser.ParseDetail(browser.Html);
+                var target = detail is null ? null : ResolveScoutTarget(detail, villages);
+
+                if (target is not null && detail!.DefenderTroops is not null)
+                {
+                    SaveScoutedGarrison(context, accountId, target.Value.X, target.Value.Y, detail.DefenderTroops);
+                    logger.Information(
+                        "Scout report {ReportId}: garrison at ({X}|{Y}) updated ({Count} troop type(s)).",
+                        row.ReportId, target.Value.X, target.Value.Y, detail.DefenderTroops.Count);
+                }
+
+                SaveLastScoutReportId(context, accountId, row.ReportId);
+            }
+
+            return Result.Ok();
+        }
+
+        // Same tile-id decoding as ResolveTarget below, for a scout report: OUR village (the
+        // attacker block) gives the map radius, the defender's tile id then decodes to X/Y.
+        private static (int X, int Y)? ResolveScoutTarget(
+            ScoutReportDetail detail,
+            IReadOnlyList<(int VillageId, int X, int Y)> villages)
+        {
+            var attacker = RaidReportRules.ResolveAttackerVillage(detail.AttackerTileId, villages);
+            if (attacker is null) return null;
+            if (detail.DefenderTileId <= 0) return null;
+
+            return MapTiles.ToCoordinates(detail.DefenderTileId, attacker.Value.Radius);
+        }
+
+        private static void SaveScoutedGarrison(
+            AppDbContext context,
+            AccountId accountId,
+            int x,
+            int y,
+            IReadOnlyList<(TroopEnums Troop, int Count)> troops)
+        {
+            var row = context.ScoutedTargetGarrisons.FirstOrDefault(g =>
+                g.AccountId == accountId.Value && g.X == x && g.Y == y);
+
+            if (row is null)
+            {
+                row = new ScoutedTargetGarrison { AccountId = accountId.Value, X = x, Y = y };
+                context.ScoutedTargetGarrisons.Add(row);
+            }
+
+            row.SetTroops(troops);
+            row.CapturedAt = DateTime.Now;
+            context.SaveChanges();
+        }
+
+        private static void SaveLastScoutReportId(AppDbContext context, AccountId accountId, long reportId)
+        {
+            var value = (int)Math.Min(reportId, int.MaxValue);
+
+            var setting = context.AccountsSetting.FirstOrDefault(x =>
+                x.AccountId == accountId.Value && x.Setting == AccountSettingEnums.ScoutReportLastId);
+
+            if (setting is null)
+            {
+                context.AccountsSetting.Add(new AccountSetting
+                {
+                    AccountId = accountId.Value,
+                    Setting = AccountSettingEnums.ScoutReportLastId,
+                    Value = value,
+                });
+            }
+            else
+            {
+                setting.Value = value;
+            }
+
+            context.SaveChanges();
         }
 
         // Works out (target X, target Y, source village id) for a report whose list row did not

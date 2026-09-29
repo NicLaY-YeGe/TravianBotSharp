@@ -17,3 +17,12 @@ MainCore/Parsers/CropOasisTileParser.cs
 MainCore/Commands/Features/CropScan/CropScanCoordinateRules.cs
 MainCore.Test/Parsers/CropOasisTileParserTest.cs
 MainCore.Test/Commands/Features/CropScan/CropScanCoordinateRulesTest.cs
+MainCore/Enums/TroopEnums.cs
+MainCore/Enums/TribeEnums.cs
+MainCore/Parsers/ReportTroopTableParser.cs
+MainCore/Commands/Features/RaidReport/CombatPower.cs
+MainCore/Commands/Features/RaidReport/CombatDecisionRules.cs
+MainCore/Entities/ScoutedTargetGarrison.cs
+MainCore.Test/Parsers/ReportTroopTableParserTest.cs
+MainCore.Test/Commands/Features/RaidReporting/CombatDecisionRulesTest.cs
+MainCore.Test/Entities/ScoutedTargetGarrisonTest.cs

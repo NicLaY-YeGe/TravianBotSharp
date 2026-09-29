@@ -270,5 +270,14 @@
         CropScanMinCroplands,
         CropScanGapMinSeconds,
         CropScanGapMaxSeconds,
+
+        // Defend + donate (2026-09-27, user request): when the village is under attack, spend
+        // whatever resources sit ABOVE the Cranny/Hideout protected amount on training the
+        // tribe's cheapest (T1) troop via Barracks, then donate any still-remaining excess to
+        // the alliance's Recruitment bonus - all finished at least 60s before the attack
+        // lands. Only an on/off toggle: troop choice (always T1), bonus choice (always
+        // Recruitment) and the 60s deadline are fixed by explicit user choice, not
+        // per-village-configurable. See DefendDonateTask.
+        DefendDonateEnable,
     }
 }

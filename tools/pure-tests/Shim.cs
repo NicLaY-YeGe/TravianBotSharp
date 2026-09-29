@@ -5,6 +5,7 @@ global using System.Threading;
 global using System.Threading.Tasks;
 global using HtmlAgilityPack;
 global using MainCore.Entities;
+global using MainCore.Enums;
 global using MainCore.Parsers;
 global using Xunit;
 global using Shouldly;

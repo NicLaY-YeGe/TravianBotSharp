@@ -29,11 +29,23 @@ namespace MainCore.Parsers
     // MapTiles). Resources is null when the mission did not reveal them (e.g. a "defence and
     // troops" mission); CrannyCapacity is null when the report has no cranny line at all
     // (0 is a real value: no cranny).
+    // DefenderTroops (2026-09-27): the defender's troop composition, when revealed (see
+    // ReportTroopTableParser) - an empty list means "revealed, target had zero troops", null
+    // means "not revealed" (hidden "?", or the row is missing entirely). This project's one real
+    // capture so far (ScoutReportDetail_Success.html - a "resources" mission against an empty
+    // target) happens to show the troop row already unhidden (all zero) rather than "?", which
+    // suggests a successful scouting report may reveal the defender's troop COUNT regardless of
+    // which mission was chosen (resources vs defence/troops), with the mission only controlling
+    // whether resources are also shown - but that has only been observed at zero troops, so it
+    // is not confirmed either way for a target that actually has a garrison. Flag it (and ideally
+    // share a real capture) the first time this is checked against a live nonzero-garrison
+    // target.
     public sealed record ScoutReportDetail(
         int AttackerTileId,
         int DefenderTileId,
         ScoutResources? Resources,
-        int? CrannyCapacity);
+        int? CrannyCapacity,
+        IReadOnlyList<(TroopEnums Troop, int Count)>? DefenderTroops);
 
     // Parses /report/scouting (list) and an opened scouting report, both captured from a
     // real English-client account on 2026-09-21 (fixtures: MainCore.Test/Parsers/ScoutReport).
@@ -147,7 +159,9 @@ namespace MainCore.Parsers
                 cranny = GetCrannyCapacity(info);
             }
 
-            return new ScoutReportDetail(attackerTileId, defenderTileId, resources, cranny);
+            var defenderTroops = ReportTroopTableParser.GetComposition(defender, "troopCount_small");
+
+            return new ScoutReportDetail(attackerTileId, defenderTileId, resources, cranny, defenderTroops);
         }
 
         private static int GetVillageTileId(HtmlNode role)

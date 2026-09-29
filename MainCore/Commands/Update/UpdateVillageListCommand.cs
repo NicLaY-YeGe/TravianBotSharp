@@ -57,6 +57,12 @@
                     {
                         taskManager.Add(dodgeTask);
                     }
+
+                    var defendDonateTask = new DefendDonateTask.Task(accountId, village.Id);
+                    if (defendDonateTask.CanStart(context) && !taskManager.IsExist<DefendDonateTask.Task>(accountId, village.Id))
+                    {
+                        taskManager.Add(defendDonateTask);
+                    }
                 }
             }
 

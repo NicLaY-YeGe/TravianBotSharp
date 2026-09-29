@@ -32,6 +32,10 @@ namespace MainCore.Parsers
     // An opened offensive report. Tile ids are the "d" of /karte.php?d=... links - they encode
     // a map position (see MapTiles). LootCarried/LootCapacity are null when the report has no
     // bounty line.
+    // DefenderTroops (2026-09-27): the defender's troop composition, ONLY when the report
+    // actually revealed it (see ReportTroopTableParser) - null in the ordinary case where the
+    // defender's row is hidden ("?"). Real offensive reports almost never reveal this; it's kept
+    // here mainly for symmetry with ScoutReportDetail and the rare case it ever is shown.
     public sealed record OffensiveReportDetail(
         int AttackerTileId,
         int DefenderTileId,
@@ -41,7 +45,8 @@ namespace MainCore.Parsers
         long TroopsSent,
         long TroopsDead,
         int? LootCarried,
-        int? LootCapacity);
+        int? LootCapacity,
+        IReadOnlyList<(TroopEnums Troop, int Count)>? DefenderTroops);
 
     // Parses /report/offensive (list) and the opened report pages behind it, both captured
     // from a real English-client account on 2026-09-19 (see the fixtures under
@@ -187,9 +192,11 @@ namespace MainCore.Parsers
                 lootCapacity = capacity;
             }
 
+            var defenderTroops = ReportTroopTableParser.GetComposition(defender, "troopCount_small");
+
             return new OffensiveReportDetail(
                 attackerTileId, defenderTileId, hasDefenderCoordinates, defenderX, defenderY,
-                sent, dead, lootCarried, lootCapacity);
+                sent, dead, lootCarried, lootCapacity, defenderTroops);
         }
 
         // "a.village" inside the role block's headline: /karte.php?d=<tile id>. 0 when absent.

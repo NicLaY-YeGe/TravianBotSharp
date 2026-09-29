@@ -68,6 +68,10 @@
                         <CheckBox x:Name="EnableAutoHeroRevive" Content="Automatically revive a dead hero (own bag, then sibling villages, then NPC trade with gold)" />
                         <uc:RangeInputUc x:Name="RaidSendGap" Text="Raid List: wait between two consecutive sends (any rows)" Unit="seconds" />
                         <CheckBox x:Name="EnableRaidReport" Content="Read raid reports and pause Raid List rows that keep losing troops" />
+                        <CheckBox x:Name="EnableCombatCheckOnRaidList" Content="Before a Raid List send, roughly compare our troops against the target's most recently scouted garrison and skip if we'd likely lose (needs a fresh scouting report - see CombatCheckMaxAgeHours)" />
+                        <CheckBox x:Name="EnableCombatCheckOnAttack" Content="Same rough garrison check for real Attack sends (not wired into a send yet - reserved for a later update)" />
+                        <uc:AmountInputUc x:Name="CombatCheckMaxAgeHours" Text="Trust a scouted garrison for this long before ignoring it (falls back to sending as before)" Unit="hours" />
+                        <uc:AmountInputUc x:Name="CombatSafetyMarginPercent" Text="Required attack advantage over the target's estimated defense before sending" Unit="%" />
 
                         <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Hammer village supply" VerticalAlignment="Center" FontWeight="Bold" Margin="0,8,0,0" />
                         <uc:AmountInputUc x:Name="HammerVillageId" Text="Hammer village (Village.Id, see Villages tab)" Unit="" />

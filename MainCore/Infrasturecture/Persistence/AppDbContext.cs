@@ -26,6 +26,7 @@ namespace MainCore.Infrasturecture.Persistence
         public DbSet<VillageSetting> VillagesSetting { get; set; }
         public DbSet<Farm> FarmLists { get; set; }
         public DbSet<RaidListEntry> RaidListEntries { get; set; }
+        public DbSet<ScoutedTargetGarrison> ScoutedTargetGarrisons { get; set; }
 
         #endregion table
 
@@ -56,8 +57,13 @@ namespace MainCore.Infrasturecture.Persistence
             {AccountSettingEnums.RaidListNextAllowedSendAtMinutes, 0 },
             {AccountSettingEnums.EnableRaidReport, 1 },
             {AccountSettingEnums.RaidReportLastId, 0 },
+            {AccountSettingEnums.ScoutReportLastId, 0 },
             {AccountSettingEnums.RaidListSendGapMinSeconds, 30 },
             {AccountSettingEnums.RaidListSendGapMaxSeconds, 90 },
+            {AccountSettingEnums.EnableCombatCheckOnRaidList, 0 },
+            {AccountSettingEnums.EnableCombatCheckOnAttack, 0 },
+            {AccountSettingEnums.CombatCheckMaxAgeHours, 12 },
+            {AccountSettingEnums.CombatSafetyMarginPercent, 20 },
             {AccountSettingEnums.RaidListNextAllowedSendAtSeconds, 0 },
         }.ToImmutableDictionary();
 
@@ -163,6 +169,8 @@ namespace MainCore.Infrasturecture.Persistence
 
             {VillageSettingEnums.DodgeEnable, 0 },
             {VillageSettingEnums.DodgeTroopSlot, 1 },
+
+            {VillageSettingEnums.DefendDonateEnable, 0 },
 
             {VillageSettingEnums.SmithyUpgradeEnable, 0 },
             {VillageSettingEnums.SmithyUpgradeTroopSlot, 1 },
@@ -412,6 +420,34 @@ namespace MainCore.Infrasturecture.Persistence
             if (hasColumn) return;
 
             Database.ExecuteSqlRaw("ALTER TABLE \"RaidListEntries\" ADD COLUMN \"ReportStatsJson\" TEXT NULL");
+        }
+
+        // ScoutedTargetGarrisons (added 2026-09-27, combat-decision feature) - a genuinely NEW
+        // TABLE, same situation and same GenerateCreateScript()-based fix shape as
+        // EnsureRaidListEntriesTableExists() above (see that method's comment for why - no EF
+        // Core migrations in this project).
+        public void EnsureScoutedTargetGarrisonsTableExists()
+        {
+            var fullScript = Database.GenerateCreateScript();
+            var statements = fullScript.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+            foreach (var statement in statements)
+            {
+                if (!statement.Contains("\"ScoutedTargetGarrisons\"", StringComparison.Ordinal)) continue;
+
+                var idempotent = statement switch
+                {
+                    _ when statement.Contains("CREATE TABLE", StringComparison.Ordinal)
+                        => statement.Replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS"),
+                    _ when statement.Contains("CREATE UNIQUE INDEX", StringComparison.Ordinal)
+                        => statement.Replace("CREATE UNIQUE INDEX", "CREATE UNIQUE INDEX IF NOT EXISTS"),
+                    _ when statement.Contains("CREATE INDEX", StringComparison.Ordinal)
+                        => statement.Replace("CREATE INDEX", "CREATE INDEX IF NOT EXISTS"),
+                    _ => statement,
+                };
+
+                Database.ExecuteSqlRaw(idempotent);
+            }
         }
 
         // IsDeadTarget (added 2026-09-20) - same situation/fix shape as the two column patches

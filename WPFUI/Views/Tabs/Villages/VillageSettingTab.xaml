@@ -122,6 +122,13 @@
 
                 <Border Style="{DynamicResource Box}">
                     <StackPanel>
+                        <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Defend + donate on attack" VerticalAlignment="Center" FontWeight="Bold" />
+                        <CheckBox x:Name="DefendDonateEnable" Content="When this village is attacked, spend resources above Cranny protection on cheap troops first, then donate any leftover to the alliance's Recruitment bonus - finishing at least 60s before impact" />
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{DynamicResource Box}">
+                    <StackPanel>
                         <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Auto settle (train settlers + found new village)" VerticalAlignment="Center" FontWeight="Bold" />
                         <CheckBox x:Name="AutoSettleEnable" Content="Train settlers/chieftains in this village's Residence/Palace and found a new village once 3 are ready" />
                         <CheckBox x:Name="AutoApplyBuildTemplateEnable" Content="Automatically apply the default build template to villages founded by Auto Settle" />

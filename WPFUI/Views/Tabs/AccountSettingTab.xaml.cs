@@ -33,6 +33,10 @@ namespace WPFUI.Views.Tabs
                 this.Bind(ViewModel, vm => vm.AccountSettingInput.EnableAutoHeroRevive, v => v.EnableAutoHeroRevive.IsChecked).DisposeWith(d);
                 this.Bind(ViewModel, vm => vm.AccountSettingInput.RaidSendGap, v => v.RaidSendGap.ViewModel).DisposeWith(d);
                 this.Bind(ViewModel, vm => vm.AccountSettingInput.EnableRaidReport, v => v.EnableRaidReport.IsChecked).DisposeWith(d);
+                this.Bind(ViewModel, vm => vm.AccountSettingInput.EnableCombatCheckOnRaidList, v => v.EnableCombatCheckOnRaidList.IsChecked).DisposeWith(d);
+                this.Bind(ViewModel, vm => vm.AccountSettingInput.EnableCombatCheckOnAttack, v => v.EnableCombatCheckOnAttack.IsChecked).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.AccountSettingInput.CombatCheckMaxAgeHours, v => v.CombatCheckMaxAgeHours.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.AccountSettingInput.CombatSafetyMarginPercent, v => v.CombatSafetyMarginPercent.ViewModel).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.AccountSettingInput.MinHeroHealthPercent, v => v.MinHeroHealthPercent.ViewModel).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.AccountSettingInput.HammerVillageId, v => v.HammerVillageId.ViewModel).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.AccountSettingInput.HammerReservePercent, v => v.HammerReservePercent.ViewModel).DisposeWith(d);

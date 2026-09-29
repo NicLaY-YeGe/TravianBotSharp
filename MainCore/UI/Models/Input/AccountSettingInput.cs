@@ -19,6 +19,10 @@ namespace MainCore.UI.Models.Input
             EnableRaidReport = settings.GetValueOrDefault(AccountSettingEnums.EnableRaidReport) == 1;
             MinHeroHealthPercent.Set(settings.GetValueOrDefault(AccountSettingEnums.MinHeroHealthPercent));
             RaidSendGap.Set(settings.GetValueOrDefault(AccountSettingEnums.RaidListSendGapMinSeconds, 30), settings.GetValueOrDefault(AccountSettingEnums.RaidListSendGapMaxSeconds, 90));
+            EnableCombatCheckOnRaidList = settings.GetValueOrDefault(AccountSettingEnums.EnableCombatCheckOnRaidList) == 1;
+            EnableCombatCheckOnAttack = settings.GetValueOrDefault(AccountSettingEnums.EnableCombatCheckOnAttack) == 1;
+            CombatCheckMaxAgeHours.Set(settings.GetValueOrDefault(AccountSettingEnums.CombatCheckMaxAgeHours, 12));
+            CombatSafetyMarginPercent.Set(settings.GetValueOrDefault(AccountSettingEnums.CombatSafetyMarginPercent, 20));
             FarmInterval.Set(settings.GetValueOrDefault(AccountSettingEnums.FarmIntervalMin), settings.GetValueOrDefault(AccountSettingEnums.FarmIntervalMax));
             UseStartAllButton = settings.GetValueOrDefault(AccountSettingEnums.UseStartAllButton) == 1;
             HammerVillageId.Set(settings.GetValueOrDefault(AccountSettingEnums.HammerVillageId));
@@ -46,6 +50,10 @@ namespace MainCore.UI.Models.Input
             var onlineHoursMask = OnlineHours.Get();
             var minHeroHealthPercent = MinHeroHealthPercent.Get();
             var (raidSendGapMin, raidSendGapMax) = RaidSendGap.Get();
+            var enableCombatCheckOnRaidList = EnableCombatCheckOnRaidList ? 1 : 0;
+            var enableCombatCheckOnAttack = EnableCombatCheckOnAttack ? 1 : 0;
+            var combatCheckMaxAgeHours = CombatCheckMaxAgeHours.Get();
+            var combatSafetyMarginPercent = CombatSafetyMarginPercent.Get();
 
             var settings = new Dictionary<AccountSettingEnums, int>()
             {
@@ -75,6 +83,10 @@ namespace MainCore.UI.Models.Input
                 { AccountSettingEnums.MinHeroHealthPercent, minHeroHealthPercent },
                 { AccountSettingEnums.RaidListSendGapMinSeconds, raidSendGapMin },
                 { AccountSettingEnums.RaidListSendGapMaxSeconds, raidSendGapMax },
+                { AccountSettingEnums.EnableCombatCheckOnRaidList, enableCombatCheckOnRaidList },
+                { AccountSettingEnums.EnableCombatCheckOnAttack, enableCombatCheckOnAttack },
+                { AccountSettingEnums.CombatCheckMaxAgeHours, combatCheckMaxAgeHours },
+                { AccountSettingEnums.CombatSafetyMarginPercent, combatSafetyMarginPercent },
             };
             return settings;
         }
@@ -102,6 +114,15 @@ namespace MainCore.UI.Models.Input
 
         [Reactive]
         private bool _enableRaidReport;
+
+        [Reactive]
+        private bool _enableCombatCheckOnRaidList;
+
+        [Reactive]
+        private bool _enableCombatCheckOnAttack;
+
+        public AmountInputViewModel CombatCheckMaxAgeHours { get; } = new();
+        public AmountInputViewModel CombatSafetyMarginPercent { get; } = new();
 
         public AmountInputViewModel MinHeroHealthPercent { get; } = new();
 
