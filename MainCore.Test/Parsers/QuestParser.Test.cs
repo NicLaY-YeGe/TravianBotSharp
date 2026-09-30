@@ -41,5 +41,25 @@
             var result = MainCore.Parsers.QuestParser.IsQuestPage(_html);
             result.ShouldBeTrue();
         }
+
+        [Fact]
+        public void GetNextPageButton_PageOneOfThree_ReturnsForwardButton()
+        {
+            // QuestPage.html is a real capture sitting on page 1 of a 3-page task list (see
+            // QuestParser.GetNextPageButton's comment / the 2026-09-29 pagination bug).
+            _html.Load(QuestPage);
+            var result = MainCore.Parsers.QuestParser.GetNextPageButton(_html);
+            result.ShouldNotBeNull();
+        }
+
+        [Theory]
+        [InlineData(QuestClaimable)]
+        [InlineData(QuestNotClaimable)]
+        public void GetNextPageButton_NoPagination_ReturnsNull(string file)
+        {
+            _html.Load(file);
+            var result = MainCore.Parsers.QuestParser.GetNextPageButton(_html);
+            result.ShouldBeNull();
+        }
     }
 }

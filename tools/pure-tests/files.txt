@@ -26,3 +26,6 @@ MainCore/Entities/ScoutedTargetGarrison.cs
 MainCore.Test/Parsers/ReportTroopTableParserTest.cs
 MainCore.Test/Commands/Features/RaidReporting/CombatDecisionRulesTest.cs
 MainCore.Test/Entities/ScoutedTargetGarrisonTest.cs
+MainCore/Parsers/QuestParser.cs
+MainCore.Test/Parsers/BaseParser.Test.cs
+MainCore.Test/Parsers/QuestParser.Test.cs

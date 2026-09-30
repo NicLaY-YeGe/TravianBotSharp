@@ -32,6 +32,28 @@
             return collectButton;
         }
 
+        // 2026-09-29, real bug: the task list within a quest tab is paginated (see
+        // QuestPage.html - 3 pages for that village), and ClaimQuestCommand used to only ever
+        // look at the page it happened to land on. A claimable quest sitting on page 2 or 3
+        // was never reached, the "new quest" bubble (IsQuestClaimable) never cleared, and
+        // UpdateQuestCommand kept re-adding ClaimQuestTask forever - see CHANGELOG. Null when
+        // there's no pagination at all, or the "forward" button is disabled (already on the
+        // last page).
+        public static HtmlNode? GetNextPageButton(HtmlDocument doc)
+        {
+            var pagination = doc.DocumentNode
+                .Descendants("div")
+                .FirstOrDefault(x => x.HasClass("pagination"));
+            if (pagination is null) return null;
+
+            var forward = pagination
+                .Descendants("button")
+                .FirstOrDefault(x => x.HasClass("forward"));
+            if (forward is null || forward.HasClass("disabled")) return null;
+
+            return forward;
+        }
+
         public static bool IsQuestPage(HtmlDocument doc)
         {
             var table = doc.DocumentNode
