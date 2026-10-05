@@ -73,6 +73,11 @@
                         <uc:AmountInputUc x:Name="CombatCheckMaxAgeHours" Text="Trust a scouted garrison for this long before ignoring it (falls back to sending as before)" Unit="hours" />
                         <uc:AmountInputUc x:Name="CombatSafetyMarginPercent" Text="Required attack advantage over the target's estimated defense before sending" Unit="%" />
 
+                        <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Incoming attack while asleep / offline" VerticalAlignment="Center" FontWeight="Bold" Margin="0,8,0,0" />
+                        <CheckBox x:Name="EnableAttackWake" Content="When an incoming attack was detected and lands during sleep / an offline hour, wake up before the defensive actions (dodge, train + donate) and go back after the impact" />
+                        <uc:RangeInputUc x:Name="AttackWakeBefore" Text="Wake up this long before the first defensive action" Unit="minutes" />
+                        <uc:RangeInputUc x:Name="AttackWakeAfter" Text="Stay awake this long after the impact" Unit="minutes" />
+
                         <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Hammer village supply" VerticalAlignment="Center" FontWeight="Bold" Margin="0,8,0,0" />
                         <uc:AmountInputUc x:Name="HammerVillageId" Text="Hammer village (Village.Id, see Villages tab)" Unit="" />
                         <uc:AmountInputUc x:Name="HammerReservePercent" Text="Never send below this % of hammer's own stock" Unit="%" />

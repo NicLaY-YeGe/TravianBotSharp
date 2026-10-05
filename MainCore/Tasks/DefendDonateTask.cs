@@ -30,6 +30,20 @@ namespace MainCore.Tasks
             {
             }
 
+            // 2026-10-03: wake window (see AttackWakeWindow), same idea as DodgeTroopTask.
+            public DateTime? WakeFrom { get; private set; }
+            public DateTime? WakeUntil { get; private set; }
+
+            public void SetWakeWindow(DateTime from, DateTime until)
+            {
+                WakeFrom = from;
+                WakeUntil = until;
+            }
+
+            public override bool BypassOnlineHours => WakeFrom is not null;
+            public override DateTime? WakeStart => WakeFrom;
+            public override DateTime? WakeEnd => WakeUntil;
+
             protected override string TaskName => "Defend: train + donate excess resources";
 
             public override bool CanStart(AppDbContext context)
@@ -60,6 +74,7 @@ namespace MainCore.Tasks
             GetCrannyProtectionCommand.Handler getCrannyProtectionCommand,
             TrainCheapestTroopCommand.Handler trainCheapestTroopCommand,
             DonateAllianceBonusCommand.Handler donateAllianceBonusCommand,
+            ITaskManager taskManager,
             ILogger logger,
             CancellationToken cancellationToken)
         {
@@ -87,6 +102,7 @@ namespace MainCore.Tasks
             if (secondsUntilStart > 0)
             {
                 task.ExecuteAt = DateTime.Now.AddSeconds(secondsUntilStart);
+                AttackWakeWindow.Apply(context, taskManager, task.AccountId, task.ExecuteAt, DateTime.Now.AddSeconds(attackSeconds.Value), task.SetWakeWindow, logger);
                 logger.Information(
                     "Incoming attack on {VillageId} lands in {Seconds}s - will train+donate in {StartIn}s so it finishes {Deadline}s before impact.",
                     task.VillageId, attackSeconds.Value, secondsUntilStart, FinishBeforeImpactSeconds);

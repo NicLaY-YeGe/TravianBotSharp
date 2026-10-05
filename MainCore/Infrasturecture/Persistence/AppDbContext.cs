@@ -65,6 +65,11 @@ namespace MainCore.Infrasturecture.Persistence
             {AccountSettingEnums.CombatCheckMaxAgeHours, 12 },
             {AccountSettingEnums.CombatSafetyMarginPercent, 20 },
             {AccountSettingEnums.RaidListNextAllowedSendAtSeconds, 0 },
+            {AccountSettingEnums.EnableAttackWake, 1 },
+            {AccountSettingEnums.AttackWakeBeforeMinMinutes, 5 },
+            {AccountSettingEnums.AttackWakeBeforeMaxMinutes, 10 },
+            {AccountSettingEnums.AttackWakeAfterMinMinutes, 5 },
+            {AccountSettingEnums.AttackWakeAfterMaxMinutes, 10 },
         }.ToImmutableDictionary();
 
         // All 24 bits set (hour 0 .. hour 23) = no restriction, matches pre-existing behavior

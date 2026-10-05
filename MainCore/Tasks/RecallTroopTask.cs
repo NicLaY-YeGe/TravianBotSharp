@@ -16,11 +16,22 @@ namespace MainCore.Tasks
             public int TargetX { get; }
             public int TargetY { get; }
 
-            public Task(AccountId accountId, VillageId villageId, int targetX, int targetY)
+            // 2026-10-03: inherits the dodge's wake window (see AttackWakeWindow) so the recall,
+            // due ~50s after the dodge send, isn't held back by an offline hour.
+            public DateTime? WakeFrom { get; }
+            public DateTime? WakeUntil { get; }
+
+            public override bool BypassOnlineHours => WakeFrom is not null;
+            public override DateTime? WakeStart => WakeFrom;
+            public override DateTime? WakeEnd => WakeUntil;
+
+            public Task(AccountId accountId, VillageId villageId, int targetX, int targetY, DateTime? wakeFrom = null, DateTime? wakeUntil = null)
                 : base(accountId, villageId)
             {
                 TargetX = targetX;
                 TargetY = targetY;
+                WakeFrom = wakeFrom;
+                WakeUntil = wakeUntil;
             }
 
             protected override string TaskName => $"Recall dodge troops from ({TargetX}|{TargetY})";

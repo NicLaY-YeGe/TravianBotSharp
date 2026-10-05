@@ -120,5 +120,17 @@
         // to reach 120% of their defense points before sending; exact break-even (100 vs 100)
         // skips. See CombatDecisionRules.Decide. Default 20.
         CombatSafetyMarginPercent,
+
+        // 2026-10-03, user request: when an incoming attack was detected while awake but lands
+        // during sleep / an offline hour, wake the account BEFORE the first defensive action
+        // (Dodge / Defend+Donate) and go back to sleep after the impact - see
+        // WakeWindowRules.ComputeAttackWindow and AttackWakeWindow. Default ON (user decision).
+        // The four values are minutes, a random pick in [Min, Max] each side.
+        // APPENDED at the end on purpose: enum values are positional in existing databases.
+        EnableAttackWake,
+        AttackWakeBeforeMinMinutes,
+        AttackWakeBeforeMaxMinutes,
+        AttackWakeAfterMinMinutes,
+        AttackWakeAfterMaxMinutes,
     }
 }

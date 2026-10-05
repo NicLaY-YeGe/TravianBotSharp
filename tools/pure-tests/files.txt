@@ -29,3 +29,5 @@ MainCore.Test/Entities/ScoutedTargetGarrisonTest.cs
 MainCore/Parsers/QuestParser.cs
 MainCore.Test/Parsers/BaseParser.Test.cs
 MainCore.Test/Parsers/QuestParser.Test.cs
+MainCore/Commands/Features/SyncAttack/WakeWindowRules.cs
+MainCore.Test/Commands/Features/SyncAttack/WakeWindowRulesTest.cs

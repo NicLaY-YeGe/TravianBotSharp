@@ -25,6 +25,16 @@ namespace MainCore.Tasks
             public IReadOnlyDictionary<int, long> TroopAmounts { get; }
             public bool IncludeHero { get; }
 
+            // 2026-10-03: optional wake window (see WakeWindowRules). Fixed at creation by
+            // SyncAttackPlanTask (random picks are made once, not per tick). Null = ordinary
+            // send that obeys the offline-hours/sleep rules like every other task.
+            public DateTime? WakeFrom { get; }
+            public DateTime? WakeUntil { get; }
+
+            public override bool BypassOnlineHours => WakeFrom is not null;
+            public override DateTime? WakeStart => WakeFrom;
+            public override DateTime? WakeEnd => WakeUntil;
+
             public Task(
                 AccountId accountId,
                 VillageId villageId,
@@ -32,9 +42,13 @@ namespace MainCore.Tasks
                 int targetY,
                 RallyPointEventTypeEnums eventType,
                 IReadOnlyDictionary<int, long> troopAmounts,
-                bool includeHero = false)
+                bool includeHero = false,
+                DateTime? wakeFrom = null,
+                DateTime? wakeUntil = null)
                 : base(accountId, villageId)
             {
+                WakeFrom = wakeFrom;
+                WakeUntil = wakeUntil;
                 TargetX = targetX;
                 TargetY = targetY;
                 EventType = eventType;
@@ -52,6 +66,14 @@ namespace MainCore.Tasks
             ILogger logger,
             CancellationToken cancellationToken)
         {
+            // 2026-10-03: a timed send with a wake window is still sent when it is late (user
+            // decision) - but say so, since a late arrival is the thing they would want to know.
+            var lateBy = DateTime.Now - task.ExecuteAt;
+            if (task.WakeFrom is not null && lateBy > TimeSpan.FromSeconds(30))
+            {
+                logger.Warning("Timed send from village {VillageId} is {Late:0} s later than planned - sending anyway.", task.VillageId, lateBy.TotalSeconds);
+            }
+
             var toPageResult = await toSendTroopsPageCommand.HandleAsync(new(task.VillageId), cancellationToken);
             if (toPageResult.IsFailed) return toPageResult;
 

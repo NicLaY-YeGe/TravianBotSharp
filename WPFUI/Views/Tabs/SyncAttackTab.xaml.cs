@@ -29,6 +29,12 @@ namespace WPFUI.Views.Tabs
                 this.Bind(ViewModel, vm => vm.DesiredArrivalDate, v => v.DesiredArrivalDate.SelectedDate).DisposeWith(d);
                 this.Bind(ViewModel, vm => vm.DesiredArrivalTime, v => v.DesiredArrivalTime.Text).DisposeWith(d);
 
+                this.Bind(ViewModel, vm => vm.WakeForSend, v => v.WakeForSend.IsChecked).DisposeWith(d);
+                this.Bind(ViewModel, vm => vm.WakeBeforeMin, v => v.WakeBeforeMin.Text).DisposeWith(d);
+                this.Bind(ViewModel, vm => vm.WakeBeforeMax, v => v.WakeBeforeMax.Text).DisposeWith(d);
+                this.Bind(ViewModel, vm => vm.WakeAfterMin, v => v.WakeAfterMin.Text).DisposeWith(d);
+                this.Bind(ViewModel, vm => vm.WakeAfterMax, v => v.WakeAfterMax.Text).DisposeWith(d);
+
                 this.BindCommand(ViewModel, vm => vm.ScheduleCommand, v => v.ScheduleButton).DisposeWith(d);
 
                 // Event type radios - wired by hand (routed events) rather than a converter-Bind,

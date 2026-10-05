@@ -38,6 +38,19 @@
 
                     <Button x:Name="ScheduleButton" Content="Calculate &amp; schedule" Margin="30,0,0,0" />
                 </StackPanel>
+
+                <!-- 2026-10-03: wake window - the bot wakes up (even in sleep / offline hours) before the send and goes back after it. -->
+                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                    <CheckBox x:Name="WakeForSend" Content="Wake up for the send (even in sleep / offline hours)" VerticalAlignment="Center" />
+                    <Label Content="Wake before send (min):" VerticalAlignment="Center" Margin="20,0,0,0" />
+                    <TextBox x:Name="WakeBeforeMin" Style="{DynamicResource MaterialDesignFloatingHintTextBox}" materialDesign:HintAssist.Hint="min" Width="40" Margin="5,0,0,0" />
+                    <Label Content="-" VerticalAlignment="Center" />
+                    <TextBox x:Name="WakeBeforeMax" Style="{DynamicResource MaterialDesignFloatingHintTextBox}" materialDesign:HintAssist.Hint="max" Width="40" />
+                    <Label Content="Sleep again after send (min):" VerticalAlignment="Center" Margin="20,0,0,0" />
+                    <TextBox x:Name="WakeAfterMin" Style="{DynamicResource MaterialDesignFloatingHintTextBox}" materialDesign:HintAssist.Hint="min" Width="40" Margin="5,0,0,0" />
+                    <Label Content="-" VerticalAlignment="Center" />
+                    <TextBox x:Name="WakeAfterMax" Style="{DynamicResource MaterialDesignFloatingHintTextBox}" materialDesign:HintAssist.Hint="max" Width="40" />
+                </StackPanel>
             </StackPanel>
         </Border>
 

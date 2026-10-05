@@ -28,6 +28,9 @@ namespace MainCore.UI.Models.Input
             HammerVillageId.Set(settings.GetValueOrDefault(AccountSettingEnums.HammerVillageId));
             HammerReservePercent.Set(settings.GetValueOrDefault(AccountSettingEnums.HammerReservePercent));
             OnlineHours.Set(settings.GetValueOrDefault(AccountSettingEnums.OnlineHoursMask, AppDbContext.OnlineHoursMaskAll));
+            EnableAttackWake = settings.GetValueOrDefault(AccountSettingEnums.EnableAttackWake, 1) == 1;
+            AttackWakeBefore.Set(settings.GetValueOrDefault(AccountSettingEnums.AttackWakeBeforeMinMinutes, 5), settings.GetValueOrDefault(AccountSettingEnums.AttackWakeBeforeMaxMinutes, 10));
+            AttackWakeAfter.Set(settings.GetValueOrDefault(AccountSettingEnums.AttackWakeAfterMinMinutes, 5), settings.GetValueOrDefault(AccountSettingEnums.AttackWakeAfterMaxMinutes, 10));
         }
 
         public Dictionary<AccountSettingEnums, int> Get()
@@ -54,6 +57,9 @@ namespace MainCore.UI.Models.Input
             var enableCombatCheckOnAttack = EnableCombatCheckOnAttack ? 1 : 0;
             var combatCheckMaxAgeHours = CombatCheckMaxAgeHours.Get();
             var combatSafetyMarginPercent = CombatSafetyMarginPercent.Get();
+            var enableAttackWake = EnableAttackWake ? 1 : 0;
+            var (attackWakeBeforeMin, attackWakeBeforeMax) = AttackWakeBefore.Get();
+            var (attackWakeAfterMin, attackWakeAfterMax) = AttackWakeAfter.Get();
 
             var settings = new Dictionary<AccountSettingEnums, int>()
             {
@@ -87,6 +93,11 @@ namespace MainCore.UI.Models.Input
                 { AccountSettingEnums.EnableCombatCheckOnAttack, enableCombatCheckOnAttack },
                 { AccountSettingEnums.CombatCheckMaxAgeHours, combatCheckMaxAgeHours },
                 { AccountSettingEnums.CombatSafetyMarginPercent, combatSafetyMarginPercent },
+                { AccountSettingEnums.EnableAttackWake, enableAttackWake },
+                { AccountSettingEnums.AttackWakeBeforeMinMinutes, attackWakeBeforeMin },
+                { AccountSettingEnums.AttackWakeBeforeMaxMinutes, attackWakeBeforeMax },
+                { AccountSettingEnums.AttackWakeAfterMinMinutes, attackWakeAfterMin },
+                { AccountSettingEnums.AttackWakeAfterMaxMinutes, attackWakeAfterMax },
             };
             return settings;
         }
@@ -99,6 +110,8 @@ namespace MainCore.UI.Models.Input
         public RangeInputViewModel SleepTime { get; } = new();
         public RangeInputViewModel FarmInterval { get; } = new();
         public RangeInputViewModel RaidSendGap { get; } = new();
+        public RangeInputViewModel AttackWakeBefore { get; } = new();
+        public RangeInputViewModel AttackWakeAfter { get; } = new();
 
         [Reactive]
         private bool _enableAutoLoadVillage;
@@ -120,6 +133,9 @@ namespace MainCore.UI.Models.Input
 
         [Reactive]
         private bool _enableCombatCheckOnAttack;
+
+        [Reactive]
+        private bool _enableAttackWake;
 
         public AmountInputViewModel CombatCheckMaxAgeHours { get; } = new();
         public AmountInputViewModel CombatSafetyMarginPercent { get; } = new();

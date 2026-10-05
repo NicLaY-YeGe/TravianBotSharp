@@ -1,3 +1,4 @@
+using MainCore.Commands.Features.SyncAttack;
 using MainCore.DTO;
 using MainCore.Tasks;
 using MainCore.UI.Models.Output;
@@ -36,6 +37,24 @@ namespace MainCore.UI.ViewModels.Tabs
         // HH:mm, kept as free text like the rest of the app's simple inputs (AmountInputUc etc.)
         [Reactive]
         private string _desiredArrivalTime = "12:00";
+
+        // 2026-10-03: wake window for sends that fall into sleep/offline hours (see
+        // WakeWindowRules). Minutes, kept as free text like the arrival time above; the
+        // defaults are the user's requested 5-10 min either side of the send.
+        [Reactive]
+        private bool _wakeForSend = false;
+
+        [Reactive]
+        private string _wakeBeforeMin = "5";
+
+        [Reactive]
+        private string _wakeBeforeMax = "10";
+
+        [Reactive]
+        private string _wakeAfterMin = "5";
+
+        [Reactive]
+        private string _wakeAfterMax = "10";
 
         public SyncAttackViewModel(IDialogService dialogService, ICustomServiceScopeFactory serviceScopeFactory, ITaskManager taskManager)
         {
@@ -115,13 +134,28 @@ namespace MainCore.UI.ViewModels.Tabs
                 }
             }
 
+            WakeWindowOptions? wake = null;
+            if (WakeForSend)
+            {
+                if (!int.TryParse(WakeBeforeMin, out var beforeMin) || !int.TryParse(WakeBeforeMax, out var beforeMax) ||
+                    !int.TryParse(WakeAfterMin, out var afterMin) || !int.TryParse(WakeAfterMax, out var afterMax) ||
+                    beforeMin < 0 || beforeMax < 0 || afterMin < 0 || afterMax < 0)
+                {
+                    await _dialogService.MessageBox.Handle(new MessageBoxData("Error", "Wake-up minutes must be whole numbers (0 or more)."));
+                    return;
+                }
+
+                wake = new WakeWindowOptions(beforeMin, beforeMax, afterMin, afterMax);
+            }
+
             var plan = new SyncAttackPlan(
                 x,
                 y,
                 EventType,
                 ArrivalMode,
                 desiredArrival,
-                selected.Select(v => new SyncAttackVillageOrder(v.VillageId, v.GetTroopAmounts())).ToList());
+                selected.Select(v => new SyncAttackVillageOrder(v.VillageId, v.GetTroopAmounts())).ToList(),
+                wake);
 
             var task = new SyncAttackPlanTask.Task(AccountId, plan);
             _taskManager.Add(task, first: true);

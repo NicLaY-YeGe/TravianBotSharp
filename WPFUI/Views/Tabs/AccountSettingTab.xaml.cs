@@ -37,6 +37,9 @@ namespace WPFUI.Views.Tabs
                 this.Bind(ViewModel, vm => vm.AccountSettingInput.EnableCombatCheckOnAttack, v => v.EnableCombatCheckOnAttack.IsChecked).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.AccountSettingInput.CombatCheckMaxAgeHours, v => v.CombatCheckMaxAgeHours.ViewModel).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.AccountSettingInput.CombatSafetyMarginPercent, v => v.CombatSafetyMarginPercent.ViewModel).DisposeWith(d);
+                this.Bind(ViewModel, vm => vm.AccountSettingInput.EnableAttackWake, v => v.EnableAttackWake.IsChecked).DisposeWith(d);
+                this.Bind(ViewModel, vm => vm.AccountSettingInput.AttackWakeBefore, v => v.AttackWakeBefore.ViewModel).DisposeWith(d);
+                this.Bind(ViewModel, vm => vm.AccountSettingInput.AttackWakeAfter, v => v.AttackWakeAfter.ViewModel).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.AccountSettingInput.MinHeroHealthPercent, v => v.MinHeroHealthPercent.ViewModel).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.AccountSettingInput.HammerVillageId, v => v.HammerVillageId.ViewModel).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.AccountSettingInput.HammerReservePercent, v => v.HammerReservePercent.ViewModel).DisposeWith(d);

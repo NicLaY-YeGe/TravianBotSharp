@@ -1,4 +1,6 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+﻿using MainCore.Commands.Features.SyncAttack;
+using MainCore.Tasks.Base;
+using Microsoft.Extensions.DependencyInjection;
 using Polly;
 using Polly.Retry;
 using Timer = System.Timers.Timer;
@@ -77,17 +79,42 @@ namespace MainCore.Services
             if (status != StatusEnums.Online) return;
             var tasks = taskQueue.Tasks;
             if (tasks.Count == 0) return;
-            var task = tasks[0];
 
-            if (task.ExecuteAt > DateTime.Now) return;
+            var now = DateTime.Now;
+
+            // The queue is sorted by ExecuteAt, so if the head isn't due nothing is.
+            if (tasks[0].ExecuteAt > now) return;
 
             using var scope = _serviceScopeFactory.CreateScope(accountId);
 
             // Account is configured to be "offline" during this hour of the day: leave the
             // browser open (if it already is) but don't start a new task. We just skip this
             // tick and try again on the next timer elapse.
+            //
+            // 2026-10-03 (wake window): the one exception is a time-critical send that has a
+            // wake window (SendTroopsAtTimeTask) - it, its WakeUpTask and, while its window is
+            // open, the login it may need are allowed through, even when they are NOT at the
+            // head of the queue (normal tasks pile up in front of them during offline hours).
+            // In an online hour this is exactly the old "head task, if due" rule. The pure
+            // rule lives in WakeWindowRules.SelectIndex (unit tested).
             var settingService = scope.ServiceProvider.GetRequiredService<ISettingService>();
-            if (!settingService.IsCurrentHourOnline(accountId)) return;
+            var isOnlineHour = settingService.IsCurrentHourOnline(accountId);
+
+            BaseTask task;
+            if (isOnlineHour)
+            {
+                task = tasks[0];
+            }
+            else
+            {
+                var snapshot = tasks.ToArray();
+                var entries = snapshot
+                    .Select(t => new WakeQueueEntry(t.ExecuteAt, t.BypassOnlineHours, t is LoginTask.Task, t.WakeStart, t.WakeEnd))
+                    .ToList();
+                var index = WakeWindowRules.SelectIndex(entries, now, isOnlineHour: false);
+                if (index < 0) return;
+                task = snapshot[index];
+            }
 
             taskQueue.IsExecuting = true;
             var cts = new CancellationTokenSource();

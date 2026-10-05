@@ -169,6 +169,12 @@ namespace MainCore.Services
                     var sendTroopsAtTimeTaskHandler = scope.GetHandler<SendTroopsAtTimeTask.Task>();
                     return await sendTroopsAtTimeTaskHandler.HandleAsync(sendTroopsAtTimeTask, cancellationToken);
 
+                // 2026-10-03: WakeUpTask (wake window for timed sends). Every new Task type needs
+                // its case here - see CLAUDE.md 2k.
+                case WakeUpTask.Task wakeUpTask:
+                    var wakeUpTaskHandler = scope.GetHandler<WakeUpTask.Task>();
+                    return await wakeUpTaskHandler.HandleAsync(wakeUpTask, cancellationToken);
+
                 case WaveAttackPlanTask.Task waveAttackPlanTask:
                     var waveAttackPlanTaskHandler = scope.GetHandler<WaveAttackPlanTask.Task>();
                     return await waveAttackPlanTaskHandler.HandleAsync(waveAttackPlanTask, cancellationToken);

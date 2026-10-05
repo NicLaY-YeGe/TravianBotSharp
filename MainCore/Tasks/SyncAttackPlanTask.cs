@@ -97,11 +97,26 @@ namespace MainCore.Tasks
 
             var (arrivalTime, sendTimes) = planResult.Value;
 
+            // 2026-10-03: optional wake window - one shared window for all of this plan's sends
+            // (starts before the earliest, ends after the latest), plus a WakeUpTask at its start
+            // that reopens the browser and logs in ahead of time. See WakeWindowRules.
+            DateTime? wakeFrom = null;
+            DateTime? wakeUntil = null;
+            if (plan.Wake is not null && sendTimes.Count > 0)
+            {
+                var (windowStart, windowEnd) = WakeWindowRules.ComputeWindow(sendTimes.Values, plan.Wake, Random.Shared);
+                wakeFrom = windowStart;
+                wakeUntil = windowEnd;
+
+                taskManager.Add(new WakeUpTask.Task(task.AccountId, windowStart));
+                logger.Information("Wake window for this plan: {Start:yyyy-MM-dd HH:mm:ss} -> {End:yyyy-MM-dd HH:mm:ss} (the bot wakes up/goes online for it even in sleep or offline hours).", windowStart, windowEnd);
+            }
+
             foreach (var order in plan.Villages)
             {
                 if (!sendTimes.TryGetValue(order.VillageId, out var sendAt)) continue;
 
-                var sendTask = new SendTroopsAtTimeTask.Task(task.AccountId, order.VillageId, plan.TargetX, plan.TargetY, plan.EventType, order.TroopAmounts)
+                var sendTask = new SendTroopsAtTimeTask.Task(task.AccountId, order.VillageId, plan.TargetX, plan.TargetY, plan.EventType, order.TroopAmounts, wakeFrom: wakeFrom, wakeUntil: wakeUntil)
                 {
                     ExecuteAt = sendAt,
                 };
