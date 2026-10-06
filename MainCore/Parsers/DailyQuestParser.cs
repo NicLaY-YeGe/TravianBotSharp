@@ -46,6 +46,37 @@ namespace MainCore.Parsers
             return button;
         }
 
+        // Second screen (real capture 2026-10-06): clicking "Collect rewards" does NOT claim
+        // anything yet - it opens #dailyQuestsRewardScreen ("Congratulations! ...") for the
+        // lowest unclaimed milestone, with its own button.collect.collectable (turns "collected"
+        // once claimed) and a button.backButton to return to the overview. Several unclaimed
+        // milestones = this screen once per milestone.
+        public static bool IsRewardScreen(HtmlDocument doc)
+        {
+            return doc.GetElementbyId("dailyQuestsRewardScreen") is not null;
+        }
+
+        public static HtmlNode? GetRewardCollectButton(HtmlDocument doc)
+        {
+            var screen = doc.GetElementbyId("dailyQuestsRewardScreen");
+            if (screen is null) return null;
+
+            return screen
+                .Descendants("button")
+                .FirstOrDefault(x => x.HasClass("collect") && x.HasClass("collectable") && !x.HasClass("collected")
+                    && !x.Attributes.Contains("disabled"));
+        }
+
+        public static HtmlNode? GetRewardBackButton(HtmlDocument doc)
+        {
+            var screen = doc.GetElementbyId("dailyQuestsRewardScreen");
+            if (screen is null) return null;
+
+            return screen
+                .Descendants("button")
+                .FirstOrDefault(x => x.HasClass("backButton"));
+        }
+
         public static bool HasAchievedReward(HtmlDocument doc)
         {
             var dialog = doc.GetElementbyId("dailyQuests");

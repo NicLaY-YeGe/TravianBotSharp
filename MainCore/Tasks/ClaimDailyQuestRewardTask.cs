@@ -79,35 +79,66 @@ namespace MainCore.Tasks
 
             await delayService.DelayClick(cancellationToken);
 
-            if (DailyQuestParser.GetCollectButton(browser.Html) is not null)
+            // 2026-10-06 live capture: "Collect rewards" only opens a per-milestone reward screen;
+            // the reward is claimed by that screen's own "Collect" button, and "Back" returns to
+            // the overview (one pass per unclaimed milestone). A small state machine, bounded by
+            // MaxSteps, that always ends by closing the dialog - never a long browser.Wait (an
+            // earlier version hung there until the task's time budget cancelled the run).
+            var collected = 0;
+            for (var step = 0; step < MaxSteps; step++)
             {
-                var (_, collectFailed, collectElement, _) = await browser.GetElement(doc => DailyQuestParser.GetCollectButton(doc), cancellationToken);
-                if (!collectFailed)
-                {
-                    var collectResult = await browser.Click(collectElement, cancellationToken);
-                    if (collectResult.IsSuccess)
-                    {
-                        var doneResult = await browser.Wait(driver =>
-                        {
-                            var doc = new HtmlDocument();
-                            doc.LoadHtml(driver.PageSource);
-                            return !DailyQuestParser.HasAchievedReward(doc) || DailyQuestParser.GetCollectButton(doc) is null;
-                        }, cancellationToken);
+                var html = browser.Html;
 
-                        if (doneResult.IsSuccess) logger.Information("Daily quest reward: collected.");
-                        else logger.Warning("Daily quest reward: clicked collect but could not confirm it went through.");
-                    }
+                if (DailyQuestParser.GetRewardCollectButton(html) is not null)
+                {
+                    if (!await ClickNode(browser, doc => DailyQuestParser.GetRewardCollectButton(doc), cancellationToken)) break;
+                    collected++;
+                    logger.Information("Daily quest reward: collect clicked on the reward screen ({Count}).", collected);
                 }
+                else if (DailyQuestParser.IsRewardScreen(html))
+                {
+                    // Nothing (more) to collect on this screen: back to the overview.
+                    if (!await ClickNode(browser, doc => DailyQuestParser.GetRewardBackButton(doc), cancellationToken)) break;
+                }
+                else if (DailyQuestParser.GetCollectButton(html) is not null)
+                {
+                    if (!await ClickNode(browser, doc => DailyQuestParser.GetCollectButton(doc), cancellationToken)) break;
+                }
+                else
+                {
+                    break; // overview with nothing collectable left
+                }
+
+                await delayService.DelayClick(cancellationToken);
+                await System.Threading.Tasks.Task.Delay(1000, cancellationToken);
             }
-            else
-            {
-                logger.Information("Daily quest reward: the indicator was lit but there is nothing to collect right now.");
-            }
+
+            var end = browser.Html;
+            logger.Information(
+                "Daily quest reward: finished - collected={Collected}, rewardScreen={Screen}, achievedLeft={Achieved}, collectEnabled={Button}.",
+                collected,
+                DailyQuestParser.IsRewardScreen(end),
+                DailyQuestParser.HasAchievedReward(end),
+                DailyQuestParser.GetCollectButton(end) is not null);
 
             await delayService.DelayClick(cancellationToken);
 
             var (_, closeFailed, closeElement, _) = await browser.GetElement(doc => DailyQuestParser.GetCloseButton(doc), cancellationToken);
             if (!closeFailed) await browser.Click(closeElement, cancellationToken);
+        }
+
+        private const int MaxSteps = 12;
+
+        private static async ValueTask<bool> ClickNode(
+            IChromeBrowser browser,
+            Func<HtmlDocument, HtmlNode?> node,
+            CancellationToken cancellationToken)
+        {
+            var (_, failed, element, _) = await browser.GetElement(node, cancellationToken);
+            if (failed) return false;
+
+            var result = await browser.Click(element, cancellationToken);
+            return result.IsSuccess;
         }
     }
 }
