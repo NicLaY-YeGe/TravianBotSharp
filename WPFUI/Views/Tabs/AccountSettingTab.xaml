@@ -65,6 +65,7 @@
                         <CheckBox x:Name="EnableAutoLoadVillage" Content="Enable auto load village's building" />
                         <CheckBox x:Name="EnableAutoStartAdventure" Content="Enable auto start adventure" />
                         <uc:AmountInputUc x:Name="MinHeroHealthPercent" Text="Don't send hero below this health % (0 = no restriction)" Unit="%" />
+                        <CheckBox x:Name="EnableClaimDailyQuestReward" Content="Automatically collect the Daily Quests rewards" />
                         <CheckBox x:Name="EnableAutoHeroRevive" Content="Automatically revive a dead hero (own bag, then sibling villages, then NPC trade with gold)" />
                         <uc:RangeInputUc x:Name="RaidSendGap" Text="Raid List: wait between two consecutive sends (any rows)" Unit="seconds" />
                         <CheckBox x:Name="EnableRaidReport" Content="Read raid reports and pause Raid List rows that keep losing troops" />
@@ -77,6 +78,21 @@
                         <CheckBox x:Name="EnableAttackWake" Content="When an incoming attack was detected and lands during sleep / an offline hour, wake up before the defensive actions (dodge, train + donate) and go back after the impact" />
                         <uc:RangeInputUc x:Name="AttackWakeBefore" Text="Wake up this long before the first defensive action" Unit="minutes" />
                         <uc:RangeInputUc x:Name="AttackWakeAfter" Text="Stay awake this long after the impact" Unit="minutes" />
+
+                        <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Auto attack after a scouting report" VerticalAlignment="Center" FontWeight="Bold" Margin="0,8,0,0" />
+                        <CheckBox x:Name="EnableScoutAutoAttack" Content="After a fresh scouting report of ours, automatically send the troops below to that target if the rough garrison check says we'd win (uses the safety margin above; skips own villages, oases, unknown garrisons)" />
+                        <uc:AmountInputUc x:Name="ScoutAutoAttackVillageId" Text="Send from this village (Village.Id, see Villages tab; 0 = off)" Unit="" />
+                        <uc:AmountInputUc x:Name="ScoutAutoAttackType" Text="Movement type (0 = Raid, 1 = Attack)" Unit="" />
+                        <uc:AmountInputUc x:Name="ScoutAutoAttackTroop1" Text="Troop slot 1 (tribe order) - amount to send" Unit="" />
+                        <uc:AmountInputUc x:Name="ScoutAutoAttackTroop2" Text="Troop slot 2 (tribe order) - amount to send" Unit="" />
+                        <uc:AmountInputUc x:Name="ScoutAutoAttackTroop3" Text="Troop slot 3 (tribe order) - amount to send" Unit="" />
+                        <uc:AmountInputUc x:Name="ScoutAutoAttackTroop4" Text="Troop slot 4 (tribe order) - amount to send" Unit="" />
+                        <uc:AmountInputUc x:Name="ScoutAutoAttackTroop5" Text="Troop slot 5 (tribe order) - amount to send" Unit="" />
+                        <uc:AmountInputUc x:Name="ScoutAutoAttackTroop6" Text="Troop slot 6 (tribe order) - amount to send" Unit="" />
+                        <uc:AmountInputUc x:Name="ScoutAutoAttackTroop7" Text="Troop slot 7 (tribe order) - amount to send" Unit="" />
+                        <uc:AmountInputUc x:Name="ScoutAutoAttackTroop8" Text="Troop slot 8 (tribe order) - amount to send" Unit="" />
+                        <uc:AmountInputUc x:Name="ScoutAutoAttackTroop9" Text="Troop slot 9 (tribe order) - amount to send" Unit="" />
+                        <uc:AmountInputUc x:Name="ScoutAutoAttackTroop10" Text="Troop slot 10 (tribe order) - amount to send" Unit="" />
 
                         <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Hammer village supply" VerticalAlignment="Center" FontWeight="Bold" Margin="0,8,0,0" />
                         <uc:AmountInputUc x:Name="HammerVillageId" Text="Hammer village (Village.Id, see Villages tab)" Unit="" />

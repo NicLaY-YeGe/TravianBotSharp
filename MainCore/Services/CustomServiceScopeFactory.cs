@@ -214,6 +214,16 @@ namespace MainCore.Services
                     var raidReportTaskHandler = scope.GetHandler<RaidReportTask.Task>();
                     return await raidReportTaskHandler.HandleAsync(raidReportTask, cancellationToken);
 
+                // 2026-10-06: ClaimDailyQuestRewardTask.
+                case ClaimDailyQuestRewardTask.Task claimDailyQuestRewardTask:
+                    var claimDailyQuestRewardTaskHandler = scope.GetHandler<ClaimDailyQuestRewardTask.Task>();
+                    return await claimDailyQuestRewardTaskHandler.HandleAsync(claimDailyQuestRewardTask, cancellationToken);
+
+                // 2026-10-05: ScoutAutoAttackTask (auto attack after a scouting report).
+                case ScoutAutoAttackTask.Task scoutAutoAttackTask:
+                    var scoutAutoAttackTaskHandler = scope.GetHandler<ScoutAutoAttackTask.Task>();
+                    return await scoutAutoAttackTaskHandler.HandleAsync(scoutAutoAttackTask, cancellationToken);
+
                 default:
                     throw new NotImplementedException($"Task {task.GetType().Name} is not implemented");
             }

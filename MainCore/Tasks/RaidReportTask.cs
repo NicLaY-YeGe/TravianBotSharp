@@ -91,7 +91,7 @@ namespace MainCore.Tasks
             // is a passive cache write - it never pauses anything, unlike the offensive-report
             // pass below.
             var scoutResult = await ProcessScoutReports(
-                accountId, context, browser, villages,
+                accountId, context, browser, villages, taskManager,
                 toScoutReportPageCommand, toScoutReportDetailCommand, logger, cancellationToken);
             if (scoutResult.IsFailed) return scoutResult;
 
@@ -291,11 +291,28 @@ namespace MainCore.Tasks
             AppDbContext context,
             IChromeBrowser browser,
             IReadOnlyList<(int VillageId, int X, int Y)> villages,
+            ITaskManager taskManager,
             ToScoutReportPageCommand.Handler toScoutReportPageCommand,
             ToScoutReportDetailCommand.Handler toScoutReportDetailCommand,
             ILogger logger,
             CancellationToken cancellationToken)
         {
+            // Scout auto attack (2026-10-05): only a pass that follows another pass reasonably
+            // soon may queue attacks. The report list's time cell is localized and cannot be
+            // parsed language-independently, so report AGE is unknown - instead, after a long gap
+            // (bot was off / first pass since start) the backlog is saved as garrison data only.
+            var now = DateTime.Now;
+            var autoAttackAllowed = false;
+            lock (ScoutPassLock)
+            {
+                if (LastScoutPassAt.TryGetValue(accountId.Value, out var previousPass)
+                    && (now - previousPass).TotalMinutes <= MaxScoutPassGapMinutes)
+                {
+                    autoAttackAllowed = true;
+                }
+                LastScoutPassAt[accountId.Value] = now;
+            }
+
             var lastScoutReportId = context.ByName(accountId, AccountSettingEnums.ScoutReportLastId);
             if (lastScoutReportId <= 0)
             {
@@ -362,12 +379,50 @@ namespace MainCore.Tasks
                     logger.Information(
                         "Scout report {ReportId}: garrison at ({X}|{Y}) updated ({Count} troop type(s)).",
                         row.ReportId, target.Value.X, target.Value.Y, detail.DefenderTroops.Count);
+
+                    if (autoAttackAllowed)
+                    {
+                        QueueScoutAutoAttack(context, accountId, taskManager, target.Value.X, target.Value.Y, logger);
+                    }
                 }
 
                 SaveLastScoutReportId(context, accountId, row.ReportId);
             }
 
             return Result.Ok();
+        }
+
+        private const int MaxScoutPassGapMinutes = 90;
+        private static readonly object ScoutPassLock = new();
+        private static readonly Dictionary<int, DateTime> LastScoutPassAt = new();
+
+        // Queues ScoutAutoAttackTask for a freshly scouted target when the feature is switched on
+        // and a source village is configured. A few seconds of random delay so the send does not
+        // look machine-instant; a task for the same village+target that is already queued is not
+        // duplicated. The task itself re-checks everything (it is the one that decides).
+        private static void QueueScoutAutoAttack(
+            AppDbContext context,
+            AccountId accountId,
+            ITaskManager taskManager,
+            int x,
+            int y,
+            ILogger logger)
+        {
+            if (!context.BooleanByName(accountId, AccountSettingEnums.EnableScoutAutoAttack)) return;
+
+            var villageId = context.ByName(accountId, AccountSettingEnums.ScoutAutoAttackVillageId);
+            if (villageId <= 0) return;
+
+            var autoTask = new ScoutAutoAttackTask.Task(accountId, new VillageId(villageId), x, y)
+            {
+                ExecuteAt = DateTime.Now.AddSeconds(Random.Shared.Next(20, 91)),
+            };
+
+            var alreadyQueued = taskManager.GetTaskList(accountId).Any(t => t.Key == autoTask.Key);
+            if (alreadyQueued) return;
+
+            taskManager.Add(autoTask);
+            logger.Information("Scout auto attack: queued evaluation of ({X}|{Y}) from village {VillageId}.", x, y, villageId);
         }
 
         // Same tile-id decoding as ResolveTarget below, for a scout report: OUR village (the

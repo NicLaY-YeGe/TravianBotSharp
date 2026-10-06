@@ -132,5 +132,34 @@
         AttackWakeBeforeMaxMinutes,
         AttackWakeAfterMinMinutes,
         AttackWakeAfterMaxMinutes,
+
+        // 2026-10-05, user request ("casus raporlarıma göre asker gönder"): after RaidReportTask's
+        // scout pass saves a FRESH own-scouting report, ScoutAutoAttackTask evaluates the target
+        // with the same CombatDecisionRules the Raid List gate uses and, on "Send", sends the typed
+        // troop counts below from the fixed source village. Default OFF (it sends troops).
+        // APPENDED at the end on purpose: enum values are positional in existing databases.
+        EnableScoutAutoAttack,
+
+        // Village.Id the troops are sent from. 0 = not configured (feature does nothing).
+        ScoutAutoAttackVillageId,
+
+        // 0 = Raid (AttackRaid), 1 = Attack (AttackNormal).
+        ScoutAutoAttackType,
+
+        // Troops sent per scouted target, by rally point slot 1-10 (tribe order).
+        ScoutAutoAttackTroop1,
+        ScoutAutoAttackTroop2,
+        ScoutAutoAttackTroop3,
+        ScoutAutoAttackTroop4,
+        ScoutAutoAttackTroop5,
+        ScoutAutoAttackTroop6,
+        ScoutAutoAttackTroop7,
+        ScoutAutoAttackTroop8,
+        ScoutAutoAttackTroop9,
+        ScoutAutoAttackTroop10,
+
+        // 2026-10-06, user request: ClaimDailyQuestRewardTask collects the Daily Quests rewards.
+        // Default ON (harmless, free rewards). Appended at the end on purpose.
+        EnableClaimDailyQuestReward,
     }
 }

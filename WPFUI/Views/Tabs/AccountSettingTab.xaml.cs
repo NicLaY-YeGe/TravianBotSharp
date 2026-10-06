@@ -30,6 +30,7 @@ namespace WPFUI.Views.Tabs
                 this.Bind(ViewModel, vm => vm.AccountSettingInput.Tribe, v => v.Tribes.ViewModel).DisposeWith(d);
                 this.Bind(ViewModel, vm => vm.AccountSettingInput.HeadlessChrome, v => v.HeadlessChrome.IsChecked).DisposeWith(d);
                 this.Bind(ViewModel, vm => vm.AccountSettingInput.EnableAutoStartAdventure, v => v.EnableAutoStartAdventure.IsChecked).DisposeWith(d);
+                this.Bind(ViewModel, vm => vm.AccountSettingInput.EnableClaimDailyQuestReward, v => v.EnableClaimDailyQuestReward.IsChecked).DisposeWith(d);
                 this.Bind(ViewModel, vm => vm.AccountSettingInput.EnableAutoHeroRevive, v => v.EnableAutoHeroRevive.IsChecked).DisposeWith(d);
                 this.Bind(ViewModel, vm => vm.AccountSettingInput.RaidSendGap, v => v.RaidSendGap.ViewModel).DisposeWith(d);
                 this.Bind(ViewModel, vm => vm.AccountSettingInput.EnableRaidReport, v => v.EnableRaidReport.IsChecked).DisposeWith(d);
@@ -43,6 +44,19 @@ namespace WPFUI.Views.Tabs
                 this.OneWayBind(ViewModel, vm => vm.AccountSettingInput.MinHeroHealthPercent, v => v.MinHeroHealthPercent.ViewModel).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.AccountSettingInput.HammerVillageId, v => v.HammerVillageId.ViewModel).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.AccountSettingInput.HammerReservePercent, v => v.HammerReservePercent.ViewModel).DisposeWith(d);
+                this.Bind(ViewModel, vm => vm.AccountSettingInput.EnableScoutAutoAttack, v => v.EnableScoutAutoAttack.IsChecked).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.AccountSettingInput.ScoutAutoAttackVillageId, v => v.ScoutAutoAttackVillageId.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.AccountSettingInput.ScoutAutoAttackType, v => v.ScoutAutoAttackType.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.AccountSettingInput.ScoutAutoAttackTroop1, v => v.ScoutAutoAttackTroop1.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.AccountSettingInput.ScoutAutoAttackTroop2, v => v.ScoutAutoAttackTroop2.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.AccountSettingInput.ScoutAutoAttackTroop3, v => v.ScoutAutoAttackTroop3.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.AccountSettingInput.ScoutAutoAttackTroop4, v => v.ScoutAutoAttackTroop4.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.AccountSettingInput.ScoutAutoAttackTroop5, v => v.ScoutAutoAttackTroop5.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.AccountSettingInput.ScoutAutoAttackTroop6, v => v.ScoutAutoAttackTroop6.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.AccountSettingInput.ScoutAutoAttackTroop7, v => v.ScoutAutoAttackTroop7.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.AccountSettingInput.ScoutAutoAttackTroop8, v => v.ScoutAutoAttackTroop8.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.AccountSettingInput.ScoutAutoAttackTroop9, v => v.ScoutAutoAttackTroop9.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.AccountSettingInput.ScoutAutoAttackTroop10, v => v.ScoutAutoAttackTroop10.ViewModel).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.AccountSettingInput.OnlineHours, v => v.OnlineHours.ViewModel).DisposeWith(d);
 
                 this.Bind(ViewModel, vm => vm.TelegramBotToken, v => v.TelegramBotToken.Text).DisposeWith(d);

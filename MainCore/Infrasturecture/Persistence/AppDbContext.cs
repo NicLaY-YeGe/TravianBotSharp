@@ -70,6 +70,20 @@ namespace MainCore.Infrasturecture.Persistence
             {AccountSettingEnums.AttackWakeBeforeMaxMinutes, 10 },
             {AccountSettingEnums.AttackWakeAfterMinMinutes, 5 },
             {AccountSettingEnums.AttackWakeAfterMaxMinutes, 10 },
+            {AccountSettingEnums.EnableScoutAutoAttack, 0 },
+            {AccountSettingEnums.ScoutAutoAttackVillageId, 0 },
+            {AccountSettingEnums.ScoutAutoAttackType, 0 },
+            {AccountSettingEnums.ScoutAutoAttackTroop1, 0 },
+            {AccountSettingEnums.ScoutAutoAttackTroop2, 0 },
+            {AccountSettingEnums.ScoutAutoAttackTroop3, 0 },
+            {AccountSettingEnums.ScoutAutoAttackTroop4, 0 },
+            {AccountSettingEnums.ScoutAutoAttackTroop5, 0 },
+            {AccountSettingEnums.ScoutAutoAttackTroop6, 0 },
+            {AccountSettingEnums.ScoutAutoAttackTroop7, 0 },
+            {AccountSettingEnums.ScoutAutoAttackTroop8, 0 },
+            {AccountSettingEnums.ScoutAutoAttackTroop9, 0 },
+            {AccountSettingEnums.ScoutAutoAttackTroop10, 0 },
+            {AccountSettingEnums.EnableClaimDailyQuestReward, 1 },
         }.ToImmutableDictionary();
 
         // All 24 bits set (hour 0 .. hour 23) = no restriction, matches pre-existing behavior

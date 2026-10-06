@@ -85,6 +85,22 @@
                     taskManager.Remove<RaidReportTask.Task>(accountId);
                 }
             }
+
+            if (settings.ContainsKey(AccountSettingEnums.EnableClaimDailyQuestReward))
+            {
+                if (settings[AccountSettingEnums.EnableClaimDailyQuestReward] == 1)
+                {
+                    var task = new ClaimDailyQuestRewardTask.Task(accountId);
+                    if (task.CanStart(context) && !taskManager.IsExist<ClaimDailyQuestRewardTask.Task>(accountId))
+                    {
+                        taskManager.Add(task);
+                    }
+                }
+                else
+                {
+                    taskManager.Remove<ClaimDailyQuestRewardTask.Task>(accountId);
+                }
+            }
         }
     }
 }

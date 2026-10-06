@@ -68,6 +68,13 @@ namespace MainCore.Services
                 taskManager.Add(raidReportTask);
             }
 
+            // 2026-10-06: collects the Daily Quests rewards (see ClaimDailyQuestRewardTask).
+            var claimDailyQuestRewardTask = new ClaimDailyQuestRewardTask.Task(accountId);
+            if (claimDailyQuestRewardTask.CanStart(context) && !taskManager.IsExist<ClaimDailyQuestRewardTask.Task>(accountId))
+            {
+                taskManager.Add(claimDailyQuestRewardTask);
+            }
+
             var villagesSpec = new VillagesSpec(accountId);
             var villages = context.Villages
                 .WithSpecification(villagesSpec)
