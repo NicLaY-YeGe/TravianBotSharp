@@ -111,5 +111,25 @@ namespace MainCore.Test.Commands.Features.UpgradeBuilding
             plan.Location.ShouldBe(22);
             plan.Level.ShouldBe(2);
         }
+
+        [Fact]
+        public void GetPrerequisitePlan_ExistingBuildingAtMaxLevel_IsIgnoredAndEmptyPlotUsed()
+        {
+            // Arrange - the only Warehouse is already level 20 (max); bumping it to 21 is
+            // impossible, so the resolver must claim an empty plot for a second Warehouse.
+            var buildings = new List<BuildingItem>()
+            {
+                new() { Id = new(1), Location = 20, Type = BuildingEnums.Warehouse, CurrentLevel = 20 },
+                new() { Id = new(2), Location = 23, Type = BuildingEnums.Site },
+            };
+
+            // Act
+            var plan = ResolveMissingPrerequisiteCommand.GetPrerequisitePlan(buildings, BuildingEnums.Warehouse);
+
+            // Assert
+            plan.ShouldNotBeNull();
+            plan.Location.ShouldBe(23);
+            plan.Level.ShouldBe(1);
+        }
     }
 }

@@ -22,12 +22,18 @@ namespace MainCore.Tasks
             GetBuildPlanCommand.Handler getBuildPlanCommand,
             ToBuildPageCommand.Handler toBuildPageCommand,
             HandleResourceCommand.Handler handleResourceCommand,
+            ResolveMissingPrerequisiteCommand.Handler resolveMissingPrerequisiteCommand,
             AddCroplandCommand.Handler addCroplandCommand,
             HandleUpgradeCommand.Handler handleUpgradeCommand,
             UpdateBuildingCommand.Handler updateBuildingCommand,
             CancellationToken cancellationToken)
         {
             Result result;
+
+            // Safety net: how many times this single run may auto-queue a Warehouse/Granary upgrade
+            // (one for each side is the realistic worst case) before falling back to the old Stop.
+            const int maxStorageResolutions = 2;
+            var storageResolutions = 0;
 
             while (true)
             {
@@ -61,6 +67,22 @@ namespace MainCore.Tasks
 
                     if (result.HasError<StorageLimit>())
                     {
+                        // The building costs more of a resource than the warehouse/granary can ever hold,
+                        // so waiting never helps. Instead of pausing the whole account, put the missing
+                        // storage upgrade at the top of the build queue (same mechanism as missing
+                        // prerequisites) and loop - GetBuildPlanCommand will pick it up next.
+                        var storageError = result.Errors.OfType<StorageLimit>().First();
+                        if (storageResolutions < maxStorageResolutions)
+                        {
+                            storageResolutions++;
+                            var queued = await resolveMissingPrerequisiteCommand.HandleAsync(new(task.VillageId, storageError.Building, 0), cancellationToken);
+                            if (queued)
+                            {
+                                logger.Information("{Building} is too small for {Type} level {Level}, queued a {Building} upgrade first.", storageError.Building, plan.Type, plan.Level, storageError.Building);
+                                continue;
+                            }
+                        }
+
                         return Stop.Error.WithErrors(result.Errors);
                     }
                     if (result.HasError<MissingResource>())

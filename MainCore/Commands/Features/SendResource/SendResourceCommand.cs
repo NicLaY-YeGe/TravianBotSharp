@@ -85,8 +85,28 @@ namespace MainCore.Commands.Features.SendResource
             result = await ClickSend(browser, cancellationToken);
             if (result.IsFailed) return Stop.Error.WithErrors(result.Errors);
 
+            // Live case (TS32, 2026-10-09): the form was filled correctly and the button enabled,
+            // yet the mouse click never submitted (the button sits at the bottom edge of the
+            // viewport next to the game's bottom bar, so the pointer click can land on an overlay).
+            // If the merchant count hasn't moved shortly after, fall back to a JS click on the
+            // same button - safe, because a click that did register shows up within a second or two.
+            if (!await WaitMerchantsDroppedQuick(browser, freeMerchants, cancellationToken))
+            {
+                logger.Warning("Send click did not register - retrying with a script click.");
+                var js = await ClickSendViaScript(browser, cancellationToken);
+                if (js.IsFailed) return Stop.Error.WithErrors(js.Errors);
+            }
+
             result = await WaitMerchantsDropped(browser, freeMerchants, cancellationToken);
-            if (result.IsFailed) return Stop.Error.WithError("Merchant count did not drop after sending - the shipment may not have gone through.");
+            if (result.IsFailed)
+            {
+                // Even the script click did not move the counter (it could also be masked by
+                // merchants returning from earlier shipments). Pausing the WHOLE account over a
+                // small transfer is far worse than one missed/duplicated shipment (every caller
+                // re-plans from live storage on its next run), so warn and carry on instead of Stop.
+                logger.Warning("Could not confirm the shipment from village {VillageId} (free-merchant count did not drop within the wait) - continuing without pausing.", villageId);
+                return Result.Ok();
+            }
 
             logger.Information("Merchants sent.");
 
@@ -212,7 +232,41 @@ namespace MainCore.Commands.Features.SendResource
             var (_, isFailed, element, errors) = await browser.GetElement(By.XPath(node.XPath), cancellationToken);
             if (isFailed) return Result.Fail(errors);
 
+            // Bring the button to the middle of the viewport first so nothing (bottom bar, cookie
+            // icon) overlaps it, then click.
+            await browser.ExecuteJsScript(ScrollIntoViewScript(node.XPath));
             return await browser.Click(element, cancellationToken);
+        }
+
+        private static async Task<Result> ClickSendViaScript(IChromeBrowser browser, CancellationToken cancellationToken)
+        {
+            await Task.CompletedTask;
+            var node = SendResourceParser.GetSendButton(browser.Html);
+            if (node is null) return Retry.Error.WithError("Cannot find send button.");
+
+            var xpath = node.XPath.Replace("\\", "\\\\").Replace("\"", "\\\"");
+            return await browser.ExecuteJsScript(
+                $"var el=document.evaluate(\"{xpath}\",document,null,XPathResult.FIRST_ORDERED_NODE_TYPE,null).singleNodeValue;" +
+                "if(el){el.scrollIntoView({block:'center'});el.click();}");
+        }
+
+        private static string ScrollIntoViewScript(string xpathRaw)
+        {
+            var xpath = xpathRaw.Replace("\\", "\\\\").Replace("\"", "\\\"");
+            return $"var el=document.evaluate(\"{xpath}\",document,null,XPathResult.FIRST_ORDERED_NODE_TYPE,null).singleNodeValue;" +
+                   "if(el){el.scrollIntoView({block:'center'});}";
+        }
+
+        // Polls the live page for up to ~10 seconds; true as soon as the free-merchant count drops.
+        private static async Task<bool> WaitMerchantsDroppedQuick(IChromeBrowser browser, int freeMerchantsBefore, CancellationToken cancellationToken)
+        {
+            for (var i = 0; i < 10; i++)
+            {
+                if (cancellationToken.IsCancellationRequested) return true;
+                await Task.Delay(1000, cancellationToken);
+                if (SendResourceParser.GetFreeMerchants(browser.Html) < freeMerchantsBefore) return true;
+            }
+            return false;
         }
     }
 }

@@ -53,8 +53,13 @@ namespace MainCore.Commands.Features.UpgradeBuilding
         // Returns null only when neither option exists.
         public static NormalBuildPlan? GetPrerequisitePlan(List<BuildingItem> buildings, BuildingEnums type)
         {
+            // Instances already at their max level can't be bumped any further (e.g. a level-20
+            // Warehouse) - ignore them so we fall through to claiming an empty plot instead of
+            // queueing an impossible "level 21" job.
+            var maxLevel = type.GetMaxLevel();
             var existing = buildings
                 .Where(x => x.Type == type)
+                .Where(x => x.Level < maxLevel)
                 .OrderByDescending(x => x.Level)
                 .FirstOrDefault();
 
