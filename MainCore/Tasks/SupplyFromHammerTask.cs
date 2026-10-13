@@ -180,6 +180,12 @@ namespace MainCore.Tasks
             var pageResult = await toSendResourcePageCommand.HandleAsync(new(task.VillageId), cancellationToken);
             if (pageResult.IsFailed)
             {
+                if (pageResult.HasError<MissingBuilding>())
+                {
+                    // No (built) marketplace here - this village just can't act as a source.
+                    logger.Warning("No marketplace in {VillageId}, cannot supply {Target} from the hammer.", task.VillageId, task.TargetVillageId);
+                    return Skip.Error.WithErrors(pageResult.Errors);
+                }
                 return Stop.Error.WithErrors(pageResult.Errors);
             }
 

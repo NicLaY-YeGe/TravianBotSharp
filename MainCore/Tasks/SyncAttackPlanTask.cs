@@ -66,7 +66,7 @@ namespace MainCore.Tasks
 
                 var probeStart = DateTime.Now;
                 var probeResult = await sendTroopsCommand.HandleAsync(
-                    new(order.VillageId, plan.TargetX, plan.TargetY, plan.EventType, order.TroopAmounts, Confirm: false),
+                    new(order.VillageId, plan.TargetX, plan.TargetY, plan.EventType, order.TroopAmounts, Confirm: false, IncludeHero: order.IncludeHero),
                     cancellationToken);
                 if (probeResult.IsFailed) return Result.Fail(probeResult.Errors);
 
@@ -116,7 +116,7 @@ namespace MainCore.Tasks
             {
                 if (!sendTimes.TryGetValue(order.VillageId, out var sendAt)) continue;
 
-                var sendTask = new SendTroopsAtTimeTask.Task(task.AccountId, order.VillageId, plan.TargetX, plan.TargetY, plan.EventType, order.TroopAmounts, wakeFrom: wakeFrom, wakeUntil: wakeUntil)
+                var sendTask = new SendTroopsAtTimeTask.Task(task.AccountId, order.VillageId, plan.TargetX, plan.TargetY, plan.EventType, order.TroopAmounts, order.IncludeHero, wakeFrom, wakeUntil)
                 {
                     ExecuteAt = sendAt,
                 };

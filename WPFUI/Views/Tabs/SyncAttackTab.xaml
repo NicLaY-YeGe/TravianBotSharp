@@ -65,6 +65,7 @@
                                     <StackPanel Orientation="Horizontal">
                                         <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" VerticalAlignment="Center" />
                                         <Label Content="{Binding VillageName}" FontWeight="Bold" VerticalAlignment="Center" />
+                                        <CheckBox IsChecked="{Binding IncludeHero, Mode=TwoWay}" Content="Send hero" VerticalAlignment="Center" Margin="20,0,0,0" />
                                     </StackPanel>
                                     <ItemsControl ItemsSource="{Binding Slots}" Margin="24,0,0,0">
                                         <ItemsControl.ItemsPanel>

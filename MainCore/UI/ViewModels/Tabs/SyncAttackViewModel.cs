@@ -117,6 +117,14 @@ namespace MainCore.UI.ViewModels.Tabs
                 return;
             }
 
+            // The hero lives in exactly one village, so at most one source village may send it.
+            if (selected.Count(v => v.IncludeHero) > 1)
+            {
+                await _dialogService.MessageBox.Handle(new MessageBoxData("Error",
+                    "The hero can only be sent from one village - tick \"Send hero\" for a single village."));
+                return;
+            }
+
             DateTime? desiredArrival = null;
             if (ArrivalMode == SyncAttackArrivalModeEnums.Specific)
             {
@@ -154,7 +162,7 @@ namespace MainCore.UI.ViewModels.Tabs
                 EventType,
                 ArrivalMode,
                 desiredArrival,
-                selected.Select(v => new SyncAttackVillageOrder(v.VillageId, v.GetTroopAmounts())).ToList(),
+                selected.Select(v => new SyncAttackVillageOrder(v.VillageId, v.GetTroopAmounts(), v.IncludeHero)).ToList(),
                 wake);
 
             var task = new SyncAttackPlanTask.Task(AccountId, plan);
