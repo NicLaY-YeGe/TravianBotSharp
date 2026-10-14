@@ -11,7 +11,71 @@ namespace MainCore.Commands.Features.SendResource
 
         private static readonly string[] AllResourceTypes = ["wood", "clay", "iron", "crop"];
 
+        // How long we wait for a form element to become usable. The browser-wide default wait is
+        // 3 minutes (ad-friendly), which turned one unusable input into a 12-minute stall plus an
+        // account pause (live case TS32, 2026-10-14, Balance resources in TS-3203). The send form
+        // is already loaded by the time we get here, so a few seconds is plenty.
+        private const int ElementWaitSeconds = 8;
+
         private static async ValueTask<Result> HandleAsync(
+            Command command,
+            IChromeBrowser browser,
+            AppDbContext context,
+            ILogger logger,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                return await SendAsync(command, browser, context, logger, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                return Cancel.Error;
+            }
+        }
+
+        // A failure to fill/submit the send form is never worth pausing the whole account: every
+        // caller re-plans from live storage on its next run (see CLAUDE.md 2l). So these are Skip,
+        // with enough detail in the log to tell which step/resource/XPath was the problem.
+        private static Result FormFailure(ILogger logger, Command command, string step, string detail)
+        {
+            var plan = string.Join(", ", command.Amounts.Where(x => x.Value > 0).Select(x => $"{x.Key}={x.Value}"));
+            var message = $"Send form failed at step '{step}' ({detail}); source {command.VillageId} -> target {command.TargetVillageId}; plan: {plan}";
+            logger.Warning(message);
+            return Skip.Error.WithError(message);
+        }
+
+        // Polls for an element without the browser-wide 3 minute wait. requireInteractable=false
+        // is for read-only checks (an input that is hidden/disabled still has a readable value).
+        private static async Task<IWebElement?> FindElement(IChromeBrowser browser, string xpath, int seconds, bool requireInteractable, CancellationToken cancellationToken)
+        {
+            var driver = browser.Driver;
+            if (driver is null) return null;
+
+            var deadline = DateTime.UtcNow.AddSeconds(seconds);
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                try
+                {
+                    var elements = driver.FindElements(By.XPath(xpath));
+                    if (elements.Count > 0)
+                    {
+                        var element = elements[0];
+                        if (!requireInteractable || (element.Displayed && element.Enabled)) return element;
+                    }
+                }
+                catch (StaleElementReferenceException)
+                {
+                    // page re-rendered between lookup and check - just look again
+                }
+
+                if (DateTime.UtcNow >= deadline) return null;
+                await Task.Delay(250, cancellationToken);
+            }
+        }
+
+        private static async ValueTask<Result> SendAsync(
             Command command,
             IChromeBrowser browser,
             AppDbContext context,
@@ -26,7 +90,7 @@ namespace MainCore.Commands.Features.SendResource
             var targetVillage = context.Villages.FirstOrDefault(x => x.Id == targetVillageId.Value);
             if (targetVillage is null)
             {
-                return Stop.Error.WithError($"Cannot find target village {targetVillageId} in the database.");
+                return FormFailure(logger, command, "lookup target village", "target village not found in the database");
             }
 
             var freeMerchants = SendResourceParser.GetFreeMerchants(browser.Html);
@@ -54,25 +118,25 @@ namespace MainCore.Commands.Features.SendResource
             // Clear all 4 resource fields first. The page can retain a leftover value from a
             // previous visit/session (same as it remembers the last-used target coordinates),
             // and we don't want to assume any of them start at 0.
-            var clearResult = await ClearAllResourceInputs(browser, cancellationToken);
-            if (clearResult.IsFailed) return Stop.Error.WithErrors(clearResult.Errors);
+            var clearResult = await ClearAllResourceInputs(browser, logger, command, cancellationToken);
+            if (clearResult.IsFailed) return clearResult;
 
-            var result = await InputCoordinates(browser, targetVillage.X, targetVillage.Y, cancellationToken);
-            if (result.IsFailed) return Stop.Error.WithErrors(result.Errors);
+            var result = await InputCoordinates(browser, logger, command, targetVillage.X, targetVillage.Y, cancellationToken);
+            if (result.IsFailed) return result;
 
             foreach (var (resourceType, amount) in amounts)
             {
                 if (amount <= 0) continue;
 
-                result = await TypeResourceAmount(browser, resourceType, amount, cancellationToken);
-                if (result.IsFailed) return Stop.Error.WithErrors(result.Errors);
+                result = await TypeResourceAmount(browser, logger, command, resourceType, amount, cancellationToken);
+                if (result.IsFailed) return result;
             }
 
             // Safety check: confirm the form actually has ONLY the intended resources filled
             // in before we commit to sending. If typing landed on the wrong element (the
             // page can shift under us), this catches it instead of shipping the wrong resource.
-            result = await VerifyOnlyIntendedResourcesFilled(browser, amounts, cancellationToken);
-            if (result.IsFailed) return Stop.Error.WithErrors(result.Errors);
+            result = await VerifyOnlyIntendedResourcesFilled(browser, logger, command, amounts, cancellationToken);
+            if (result.IsFailed) return result;
 
             logger.Information(
                 "Sending resources from village {VillageId} to ({X}|{Y}): {Plan}",
@@ -80,10 +144,10 @@ namespace MainCore.Commands.Features.SendResource
                 string.Join(", ", amounts.Where(x => x.Value > 0).Select(x => $"{x.Key}={x.Value}")));
 
             result = await WaitSendButtonEnabled(browser, cancellationToken);
-            if (result.IsFailed) return Stop.Error.WithError("Send button never became enabled - the amounts or target may not have registered.");
+            if (result.IsFailed) return FormFailure(logger, command, "wait send button", "send button never became enabled - the amounts or target may not have registered");
 
-            result = await ClickSend(browser, cancellationToken);
-            if (result.IsFailed) return Stop.Error.WithErrors(result.Errors);
+            result = await ClickSend(browser, logger, command, cancellationToken);
+            if (result.IsFailed) return result;
 
             // Live case (TS32, 2026-10-09): the form was filled correctly and the button enabled,
             // yet the mouse click never submitted (the button sits at the bottom edge of the
@@ -94,7 +158,7 @@ namespace MainCore.Commands.Features.SendResource
             {
                 logger.Warning("Send click did not register - retrying with a script click.");
                 var js = await ClickSendViaScript(browser, cancellationToken);
-                if (js.IsFailed) return Stop.Error.WithErrors(js.Errors);
+                if (js.IsFailed) return FormFailure(logger, command, "script click send", "send button not found");
             }
 
             result = await WaitMerchantsDropped(browser, freeMerchants, cancellationToken);
@@ -126,82 +190,100 @@ namespace MainCore.Commands.Features.SendResource
             return result;
         }
 
-        private static async Task<Result> ClearAllResourceInputs(IChromeBrowser browser, CancellationToken cancellationToken)
+        private static async Task<Result> ClearAllResourceInputs(IChromeBrowser browser, ILogger logger, Command command, CancellationToken cancellationToken)
         {
             foreach (var resourceType in AllResourceTypes)
             {
                 var node = SendResourceParser.GetResourceInput(browser.Html, resourceType);
                 if (node is null) continue;
 
-                var (_, isFailed, element, errors) = await browser.GetElement(By.XPath(node.XPath), cancellationToken);
-                if (isFailed) return Result.Fail(errors);
+                // Don't require the input to be usable: Travian can render a resource's input
+                // hidden/disabled (e.g. nothing of it to send), and waiting for that to become
+                // interactable is what stalled the bot for 3 minutes. Nothing to clear there.
+                var element = await FindElement(browser, node.XPath, 0, requireInteractable: false, cancellationToken);
+                if (element is null) continue;
 
                 var current = (element.GetAttribute("value") ?? "0").ParseLong();
                 if (current == 0) continue;
 
+                if (!element.Displayed || !element.Enabled)
+                {
+                    return FormFailure(logger, command, $"clear {resourceType}", $"input holds {current} but is not interactable ({node.XPath})");
+                }
+
                 var result = await browser.Input(element, "0", cancellationToken);
-                if (result.IsFailed) return result;
+                if (result.IsFailed) return FormFailure(logger, command, $"clear {resourceType}", $"typing failed ({node.XPath})");
             }
 
             return Result.Ok();
         }
 
-        private static async Task<Result> VerifyOnlyIntendedResourcesFilled(IChromeBrowser browser, Dictionary<string, long> amounts, CancellationToken cancellationToken)
+        private static async Task<Result> VerifyOnlyIntendedResourcesFilled(IChromeBrowser browser, ILogger logger, Command command, Dictionary<string, long> amounts, CancellationToken cancellationToken)
         {
             foreach (var resourceType in AllResourceTypes)
             {
                 var node = SendResourceParser.GetResourceInput(browser.Html, resourceType);
                 if (node is null) continue;
 
-                var (_, isFailed, element, errors) = await browser.GetElement(By.XPath(node.XPath), cancellationToken);
-                if (isFailed) return Result.Fail(errors);
+                var intended = amounts.GetValueOrDefault(resourceType, 0);
+
+                var element = await FindElement(browser, node.XPath, 0, requireInteractable: false, cancellationToken);
+                if (element is null)
+                {
+                    // An input we meant to fill must exist; one we didn't touch just isn't there to hold a value.
+                    if (intended > 0) return FormFailure(logger, command, $"verify {resourceType}", $"input not found ({node.XPath})");
+                    continue;
+                }
 
                 var value = (element.GetAttribute("value") ?? "0").ParseLong();
-                var intended = amounts.GetValueOrDefault(resourceType, 0);
 
                 if (intended > 0 && value <= 0)
                 {
-                    return Stop.Error.WithError($"Expected '{resourceType}' to have an amount filled in after typing, but it shows 0 - the typing may have missed.");
+                    return FormFailure(logger, command, $"verify {resourceType}", "shows 0 after typing - the typing may have missed");
                 }
 
                 if (intended <= 0 && value > 0)
                 {
-                    return Stop.Error.WithError($"'{resourceType}' unexpectedly has {value} filled in even though it wasn't part of the plan - typing likely landed on the wrong resource. Aborting instead of sending it.");
+                    return FormFailure(logger, command, $"verify {resourceType}", $"unexpectedly has {value} filled in though it wasn't part of the plan - typing likely landed on the wrong resource, aborting instead of sending");
                 }
             }
 
             return Result.Ok();
         }
 
-        private static async Task<Result> InputCoordinates(IChromeBrowser browser, int x, int y, CancellationToken cancellationToken)
+        private static async Task<Result> InputCoordinates(IChromeBrowser browser, ILogger logger, Command command, int x, int y, CancellationToken cancellationToken)
         {
             var xNode = SendResourceParser.GetXInput(browser.Html);
-            if (xNode is null) return Retry.Error.WithError("Cannot find X coordinate input.");
+            if (xNode is null) return FormFailure(logger, command, "coordinates", "X input not in page");
 
-            var (_, xFailed, xElement, xErrors) = await browser.GetElement(By.XPath(xNode.XPath), cancellationToken);
-            if (xFailed) return Result.Fail(xErrors);
+            var xElement = await FindElement(browser, xNode.XPath, ElementWaitSeconds, requireInteractable: true, cancellationToken);
+            if (xElement is null) return FormFailure(logger, command, "coordinates", $"X input not usable ({xNode.XPath})");
 
             var result = await browser.Input(xElement, $"{x}", cancellationToken);
-            if (result.IsFailed) return result;
+            if (result.IsFailed) return FormFailure(logger, command, "coordinates", "typing X failed");
 
             var yNode = SendResourceParser.GetYInput(browser.Html);
-            if (yNode is null) return Retry.Error.WithError("Cannot find Y coordinate input.");
+            if (yNode is null) return FormFailure(logger, command, "coordinates", "Y input not in page");
 
-            var (_, yFailed, yElement, yErrors) = await browser.GetElement(By.XPath(yNode.XPath), cancellationToken);
-            if (yFailed) return Result.Fail(yErrors);
+            var yElement = await FindElement(browser, yNode.XPath, ElementWaitSeconds, requireInteractable: true, cancellationToken);
+            if (yElement is null) return FormFailure(logger, command, "coordinates", $"Y input not usable ({yNode.XPath})");
 
-            return await browser.Input(yElement, $"{y}", cancellationToken);
+            result = await browser.Input(yElement, $"{y}", cancellationToken);
+            return result.IsFailed ? FormFailure(logger, command, "coordinates", "typing Y failed") : result;
         }
 
-        private static async Task<Result> TypeResourceAmount(IChromeBrowser browser, string resourceType, long amount, CancellationToken cancellationToken)
+        private static async Task<Result> TypeResourceAmount(IChromeBrowser browser, ILogger logger, Command command, string resourceType, long amount, CancellationToken cancellationToken)
         {
+            var step = $"type {resourceType}={amount}";
+
             var node = SendResourceParser.GetResourceInput(browser.Html, resourceType);
-            if (node is null) return Retry.Error.WithError($"Cannot find '{resourceType}' amount input.");
+            if (node is null) return FormFailure(logger, command, step, "input not in page");
 
-            var (_, isFailed, element, errors) = await browser.GetElement(By.XPath(node.XPath), cancellationToken);
-            if (isFailed) return Result.Fail(errors);
+            var element = await FindElement(browser, node.XPath, ElementWaitSeconds, requireInteractable: true, cancellationToken);
+            if (element is null) return FormFailure(logger, command, step, $"input not displayed/enabled within {ElementWaitSeconds}s ({node.XPath})");
 
-            return await browser.Input(element, $"{amount}", cancellationToken);
+            var result = await browser.Input(element, $"{amount}", cancellationToken);
+            return result.IsFailed ? FormFailure(logger, command, step, "typing failed") : result;
         }
 
         private static async Task<Result> WaitSendButtonEnabled(IChromeBrowser browser, CancellationToken cancellationToken)
@@ -224,25 +306,26 @@ namespace MainCore.Commands.Features.SendResource
             }, cancellationToken);
         }
 
-        private static async Task<Result> ClickSend(IChromeBrowser browser, CancellationToken cancellationToken)
+        private static async Task<Result> ClickSend(IChromeBrowser browser, ILogger logger, Command command, CancellationToken cancellationToken)
         {
             var node = SendResourceParser.GetSendButton(browser.Html);
-            if (node is null) return Retry.Error.WithError("Cannot find send button.");
+            if (node is null) return FormFailure(logger, command, "click send", "send button not in page");
 
-            var (_, isFailed, element, errors) = await browser.GetElement(By.XPath(node.XPath), cancellationToken);
-            if (isFailed) return Result.Fail(errors);
+            var element = await FindElement(browser, node.XPath, ElementWaitSeconds, requireInteractable: true, cancellationToken);
+            if (element is null) return FormFailure(logger, command, "click send", $"send button not usable ({node.XPath})");
 
             // Bring the button to the middle of the viewport first so nothing (bottom bar, cookie
             // icon) overlaps it, then click.
             await browser.ExecuteJsScript(ScrollIntoViewScript(node.XPath));
-            return await browser.Click(element, cancellationToken);
+            var result = await browser.Click(element, cancellationToken);
+            return result.IsFailed ? FormFailure(logger, command, "click send", "click failed") : result;
         }
 
         private static async Task<Result> ClickSendViaScript(IChromeBrowser browser, CancellationToken cancellationToken)
         {
             await Task.CompletedTask;
             var node = SendResourceParser.GetSendButton(browser.Html);
-            if (node is null) return Retry.Error.WithError("Cannot find send button.");
+            if (node is null) return Skip.Error.WithError("Cannot find send button.");
 
             var xpath = node.XPath.Replace("\\", "\\\\").Replace("\"", "\\\"");
             return await browser.ExecuteJsScript(

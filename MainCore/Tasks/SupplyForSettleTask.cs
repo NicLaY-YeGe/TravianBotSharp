@@ -174,7 +174,9 @@ namespace MainCore.Tasks
             }
 
             var result = await sendResourceCommand.HandleAsync(new(task.VillageId, task.TargetVillageId, amounts), cancellationToken);
-            if (result.IsFailed) return Stop.Error.WithErrors(result.Errors);
+            // SendResourceCommand already classifies its failures (Skip for form problems, Cancel for
+            // pause) - re-wrapping as Stop would pause the whole account over one missed transfer.
+            if (result.IsFailed) return result;
 
             return Result.Ok();
         }
