@@ -36,7 +36,11 @@
             result = await browser.Input(element, password, cancellationToken);
             if (result.IsFailed) return result;
 
-            (_, isFailed, element, errors) = await browser.GetElement(By.XPath("//input[@name='password']/ancestor::form[1]//button[contains(@class,'green')]"), cancellationToken);
+            // 2026-10-18: "green" submit button first, otherwise any submit button of the same
+            // form (a union in document order, so the green one wins when both exist) - the
+            // class name has changed before and a single hard-coded one is a single point of
+            // failure for the whole bot.
+            (_, isFailed, element, errors) = await browser.GetElement(By.XPath("(//input[@name='password']/ancestor::form[1]//button[contains(@class,'green')] | //input[@name='password']/ancestor::form[1]//button[@type='submit'])[1]"), cancellationToken);
             if (isFailed) return Result.Fail(errors);
             result = await browser.Click(element, cancellationToken);
             if (result.IsFailed) return result;

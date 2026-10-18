@@ -51,8 +51,18 @@
 
         public static bool IsLoginPage(HtmlDocument doc)
         {
-            var loginButton = GetLoginButton(doc);
-            return loginButton is not null;
+            // 2026-10-18 (real incident, TS32): the bot sat on a login screen for 8+ hours,
+            // every task ending with "not ingame nor login page" (268 times), because the
+            // old check demanded a password input AND a "green" submit button right next to
+            // it. The login form is rendered client-side by React (window.Travian.React.Login
+            // .render) INTO the otherwise empty <div id="loginScene">, so the raw page has no
+            // form at all and the live DOM only has one once the script has run - a read that
+            // lands before that (or a variant whose button isn't "green") was misjudged as
+            // "some unknown page". Any of these three is enough to know it IS the login page
+            // (an in-game page has none of them); LoginCommand then waits for the real form.
+            if (GetLoginButton(doc) is not null) return true;
+            if (GetPasswordInput(doc) is not null) return true;
+            return doc.GetElementbyId("loginScene") is not null;
         }
     }
 }

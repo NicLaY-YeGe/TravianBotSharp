@@ -54,32 +54,56 @@ namespace MainCore.Behaviors
 
                 if (!LoginParser.IsIngamePage(_browser.Html))
                 {
+                    // 2026-10-18 (real TS32 incident: 268 "not ingame nor login" skips over 8
+                    // hours while the browser sat on a login screen): a page that is neither
+                    // in-game nor login is often just half-loaded or stuck (the login form is
+                    // rendered client-side by React), not a down site. Try ONE reload right
+                    // now before settling for the 30-minute backoff below, and re-judge the
+                    // page afterwards - the reload may well land on the game or the login form.
                     if (!LoginParser.IsLoginPage(_browser.Html))
                     {
-                        // The page is neither in-game nor the login page - most often this
-                        // means the site itself was temporarily unreachable (Chrome's own
-                        // "ERR_CONNECTION_TIMED_OUT" error page - confirmed via a user
-                        // screenshot on 2026-09-11) rather than something that needs a human
-                        // to step in. This used to pause the WHOLE account until the user
-                        // noticed and manually resumed it. Now it reschedules this same task
-                        // 30 minutes out instead (same backoff pattern as the MissingResource
-                        // case in UpgradeBuildingTask) and keeps going - no retry cap, matching
-                        // the "just keep retrying automatically" philosophy already used for
-                        // the browser-reopen path above. Trade-off, on purpose: this also
-                        // silently retries the rarer non-transient cases (account banned,
-                        // page structure actually changed) every 30 minutes forever instead of
-                        // surfacing them as a paused account with a notification - if that
-                        // turns out to be a problem in practice, a retry-count cap before
-                        // finally pausing would be the next step.
-                        request.ExecuteAt = request.ExecuteAt.AddMinutes(30);
-                        return (TResponse)Skip.Error.WithError("Travian is not ingame nor login page (site may be unreachable) - retrying in 30 minutes");
+                        var refreshResult = await _browser.Refresh(cancellationToken);
+                        if (refreshResult.IsSuccess)
+                        {
+                            await _dismissCookieConsentCommand.HandleAsync(new(), cancellationToken);
+                        }
                     }
 
-                    if (request is not LoginTask.Task)
+                    if (!LoginParser.IsIngamePage(_browser.Html))
                     {
-                        _taskManager.AddOrUpdate<LoginTask.Task>(new(accountId), first: true);
-                        request.ExecuteAt = request.ExecuteAt.AddSeconds(1);
-                        return (TResponse)Skip.Error.WithError("Account is logout. Re-login now");
+                        if (!LoginParser.IsLoginPage(_browser.Html))
+                        {
+                            // The page is neither in-game nor the login page - most often this
+                            // means the site itself was temporarily unreachable (Chrome's own
+                            // "ERR_CONNECTION_TIMED_OUT" error page - confirmed via a user
+                            // screenshot on 2026-09-11) rather than something that needs a human
+                            // to step in. This used to pause the WHOLE account until the user
+                            // noticed and manually resumed it. Now it reschedules this same task
+                            // 30 minutes out instead (same backoff pattern as the MissingResource
+                            // case in UpgradeBuildingTask) and keeps going - no retry cap, matching
+                            // the "just keep retrying automatically" philosophy already used for
+                            // the browser-reopen path above. Trade-off, on purpose: this also
+                            // silently retries the rarer non-transient cases (account banned,
+                            // page structure actually changed) every 30 minutes forever instead of
+                            // surfacing them as a paused account with a notification - if that
+                            // turns out to be a problem in practice, a retry-count cap before
+                            // finally pausing would be the next step.
+                            //
+                            // 2026-10-18: the message now carries what the page actually was,
+                            // so the next incident can be diagnosed from the log alone.
+                            var title = _browser.Html.DocumentNode.SelectSingleNode("//title")?.InnerText?.Trim();
+                            var bodyClass = _browser.Html.DocumentNode.SelectSingleNode("//body")?.GetAttributeValue("class", "");
+                            request.ExecuteAt = request.ExecuteAt.AddMinutes(30);
+                            return (TResponse)Skip.Error.WithError(
+                                $"Travian is not ingame nor login page (site may be unreachable) - retrying in 30 minutes [url={_browser.CurrentUrl}, title='{title}', body class='{bodyClass}']");
+                        }
+
+                        if (request is not LoginTask.Task)
+                        {
+                            _taskManager.AddOrUpdate<LoginTask.Task>(new(accountId), first: true);
+                            request.ExecuteAt = request.ExecuteAt.AddSeconds(1);
+                            return (TResponse)Skip.Error.WithError("Account is logout. Re-login now");
+                        }
                     }
                 }
 
