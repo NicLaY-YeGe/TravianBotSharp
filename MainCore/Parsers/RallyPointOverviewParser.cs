@@ -92,7 +92,14 @@ namespace MainCore.Parsers
                     .FirstOrDefault(x => x.GetAttributeValue("class", "") == "timer");
                 if (timer is null) continue;
 
-                var seconds = timer.GetAttributeValue("data-value", "").ParseInt();
+                // 2026-10-18: the Rally Point Overview timer carries its seconds in a plain
+                // `value` attribute (`<span class="timer" counting="down" value="424">`), NOT
+                // `data-value` like the dorf1/dorf2 #movements widget. Real incoming-attack
+                // capture confirmed this; reading only `data-value` made every read return
+                // null, so Dodge/Defend skipped themselves. `data-value` kept as a fallback.
+                var raw = timer.GetAttributeValue("value", "");
+                if (string.IsNullOrWhiteSpace(raw)) raw = timer.GetAttributeValue("data-value", "");
+                var seconds = raw.ParseInt();
                 if (seconds <= 0) continue;
 
                 if (soonest is null || seconds < soonest) soonest = seconds;
