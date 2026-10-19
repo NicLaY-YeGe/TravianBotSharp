@@ -60,11 +60,25 @@ namespace MainCore.Tasks
         // attack lands.
         private const int FinishBeforeImpactSeconds = 60;
 
+        // Extra gap kept between the end of this task and the Dodge send moment.
+        private const int DodgeLeadMarginSeconds = 30;
+
         // Rough estimate of how long the train+donate sequence itself takes once started:
         // Barracks nav (~1-2s) + input fill + submit, then Alliance page nav + radio click +
         // 4 resource inputs + submit. Kept deliberately generous given the extra page
         // navigation (Alliance) this task does beyond what DodgeTroopTask needs.
         private const int MinimumActionTimeSeconds = 45;
+
+        // 2026-10-19: this is a secondary job racing an attack. A Retry/Stop result would make the
+        // timer re-run it and, after 3 retries, pause the whole account - and every Retry
+        // holds the single-threaded queue, which is how Dodge ended up running after impact
+        // (CLAUDE.md 2l). Any failure here is logged and skipped.
+        private static Result DefendFailed(IEnumerable<IError> errors, ILogger logger)
+        {
+            logger.Warning("Defend+donate step failed, skipping so Dodge is not blocked: {Errors}",
+                string.Join(" | ", errors.Select(e => e.Message)));
+            return Skip.Error.WithErrors(errors);
+        }
 
         private static async ValueTask<Result> HandleAsync(
             Task task,
@@ -97,7 +111,18 @@ namespace MainCore.Tasks
                 return Skip.Error;
             }
 
-            var secondsUntilStart = attackSeconds.Value - FinishBeforeImpactSeconds - MinimumActionTimeSeconds;
+            // 2026-10-19: the queue is single-threaded, so this task must be DONE before the Dodge
+            // task's send moment, not just before impact. If Dodge is on, finish at least
+            // DodgeLeadMarginSeconds ahead of its configured send-before-impact lead.
+            var finishBefore = FinishBeforeImpactSeconds;
+            if (context.BooleanByName(task.VillageId, VillageSettingEnums.DodgeEnable))
+            {
+                var dodgeLead = context.ByName(task.VillageId, VillageSettingEnums.DodgeSendSecondsBeforeImpact);
+                if (dodgeLead <= 0) dodgeLead = 30;
+                finishBefore = Math.Max(finishBefore, dodgeLead + DodgeLeadMarginSeconds);
+            }
+
+            var secondsUntilStart = attackSeconds.Value - finishBefore - MinimumActionTimeSeconds;
 
             if (secondsUntilStart > 0)
             {
@@ -105,7 +130,7 @@ namespace MainCore.Tasks
                 AttackWakeWindow.Apply(context, taskManager, task.AccountId, task.ExecuteAt, DateTime.Now.AddSeconds(attackSeconds.Value), task.SetWakeWindow, logger);
                 logger.Information(
                     "Incoming attack on {VillageId} lands in {Seconds}s - will train+donate in {StartIn}s so it finishes {Deadline}s before impact.",
-                    task.VillageId, attackSeconds.Value, secondsUntilStart, FinishBeforeImpactSeconds);
+                    task.VillageId, attackSeconds.Value, secondsUntilStart, finishBefore);
                 return Result.Ok();
             }
 
@@ -121,11 +146,11 @@ namespace MainCore.Tasks
                 return Skip.Error;
             }
 
-            if (attackSeconds.Value - MinimumActionTimeSeconds < FinishBeforeImpactSeconds)
+            if (attackSeconds.Value - MinimumActionTimeSeconds < finishBefore)
             {
                 logger.Warning(
                     "Incoming attack on {VillageId} lands in {Seconds}s - the {Deadline}s-before-impact goal will be missed, proceeding anyway since there's still time before actual impact.",
-                    task.VillageId, attackSeconds.Value, FinishBeforeImpactSeconds);
+                    task.VillageId, attackSeconds.Value, finishBefore);
             }
 
             var storage = context.Storages.FirstOrDefault(x => x.VillageId == task.VillageId.Value);
@@ -136,7 +161,7 @@ namespace MainCore.Tasks
             }
 
             var protectionResult = await getCrannyProtectionCommand.HandleAsync(new(task.VillageId), cancellationToken);
-            if (protectionResult.IsFailed) return Result.Fail(protectionResult.Errors);
+            if (protectionResult.IsFailed) return DefendFailed(protectionResult.Errors, logger);
             var protectedAmount = protectionResult.Value;
 
             var excessWood = Math.Max(0, storage.Wood - protectedAmount);
@@ -152,7 +177,7 @@ namespace MainCore.Tasks
 
             var trainResult = await trainCheapestTroopCommand.HandleAsync(
                 new(task.VillageId, excessWood, excessClay, excessIron, excessCrop), cancellationToken);
-            if (trainResult.IsFailed) return Result.Fail(trainResult.Errors);
+            if (trainResult.IsFailed) return DefendFailed(trainResult.Errors, logger);
 
             // Re-read the CURRENT stock straight off whatever page training left us on (the
             // resource stock bar is present on every in-game page, per the top-bar markup
@@ -171,7 +196,7 @@ namespace MainCore.Tasks
 
             var donateResult = await donateAllianceBonusCommand.HandleAsync(
                 new(task.VillageId, remainingWood, remainingClay, remainingIron, remainingCrop), cancellationToken);
-            if (donateResult.IsFailed) return Result.Fail(donateResult.Errors);
+            if (donateResult.IsFailed) return DefendFailed(donateResult.Errors, logger);
 
             logger.Information(
                 "Defend+donate done for {VillageId}: trained {TroopCount} troop(s), donated {Donated} resources to the alliance.",

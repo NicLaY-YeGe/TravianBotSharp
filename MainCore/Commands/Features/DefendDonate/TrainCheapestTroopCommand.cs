@@ -20,6 +20,7 @@ namespace MainCore.Commands.Features.DefendDonate
             Command command,
             AppDbContext context,
             IChromeBrowser browser,
+            ToDorfCommand.Handler toDorfCommand,
             ToBuildingByTypeCommand.Handler toBuildingByTypeCommand,
             ILogger logger,
             CancellationToken cancellationToken)
@@ -32,10 +33,13 @@ namespace MainCore.Commands.Features.DefendDonate
                 return 0;
             }
 
-            var tribe = context.AccountsInfo
-                .Where(x => x.AccountId == context.Villages.First(v => v.Id == command.VillageId.Value).AccountId)
-                .Select(x => x.Tribe)
-                .FirstOrDefault();
+            // 2026-10-19: AccountsInfo.Tribe is never parsed and is always Any (CLAUDE.md 2h), so
+            // GetT1Troop returned null and nothing was ever trained. Use the account setting.
+            var accountId = context.Villages
+                .Where(v => v.Id == command.VillageId.Value)
+                .Select(v => v.AccountId)
+                .First();
+            var tribe = (TribeEnums)context.ByName(new AccountId(accountId), AccountSettingEnums.Tribe);
 
             var troop = GetT1Troop(tribe);
             if (troop is null)
@@ -43,6 +47,10 @@ namespace MainCore.Commands.Features.DefendDonate
                 logger.Warning("Cannot determine T1 troop for tribe {Tribe} in {VillageId}.", tribe, command.VillageId);
                 return 0;
             }
+
+            // Same reason as GetCrannyProtectionCommand: we may be on a build.php page (Cranny).
+            var toDorfResult = await toDorfCommand.HandleAsync(new(2), cancellationToken);
+            if (toDorfResult.IsFailed) return Result.Fail(toDorfResult.Errors);
 
             var toBuildingResult = await toBuildingByTypeCommand.HandleAsync(
                 new(command.VillageId, BuildingEnums.Barracks), cancellationToken);
