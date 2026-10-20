@@ -13,8 +13,14 @@ namespace MainCore.Commands.Features.DodgeTroop
     }
 
     // One queue entry as TimerManager sees it - just what the selection needs, so the rule is a
-    // pure function (no BaseTask/DI) and can be unit tested. Exempt = may run during a reservation.
-    public readonly record struct ReservationQueueEntry(DateTime ExecuteAt, bool Exempt);
+    // pure function (no BaseTask/DI) and can be unit tested.
+    //  * Exempt   = may run during a reservation.
+    //  * Priority = a defensive/session task (Dodge, Defend, Recall, Login, WakeUp) that jumps ahead
+    //               of ordinary due tasks the moment it is due, reservation or not. Needed because the
+    //               queue is sorted by ExecuteAt: tasks held back during a reservation have OLDER
+    //               times and would otherwise run first and push a time-critical Recall (90 s cancel
+    //               window) or a freshly queued Dodge behind them (log 2026-10-20 11:30-11:31).
+    public readonly record struct ReservationQueueEntry(DateTime ExecuteAt, bool Exempt, bool Priority = false);
 
     public static class AttackReservationRules
     {
@@ -31,12 +37,19 @@ namespace MainCore.Commands.Features.DodgeTroop
             => reservations.Any(r => r.Covers(now));
 
         // Which queue entry TimerManager should run now (-1 = none). The queue is sorted by ExecuteAt.
-        //  * No reservation covers "now": exactly the old rule - only the head, and only when due.
-        //  * Inside a reservation: the first DUE entry that is exempt. Held-back tasks stay queued
-        //    and become the head again once the reservation is over, so they simply run after the attack.
+        //  1. The first DUE Priority entry always wins (see ReservationQueueEntry).
+        //  2. No reservation covers "now": otherwise the old rule - only the head, and only when due.
+        //  3. Inside a reservation: otherwise the first DUE exempt entry. Held-back tasks stay queued
+        //     and become runnable again once the reservation is over, so they simply run after the attack.
         public static int SelectIndex(IReadOnlyList<ReservationQueueEntry> queue, DateTime now, IReadOnlyList<AttackReservation> reservations)
         {
             if (queue.Count == 0) return -1;
+
+            for (var i = 0; i < queue.Count; i++)
+            {
+                if (queue[i].ExecuteAt > now) break;
+                if (queue[i].Priority) return i;
+            }
 
             if (!IsReserved(reservations, now)) return queue[0].ExecuteAt <= now ? 0 : -1;
 

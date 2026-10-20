@@ -110,20 +110,15 @@ namespace MainCore.Services
             BaseTask task;
             if (isOnlineHour)
             {
-                if (reservations.Count == 0)
-                {
-                    task = tasks[0];
-                }
-                else
-                {
-                    var queue = tasks.ToArray();
-                    var reservationEntries = queue
-                        .Select(t => new ReservationQueueEntry(t.ExecuteAt, IsAttackExempt(t)))
-                        .ToList();
-                    var reservedIndex = AttackReservationRules.SelectIndex(reservationEntries, now, reservations);
-                    if (reservedIndex < 0) return;
-                    task = queue[reservedIndex];
-                }
+                // Always through the rule (not just while a reservation is active): a due
+                // Dodge/Defend/Recall/Login/WakeUp jumps ahead of ordinary due tasks.
+                var queue = tasks.ToArray();
+                var reservationEntries = queue
+                    .Select(t => new ReservationQueueEntry(t.ExecuteAt, IsAttackExempt(t), IsAttackPriority(t)))
+                    .ToList();
+                var reservedIndex = AttackReservationRules.SelectIndex(reservationEntries, now, reservations);
+                if (reservedIndex < 0) return;
+                task = queue[reservedIndex];
             }
             else
             {
@@ -283,15 +278,17 @@ namespace MainCore.Services
             await delayService.DelayTask();
         }
 
-        // Tasks that may run while an attack reservation is active: the defensive ones, the
-        // session ones they depend on, and time-critical sends that bypass offline hours.
-        private static bool IsAttackExempt(BaseTask task) =>
+        // Defensive + session tasks: run as soon as they are due, ahead of ordinary tasks.
+        private static bool IsAttackPriority(BaseTask task) =>
             task is DodgeTroopTask.Task
                 or DefendDonateTask.Task
                 or RecallTroopTask.Task
                 or LoginTask.Task
-                or WakeUpTask.Task
-            || task.BypassOnlineHours;
+                or WakeUpTask.Task;
+
+        // Tasks that may run while an attack reservation is active: the priority ones plus
+        // time-critical sends that bypass offline hours.
+        private static bool IsAttackExempt(BaseTask task) => IsAttackPriority(task) || task.BypassOnlineHours;
 
         // Chrome can end up closed for reasons outside the bot's control - the user closes it
         // by accident, it crashes, or this is simply the first task ever run for the account.

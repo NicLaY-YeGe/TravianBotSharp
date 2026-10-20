@@ -84,6 +84,46 @@ namespace MainCore.Test.Commands.Features.DodgeTroop
             AttackReservationRules.SelectIndex(queue, after, [Reservation()]).ShouldBe(0);
         }
 
+        private static ReservationQueueEntry Priority(DateTime at) => new(at, true, true);
+
+        [Fact]
+        public void NoReservation_DuePriorityJumpsAheadOfDueNormalHead()
+        {
+            // The 2026-10-20 11:30 case: held-back tasks (older times) sit in front of a due Recall.
+            var queue = new List<ReservationQueueEntry> { Normal(Now.AddSeconds(-60)), Normal(Now.AddSeconds(-30)), Priority(Now.AddSeconds(-5)) };
+            AttackReservationRules.SelectIndex(queue, Now, []).ShouldBe(2);
+        }
+
+        [Fact]
+        public void NoReservation_PriorityNotYetDue_HeadRuleStillApplies()
+        {
+            var queue = new List<ReservationQueueEntry> { Normal(Now.AddSeconds(-30)), Priority(Now.AddSeconds(40)) };
+            AttackReservationRules.SelectIndex(queue, Now, []).ShouldBe(0);
+        }
+
+        [Fact]
+        public void AfterWindow_DueRecallRunsBeforeHeldBackTasks()
+        {
+            var after = Impact.AddSeconds(30);
+            var queue = new List<ReservationQueueEntry> { Normal(Impact.AddSeconds(-200)), Normal(Impact.AddSeconds(-150)), Priority(Impact.AddSeconds(5)) };
+            AttackReservationRules.SelectIndex(queue, after, [Reservation()]).ShouldBe(2);
+        }
+
+        [Fact]
+        public void InsideWindow_PriorityBeatsOtherExempt()
+        {
+            var inside = Impact.AddSeconds(-100);
+            var queue = new List<ReservationQueueEntry> { Exempt(inside.AddSeconds(-20)), Priority(inside.AddSeconds(-10)) };
+            AttackReservationRules.SelectIndex(queue, inside, [Reservation()]).ShouldBe(1);
+        }
+
+        [Fact]
+        public void TwoDuePriority_KeepsQueueOrder()
+        {
+            var queue = new List<ReservationQueueEntry> { Normal(Now.AddSeconds(-30)), Priority(Now.AddSeconds(-20)), Priority(Now.AddSeconds(-10)) };
+            AttackReservationRules.SelectIndex(queue, Now, []).ShouldBe(1);
+        }
+
         [Fact]
         public void Store_SameAttackReRead_KeepsLead()
         {
