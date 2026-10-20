@@ -60,7 +60,7 @@ namespace MainCore.Test
             // kept for the small building-block commands (Update/Navigate/Misc/UI), where mixing
             // database access with calling other handlers is the real smell.
             var orchestrators = Classes().That()
-                .ResideInNamespace(@"^MainCore\.(Tasks|Commands\.Features)(\..*)?$", true)
+                .ResideInNamespaceMatching(@"^MainCore\.(Tasks|Commands\.Features)(\..*)?$")
                 .As("tasks and feature commands");
 
             var rule = MethodMembers().That()
