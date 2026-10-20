@@ -52,8 +52,19 @@ namespace MainCore.Test
                 .AreAssignableTo(typeof(Immediate.Handlers.Shared.IHandler<,>))
                 .As("other handler");
 
+            // 2026-10-20: Tasks are orchestrators - the task itself reads settings/jobs from the
+            // database AND calls command handlers (that is what a task is for; ~20 existing
+            // tasks do exactly this, e.g. RaidListTask, DodgeTroopTask, ApplyBuildTemplateTask).
+            // The rule is kept for the commands, where mixing database access with calling
+            // other handlers is the real smell.
+            var tasks = Classes().That()
+                .ResideInNamespace("MainCore.Tasks")
+                .As("tasks");
+
             var rule = MethodMembers().That()
                 .Are(Handler)
+                .And()
+                .AreNotDeclaredIn(tasks)
                 .And()
                 .DependOnAny(typeof(AppDbContext))
                 .Should()
