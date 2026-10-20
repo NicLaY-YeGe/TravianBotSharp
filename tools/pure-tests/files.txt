@@ -31,3 +31,10 @@ MainCore.Test/Parsers/BaseParser.Test.cs
 MainCore.Test/Parsers/QuestParser.Test.cs
 MainCore/Commands/Features/SyncAttack/WakeWindowRules.cs
 MainCore.Test/Commands/Features/SyncAttack/WakeWindowRulesTest.cs
+MainCore/Commands/Features/DefendDonate/DefendResourceTargetRules.cs
+MainCore/Commands/Features/DefendDonate/DefendAttackMemory.cs
+MainCore.Test/Commands/Features/DefendDonate/DefendResourceTargetRulesTest.cs
+MainCore.Test/Commands/Features/DefendDonate/DefendAttackMemoryTest.cs
+MainCore/Commands/Features/DodgeTroop/AttackReservationRules.cs
+MainCore/Commands/Features/DodgeTroop/AttackReservationStore.cs
+MainCore.Test/Commands/Features/DodgeTroop/AttackReservationTest.cs

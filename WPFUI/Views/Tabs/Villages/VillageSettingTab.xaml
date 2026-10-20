@@ -122,8 +122,8 @@
 
                 <Border Style="{DynamicResource Box}">
                     <StackPanel>
-                        <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Defend + donate on attack" VerticalAlignment="Center" FontWeight="Bold" />
-                        <CheckBox x:Name="DefendDonateEnable" Content="When this village is attacked, spend resources above Cranny protection on cheap troops first, then donate any leftover to the alliance's Recruitment bonus - finishing at least 60s before impact" />
+                        <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Defend on attack (train + send resources away)" VerticalAlignment="Center" FontWeight="Bold" />
+                        <CheckBox x:Name="DefendDonateEnable" Content="When this village is attacked (once per attack, as soon as it is seen): train the cheapest troop with the stock, then send ALL remaining resources (Cranny ignored) to another of your villages - random, preferring one with free storage. Skipped if there is no marketplace or merchant; never delays Dodge" />
                     </StackPanel>
                 </Border>
 

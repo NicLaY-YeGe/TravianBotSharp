@@ -1,4 +1,5 @@
-﻿using MainCore.Commands.Features.SyncAttack;
+﻿using MainCore.Commands.Features.DodgeTroop;
+using MainCore.Commands.Features.SyncAttack;
 using MainCore.Tasks.Base;
 using Microsoft.Extensions.DependencyInjection;
 using Polly;
@@ -100,10 +101,29 @@ namespace MainCore.Services
             var settingService = scope.ServiceProvider.GetRequiredService<ISettingService>();
             var isOnlineHour = settingService.IsCurrentHourOnline(accountId);
 
+            // 2026-10-19 (user decision): from 3-5 minutes before an incoming attack lands until
+            // just after it, the queue is reserved for the defensive tasks so Dodge is never
+            // stuck behind ordinary work; the other tasks stay queued and run after the attack.
+            // The pure rule lives in AttackReservationRules (unit tested).
+            var reservations = AttackReservationStore.GetActive(accountId.Value, now);
+
             BaseTask task;
             if (isOnlineHour)
             {
-                task = tasks[0];
+                if (reservations.Count == 0)
+                {
+                    task = tasks[0];
+                }
+                else
+                {
+                    var queue = tasks.ToArray();
+                    var reservationEntries = queue
+                        .Select(t => new ReservationQueueEntry(t.ExecuteAt, IsAttackExempt(t)))
+                        .ToList();
+                    var reservedIndex = AttackReservationRules.SelectIndex(reservationEntries, now, reservations);
+                    if (reservedIndex < 0) return;
+                    task = queue[reservedIndex];
+                }
             }
             else
             {
@@ -114,6 +134,8 @@ namespace MainCore.Services
                 var index = WakeWindowRules.SelectIndex(entries, now, isOnlineHour: false);
                 if (index < 0) return;
                 task = snapshot[index];
+
+                if (reservations.Count > 0 && !IsAttackExempt(task) && AttackReservationRules.IsReserved(reservations, now)) return;
             }
 
             taskQueue.IsExecuting = true;
@@ -260,6 +282,16 @@ namespace MainCore.Services
             var delayService = scope.ServiceProvider.GetRequiredService<IDelayService>();
             await delayService.DelayTask();
         }
+
+        // Tasks that may run while an attack reservation is active: the defensive ones, the
+        // session ones they depend on, and time-critical sends that bypass offline hours.
+        private static bool IsAttackExempt(BaseTask task) =>
+            task is DodgeTroopTask.Task
+                or DefendDonateTask.Task
+                or RecallTroopTask.Task
+                or LoginTask.Task
+                or WakeUpTask.Task
+            || task.BypassOnlineHours;
 
         // Chrome can end up closed for reasons outside the bot's control - the user closes it
         // by accident, it crashes, or this is simply the first task ever run for the account.

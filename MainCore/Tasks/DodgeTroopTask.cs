@@ -131,8 +131,12 @@ namespace MainCore.Tasks
             {
                 // No incoming attack showing right now (already landed, already dodged, or
                 // the IsUnderAttack flag was stale) - nothing to do this pass.
+                AttackWakeWindow.ReleaseReservation(task.AccountId, task.VillageId);
                 return Skip.Error;
             }
+
+            // 2026-10-19: the 3-5 minutes before impact belong to the defensive tasks.
+            AttackWakeWindow.Reserve(task.AccountId, task.VillageId, attackSeconds.Value, logger);
 
             var sendBeforeSeconds = context.ByName(task.VillageId, VillageSettingEnums.DodgeSendSecondsBeforeImpact);
             if (sendBeforeSeconds <= 0) sendBeforeSeconds = 30;
