@@ -38,3 +38,8 @@ MainCore.Test/Commands/Features/DefendDonate/DefendAttackMemoryTest.cs
 MainCore/Commands/Features/DodgeTroop/AttackReservationRules.cs
 MainCore/Commands/Features/DodgeTroop/AttackReservationStore.cs
 MainCore.Test/Commands/Features/DodgeTroop/AttackReservationTest.cs
+MainCore/Parsers/TravianCoordinateText.cs
+MainCore/Parsers/RallyPointOverviewParser.cs
+MainCore.Test/Parsers/RallyPointOverviewParser.Test.cs
+MainCore.Test/Parsers/TravianCoordinateTextTest.cs
+MainCore/Parsers/NumberParser.cs

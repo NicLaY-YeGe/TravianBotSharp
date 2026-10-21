@@ -24,8 +24,9 @@ namespace MainCore.Commands.Features.DodgeTroop
             if (node is null)
             {
                 logger.Warning(
-                    "Could not find a cancel button for the dodge attack to ({X}|{Y}) - it may already have been cancelled, or the 90-second cancel window may have closed. It will need to be brought home manually if it's still out.",
-                    targetX, targetY);
+                    "Could not find a cancel button for the dodge attack to ({X}|{Y}) - it may already have been cancelled, or the 90-second cancel window may have closed. It will need to be brought home manually if it's still out. Outgoing movements on the page: [{Headlines}]",
+                    targetX, targetY,
+                    string.Join(" ; ", RallyPointOverviewParser.GetOutgoingMovementHeadlines(browser.Html)));
                 return Result.Ok();
             }
 

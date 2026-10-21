@@ -229,6 +229,15 @@ namespace MainCore.Tasks
             var capacity = SendResourceParser.GetMerchantCapacity(browser.Html);
             if (capacity <= 0) capacity = 1;
             var send = DefendResourceTargetRules.ScaleToCapacity(stock, (long)freeMerchants * capacity);
+
+            // 2026-10-20 diagnostics: the 12:29 attack sent only crop=8 although ~3.8k wood and ~36k
+            // crop were left; this line shows which of stock / merchants / capacity caused it.
+            logger.Information(
+                "Defend send plan for {VillageId}: stock w{Wood} c{Clay} i{Iron} cr{Crop}; free merchants {Merchants} x capacity {Capacity} = {Max}; plan w{PW} c{PC} i{PI} cr{PCr}",
+                task.VillageId, stock.Wood, stock.Clay, stock.Iron, stock.Crop,
+                freeMerchants, capacity, (long)freeMerchants * capacity,
+                send.Wood, send.Clay, send.Iron, send.Crop);
+
             if (send.Total <= 0) return Result.Ok();
 
             // 4) Pick the receiving village: random, preferring one with room, avoiding villages
