@@ -56,5 +56,27 @@ namespace MainCore.Commands.Features.DodgeTroop
                 taskManager.ReOrder(accountId);
             }
         }
+
+        // 2026-10-19 (user decision): from 3-5 minutes before the impact until just after it, the
+        // queue is reserved for the defensive tasks (see AttackReservationRules); every other
+        // task is held back by TimerManager and runs after the attack. Called by Dodge and
+        // Defend as soon as they have read the REAL impact time off the Rally Point.
+        public static void Reserve(AccountId accountId, VillageId villageId, int attackSeconds, ILogger logger)
+        {
+            var now = DateTime.Now;
+            var (reservation, isNew) = AttackReservationStore.Register(
+                accountId.Value, villageId.Value, now.AddSeconds(attackSeconds), now, Random.Shared);
+
+            if (isNew)
+            {
+                logger.Information(
+                    "Attack on {VillageId} lands {Impact:HH:mm:ss}: other tasks wait from {From:HH:mm:ss} until {Until:HH:mm:ss} so Dodge is not blocked.",
+                    villageId, reservation.ImpactAt, reservation.ReservedFrom, reservation.ReservedUntil);
+            }
+        }
+
+        // The attack is gone (landed, cancelled, or the under-attack flag was stale).
+        public static void ReleaseReservation(AccountId accountId, VillageId villageId)
+            => AttackReservationStore.Clear(accountId.Value, villageId.Value);
     }
 }
