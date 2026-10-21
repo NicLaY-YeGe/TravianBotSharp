@@ -8,6 +8,12 @@ namespace MainCore.Services
     // this Microsoft.Playwright version is already there, and downloads it (~170 MB, first run
     // and after a Microsoft.Playwright version bump) otherwise. Default location:
     // %USERPROFILE%\AppData\Local\ms-playwright (override with PLAYWRIGHT_BROWSERS_PATH).
+    //
+    // 2026-10-20: first live run - the app closed ~5 s after "installing browser" because an
+    // exception from the install escaped Load() and killed the process. The install is now
+    // best-effort: whatever happens is written to the log together with the installer's own
+    // console output, and the app starts anyway (opening a browser later reports the problem
+    // again, per account, instead of the whole bot dying at startup).
     [RegisterSingleton<IChromeDriverInstaller, ChromeDriverInstaller>]
     public sealed class ChromeDriverInstaller(ILogger logger) : IChromeDriverInstaller
     {
@@ -15,15 +21,46 @@ namespace MainCore.Services
 
         public async Task Install()
         {
-            _logger.Information("Checking the Playwright Chromium installation (downloads it on first run).");
+            _logger.Information("Checking the Playwright Chromium installation (downloads it on first run). Base directory: {BaseDirectory}", AppContext.BaseDirectory);
 
-            var exitCode = await Task.Run(() => Microsoft.Playwright.Program.Main(["install", "chromium"]));
-            if (exitCode != 0)
+            var driverFolder = Path.Combine(AppContext.BaseDirectory, ".playwright");
+            _logger.Information("Playwright driver folder {Folder} exists: {Exists}", driverFolder, Directory.Exists(driverFolder));
+
+            var originalOut = Console.Out;
+            var originalError = Console.Error;
+            var captured = new StringWriter();
+
+            try
             {
-                throw new Exception($"Installing Playwright Chromium failed (exit code {exitCode}). Check the internet connection and restart the bot.");
-            }
+                Console.SetOut(captured);
+                Console.SetError(captured);
 
-            _logger.Information("Playwright Chromium is ready.");
+                var exitCode = await Task.Run(() => Microsoft.Playwright.Program.Main(["install", "chromium"]));
+
+                Console.SetOut(originalOut);
+                Console.SetError(originalError);
+
+                if (exitCode == 0)
+                {
+                    _logger.Information("Playwright Chromium is ready.");
+                }
+                else
+                {
+                    _logger.Error("Installing Playwright Chromium failed (exit code {ExitCode}). Installer output: {Output}", exitCode, Last(captured));
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.SetOut(originalOut);
+                Console.SetError(originalError);
+                _logger.Error(ex, "Installing Playwright Chromium threw {Type}: {Message}. Installer output: {Output}", ex.GetType().Name, ex.Message, Last(captured));
+            }
+        }
+
+        private static string Last(StringWriter writer)
+        {
+            var text = writer.ToString().Trim();
+            return text.Length <= 3000 ? text : text[^3000..];
         }
     }
 }
