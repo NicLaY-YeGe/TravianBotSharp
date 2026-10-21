@@ -125,17 +125,9 @@
             CancellationToken cancellationToken
         )
         {
-            var driver = browser.Driver;
-            if (driver is null) return Stop.DriverNotReady;
-
-            var current = driver.CurrentWindowHandle;
-            while (driver.WindowHandles.Count > 1)
-            {
-                var others = driver.WindowHandles.First(x => !x.Equals(current));
-                driver.SwitchTo().Window(others);
-                driver.Close();
-                driver.SwitchTo().Window(current);
-            }
+            // 2026-10-18 (Playwright): close any ad pop-up tab/window, the main page stays active.
+            var closeResult = await browser.CloseExtraTabs();
+            if (closeResult.IsFailed) return Result.Fail(closeResult.Errors);
 
             static bool videoFeatureShown(IWebDriver driver)
             {
@@ -175,28 +167,21 @@
             result = await browser.Click(element, cancellationToken);
             if (result.IsFailed) return result;
 
-            driver.SwitchTo().DefaultContent();
-
             // close if bot click on playing ads
             // chrome will open new tab & pause ads
+            // (2026-10-18, Playwright: no window-handle / iframe switching needed any more - the
+            // main page stays the active one, the extra tabs are simply closed)
             do
             {
-                var handles = driver.WindowHandles;
-                if (handles.Count <= 1) break;
-
-                current = driver.CurrentWindowHandle;
-                var other = driver.WindowHandles.First(x => !x.Equals(current));
-                driver.SwitchTo().Window(other);
-                driver.Close();
-                driver.SwitchTo().Window(current);
+                closeResult = await browser.CloseExtraTabs();
+                if (closeResult.IsFailed) return Result.Fail(closeResult.Errors);
+                if (closeResult.Value == 0) break;
 
                 (_, isFailed, element, errors) = await browser.GetElement(doc => doc.GetElementbyId("videoFeature"), cancellationToken);
                 if (isFailed) return Result.Fail(errors).WithError("Failed to find [Play ads video] button");
 
                 result = await browser.Click(element, cancellationToken);
                 if (result.IsFailed) return result;
-
-                driver.SwitchTo().DefaultContent();
             }
             while (true);
 
