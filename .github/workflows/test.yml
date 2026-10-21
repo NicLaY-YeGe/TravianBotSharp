@@ -24,7 +24,7 @@ jobs:
           cache-dependency-path: '**/packages.lock.json'
 
       - name: Install dependencies
-        run: dotnet restore --locked-mode
+        run: dotnet restore --force-evaluate
         
       - name: Test architecture
         run: dotnet test -c Debug --filter Mode=Debug
@@ -83,7 +83,7 @@ jobs:
           cache-dependency-path: '**/packages.lock.json'
 
       - name: Install dependencies
-        run: dotnet restore --locked-mode
+        run: dotnet restore --force-evaluate
       
       - name: Publish
         run: dotnet publish WPFUI -c Release --no-restore --self-contained -p:PublishSingleFile=true -p:AssemblyVersion=${{needs.version.outputs.version}} -p:RunAnalyzersDuringBuild=True

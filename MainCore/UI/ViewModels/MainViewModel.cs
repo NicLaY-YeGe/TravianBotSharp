@@ -25,7 +25,7 @@ namespace MainCore.UI.ViewModels
             await _waitingOverlayViewModel.Show();
             using (var scope = _serviceScopeFactory.CreateScope())
             {
-                await _waitingOverlayViewModel.ChangeMessage("installing chrome driver");
+                await _waitingOverlayViewModel.ChangeMessage("installing browser (Chromium)");
                 var chromeDriverInstaller = scope.ServiceProvider.GetRequiredService<IChromeDriverInstaller>();
                 var useragentManager = scope.ServiceProvider.GetRequiredService<IUseragentManager>();
 
