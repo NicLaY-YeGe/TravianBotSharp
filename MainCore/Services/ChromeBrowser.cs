@@ -1,137 +1,128 @@
-﻿using OpenQA.Selenium.BiDi;
-using OpenQA.Selenium.BiDi.BrowsingContext;
-using OpenQA.Selenium.BiDi.Network;
-using OpenQA.Selenium.BiDi.WebExtension;
-using OpenQA.Selenium.Chrome;
-using OpenQA.Selenium.Interactions;
-using OpenQA.Selenium.Support.UI;
+﻿using Microsoft.Playwright;
 using System.Runtime.CompilerServices;
 
 namespace MainCore.Services
 {
+    // 2026-10-18: rewritten on Playwright (was Selenium WebDriver + BiDi). The public behaviour is
+    // the IChromeBrowser contract the rest of the bot was built against; what changed underneath:
+    //
+    //  - One persistent Chromium context per account (same Data/Cache/<profile>/<proxy> folder as
+    //    before, so cookies/sessions survive). Chromium is Playwright's own build - it is the one
+    //    that still honours --load-extension, so the 3 bundled .crx extensions keep working.
+    //  - The BiDi "stale context" machinery (RefreshContextAsync, _bidiNavigationBroken, the 750 ms
+    //    retry delay, the classic-driver fallback) is gone: Playwright tracks pages itself and
+    //    Navigate/Refresh are plain page calls.
+    //  - Proxy authentication is native (Proxy.Username/Password) - no BiDi auth intercept.
+    //  - Click has actionability checks (visible, stable, not covered). If the normal click is
+    //    refused it is retried once with Force, which is what the old coordinate click did.
+    //  - GetElement/Wait poll every 250 ms for up to 3 minutes, like the old WebDriverWait, and
+    //    time out with the same "Timed out after 180 seconds" text.
     public sealed class ChromeBrowser : IChromeBrowser
     {
-        private ChromeDriver? _driver;
-        private readonly ChromeDriverService _chromeService;
-        private WebDriverWait _wait = null!;
+        private static readonly TimeSpan WaitTimeout = TimeSpan.FromMinutes(3);
+        private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(250);
+        private static readonly TimeSpan CloseTimeout = TimeSpan.FromSeconds(15);
+
+        private const float NavigationTimeoutMs = 180_000;
+        private const float DefaultActionTimeoutMs = 30_000;
+        private const float ClickTimeoutMs = 10_000;
+        private const float ForceClickTimeoutMs = 5_000;
+        private const float ScreenshotTimeoutMs = 10_000;
 
         private readonly string[] _extensionsPath;
         private readonly HtmlDocument _htmlDoc = new();
 
-        private BiDi? _bidi;
-
-        private BrowsingContext? _context;
-        private Intercept? _authIntercept;
-
-        // 2026-09-19, real user log (Revive hero -> CheckHeroHealthCommand -> Navigate to
-        // /hero/attributes): the BiDi context this class tracks kept failing with the SAME
-        // "no such frame: Context ... not found" id on every attempt - across all three Polly
-        // retries, over more than a minute - even though the page itself had loaded fine in
-        // the browser (screenshot from that moment). A 750 ms wait can't fix a state that
-        // doesn't clear on its own, and the exhausted retries ended in Retry.Error, which
-        // TimerManager treats as "pause the WHOLE bot". Everything else in this class (click,
-        // PageSource, screenshot, ...) goes through the classic WebDriver session, which was
-        // healthy the whole time - only Navigate/Refresh use BiDi. So once BiDi navigation has
-        // failed twice in a row while the classic session still works, this flag makes
-        // Navigate/Refresh use the classic driver directly until the browser is restarted
-        // (reset in Setup/Close). See NavigateClassic/RefreshClassic below.
-        private bool _bidiNavigationBroken;
-
-        // 2026-09-18: added after a live log showed Navigate's retry (below) failing with the
-        // SAME stale context ID as the original failure, even though RefreshContextAsync's
-        // GetTreeAsync is a genuine live round-trip to the browser (verified against Selenium's
-        // own source - browsingContext.getTree is not client-cached), not a stale local read.
-        // That means the browser itself was still reporting the dying context as current -
-        // most likely queried mid-teardown, in the brief window between the old context being
-        // invalidated and a replacement becoming current. A short pause before retrying gives
-        // that transition a moment to settle instead of re-querying into the same race.
-        private static readonly TimeSpan ContextRefreshRetryDelay = TimeSpan.FromMilliseconds(750);
+        private IBrowserContext? _context;
+        private IPage? _page;
+        private PlaywrightDriver? _driver;
 
         public ChromeBrowser(string[] extensionsPath)
         {
             _extensionsPath = extensionsPath;
-
-            _chromeService = ChromeDriverService.CreateDefaultService();
-            _chromeService.HideCommandPromptWindow = true;
         }
+
+        public ILogger Logger { get; set; } = null!;
 
         public async Task Setup(ChromeSetting setting)
         {
-            var options = new ChromeOptions();
+            // Drop anything left from a previous run (idempotent) so the profile folder is free.
+            await Close();
+
+            var playwright = await PlaywrightHost.GetAsync();
+
+            var args = new List<string>
+            {
+                "--no-default-browser-check",
+                "--no-first-run",
+                "--ash-no-nudges",
+                "--mute-audio",
+                "--disable-gpu",
+                "--disable-search-engine-choice-screen",
+                "--disable-blink-features=AutomationControlled",
+            };
+
+            if (!setting.IsHeadless) args.Add("--start-maximized");
+
+            if (_extensionsPath.Length > 0)
+            {
+                var paths = string.Join(",", _extensionsPath.Select(Path.GetFullPath));
+                args.Add($"--disable-extensions-except={paths}");
+                args.Add($"--load-extension={paths}");
+            }
+
+            var options = new BrowserTypeLaunchPersistentContextOptions
+            {
+                Headless = setting.IsHeadless,
+                // Extensions only load in full Chromium. Plain headless uses the stripped
+                // chromium-headless-shell, which has no extension support - the "chromium"
+                // channel is the new headless mode of the full browser.
+                Channel = setting.IsHeadless ? "chromium" : null,
+                Args = args,
+                IgnoreDefaultArgs = ["--enable-automation"],
+                IgnoreHTTPSErrors = true,
+                ViewportSize = setting.IsHeadless ? new ViewportSize { Width = 1920, Height = 1080 } : ViewportSize.NoViewport,
+                Timeout = NavigationTimeoutMs,
+            };
+
+            if (!string.IsNullOrEmpty(setting.UserAgent)) options.UserAgent = setting.UserAgent;
 
             if (!string.IsNullOrEmpty(setting.ProxyHost))
             {
-                options.AddArgument($"--proxy-server={setting.ProxyHost}:{setting.ProxyPort}");
+                options.Proxy = new Proxy { Server = $"http://{setting.ProxyHost}:{setting.ProxyPort}" };
+                if (!string.IsNullOrEmpty(setting.ProxyUsername) && !string.IsNullOrEmpty(setting.ProxyPassword))
+                {
+                    options.Proxy.Username = setting.ProxyUsername;
+                    options.Proxy.Password = setting.ProxyPassword;
+                }
             }
 
-            options.AddArgument($"--user-agent={setting.UserAgent}");
-            options.AddArgument("--ignore-certificate-errors");
-            options.AddArguments("--no-default-browser-check", "--no-first-run", "--ash-no-nudges");
-            options.AddArguments("--mute-audio", "--disable-gpu", "--disable-search-engine-choice-screen");
-
-            options.AddArgument("--enable-unsafe-extension-debugging");
-            options.AddArgument("--remote-debugging-pipe");
-
-            options.AddExcludedArgument("enable-automation");
-            options.AddAdditionalOption("useAutomationExtension", "undefined");
-
-            options.AddArgument("--disable-background-timer-throttling");
-            options.AddArgument("--disable-backgrounding-occluded-windows");
-            options.AddArgument("--disable-features=CalculateNativeWinOcclusion");
-            options.AddArgument("--disable-features=UserAgentClientHint");
-            options.AddArgument("--disable-blink-features=AutomationControlled");
-
-            if (setting.IsHeadless)
-            {
-                options.AddArgument("--headless=new");
-                options.AddArgument("--disable-dev-shm-usage");
-            }
-            else
-            {
-                options.AddArgument("--start-maximized");
-            }
             var pathUserData = Path.Combine(AppContext.BaseDirectory, "Data", "Cache", setting.ProfilePath);
             if (!Directory.Exists(pathUserData)) Directory.CreateDirectory(pathUserData);
-
             pathUserData = Path.Combine(pathUserData, string.IsNullOrEmpty(setting.ProxyHost) ? "default" : setting.ProxyHost);
 
-            options.AddArguments($"user-data-dir={pathUserData}");
-            options.UseWebSocketUrl = true;
-            options.UnhandledPromptBehavior = UnhandledPromptBehavior.Ignore;
+            var context = await playwright.Chromium.LaunchPersistentContextAsync(pathUserData, options);
+            context.SetDefaultTimeout(DefaultActionTimeoutMs);
+            context.SetDefaultNavigationTimeout(NavigationTimeoutMs);
 
-            _driver = await Task.Run(() => new ChromeDriver(_chromeService, options, TimeSpan.FromMinutes(3)));
-
-            _driver.Manage().Timeouts().PageLoad = TimeSpan.FromMinutes(3);
-            _wait = new WebDriverWait(_driver, TimeSpan.FromMinutes(3)); // watch ads
-
-            _bidi = await _driver.AsBiDiAsync();
-            _context = (await _bidi.BrowsingContext.GetTreeAsync()).Contexts[0].Context;
-            _bidiNavigationBroken = false;
+            _context = context;
+            _page = context.Pages.FirstOrDefault() ?? await context.NewPageAsync();
+            _driver = new PlaywrightDriver(ResolvePage);
 
             foreach (var path in _extensionsPath)
             {
-                var result = await _bidi.WebExtension.InstallAsync(new ExtensionPath(path));
-                Logger.Information("- Installed extension: {path}", Path.GetFileNameWithoutExtension(path));
-            }
-
-            if (!string.IsNullOrEmpty(setting.ProxyHost) && !string.IsNullOrEmpty(setting.ProxyUsername) && !string.IsNullOrEmpty(setting.ProxyPassword))
-            {
-                _authIntercept = await _bidi.Network.InterceptAuthAsync(async auth =>
-                {
-                    Logger.Information("- Providing proxy auth credentials", auth.Request.Url);
-                    await auth.ContinueAsync(new AuthCredentials(setting.ProxyUsername, setting.ProxyPassword), new ContinueWithAuthCredentialsOptions());
-                });
+                Logger.Information("- Loaded extension: {path}", Path.GetFileName(path));
             }
         }
 
-        public ChromeDriver? Driver => _driver;
+        // TimerManager checks this before running the next queued task so a browser that is gone -
+        // closed on purpose (SleepCommand), by hand, crashed, or never launched yet - gets
+        // relaunched automatically. A browser that dies underneath us is noticed by the failing
+        // call (BrowserException / BrowserClosed), same as before.
+        public bool IsOpen => _context is not null;
 
-        // True once Setup() has produced a live driver and stays true until Close() (or the
-        // total-death path in RefreshContextAsync, which now also calls Close()) tears it
-        // down again. TimerManager checks this before running the next queued task so a
-        // browser that's gone - closed by hand, crashed, or never launched yet - gets
-        // relaunched automatically instead of the task failing against a dead driver.
-        public bool IsOpen => _driver is not null;
+        public IWebDriver? Driver => _driver;
+
+        public string CurrentUrl => ResolvePage()?.Url ?? "";
 
         public HtmlDocument Html
         {
@@ -144,345 +135,253 @@ namespace MainCore.Services
 
         public async Task Shutdown()
         {
-            if (_driver is null) return;
             await Close();
-            _chromeService.Dispose();
         }
 
-        public string CurrentUrl => Driver?.Url ?? "";
+        public async Task Close()
+        {
+            var context = _context;
 
-        public ILogger Logger { get; set; } = null!;
+            // Clear first so IsOpen is false immediately, whether Close() was deliberate
+            // (SleepCommand's cycle) or recovery from finding the browser already dead.
+            _context = null;
+            _page = null;
+            _driver = null;
+
+            if (context is null) return;
+
+            try
+            {
+                await context.CloseAsync().WaitAsync(CloseTimeout);
+            }
+            catch
+            {
+                // ignore - already gone, or hung; nothing more to do with it
+            }
+        }
 
         public async Task<string> Screenshot()
         {
             try
             {
-                var screenshot = Driver?.GetScreenshot();
+                var page = ResolvePage();
                 var fileName = Path.Combine(AppContext.BaseDirectory, "Screenshots", $"{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.png");
                 Directory.CreateDirectory(Path.GetDirectoryName(fileName)!);
-                await File.WriteAllBytesAsync(fileName, screenshot?.AsByteArray ?? Array.Empty<byte>(), CancellationToken.None);
+                if (page is null) return "";
+
+                await page.ScreenshotAsync(new() { Path = fileName, Timeout = ScreenshotTimeoutMs });
                 return fileName;
             }
             catch (Exception ex)
             {
-                // 2026-08-25: Driver being non-null doesn't mean the browser is still there -
-                // if it was closed externally (user closed the window, crash, killed process),
-                // GetScreenshot() throws instead of returning null. This call used to be
-                // unguarded and the exception escaped all the way up through TimerManager's
-                // async timer event handler, which crashes the entire app (no way to catch an
-                // exception that escapes an async void event handler) instead of just pausing
-                // the account. Swallow it here and let the caller carry on without a screenshot.
+                // A live context does not mean the browser is still there - closed by hand or
+                // crashed, the capture throws. This must never escape: it is called from
+                // TimerManager's async timer handler, where an unhandled exception takes the whole
+                // app down instead of just pausing the account (see 2026-08-25).
                 Logger?.Warning("Could not capture screenshot, browser is likely gone: {Message}", ex.Message);
                 return "";
             }
         }
 
-        public async Task<Result> Refresh(CancellationToken cancellationToken)
-        {
-            if (_context is null) return Stop.DriverNotReady;
-
-            if (_bidiNavigationBroken) return await RefreshClassic(cancellationToken);
-
-            try
-            {
-                await _context.ReloadAsync(new() { Wait = ReadinessState.Complete });
-                return Result.Ok();
-            }
-            catch (BiDiException)
-            {
-                // 2026-08-25: widened from just "no such frame" - a fully closed browser
-                // (whole window/process gone, not just this frame) can surface as a different
-                // BiDiException message or as the transport itself failing, and
-                // RefreshContextAsync already handles both cases safely either way.
-                var refreshResult = await RefreshContextAsync();
-                if (refreshResult.IsFailed) return refreshResult;
-
-                // 2026-09-18: see ContextRefreshRetryDelay's own comment - give a possible
-                // mid-teardown context transition a moment to finish before retrying.
-                await Task.Delay(ContextRefreshRetryDelay, cancellationToken);
-
-                try
-                {
-                    await _context!.ReloadAsync(new() { Wait = ReadinessState.Complete });
-                    return Result.Ok();
-                }
-                catch (BiDiException retryEx)
-                {
-                    // 2026-09-17 - same fix as Navigate's retry below, applied here for
-                    // consistency: this inner call had no try/catch either, so a second
-                    // stale-context hit here would propagate uncaught too.
-                    //
-                    // 2026-09-19: before giving up, try the classic driver - see
-                    // _bidiNavigationBroken's comment for why that's safe and why it works.
-                    var classicResult = await RefreshClassic(cancellationToken);
-                    if (classicResult.IsSuccess)
-                    {
-                        _bidiNavigationBroken = true;
-                        Logger?.Warning("BiDi refresh failed twice ({Message}) - the classic driver worked, so page reloads will use it from now on.", retryEx.Message);
-                        return classicResult;
-                    }
-
-                    return Retry.Error
-                        .WithError($"Refresh failed twice in a row (context kept going stale): {retryEx.Message}")
-                        .WithErrors(classicResult.Errors);
-                }
-            }
-        }
-
         public async Task<Result> Navigate(string url, CancellationToken cancellationToken)
         {
-            if (_context is null) return Stop.DriverNotReady;
-
-            if (_bidiNavigationBroken) return await NavigateClassic(url, cancellationToken);
-
-            try
-            {
-                await _context.NavigateAsync(url, new() { Wait = ReadinessState.Complete });
-                return Result.Ok();
-            }
-            catch (BiDiException)
-            {
-                // The browsing context we cached once in Setup() (the tab that was open when the
-                // driver started) no longer exists - closed or replaced (crash, popup, manual
-                // close, etc). 2026-08-25: a real user log showed this exact
-                // "no such frame: Context ... not found" during StartAdventureTask -
-                // CheckHeroHealthCommand's Navigate, and since _context never changes on its own,
-                // Polly kept retrying the SAME dead context 3 times before permanently pausing the
-                // bot - a context that's gone will never come back, so that retry was guaranteed
-                // to fail. Re-resolve the CURRENT top-level context from the live browser and
-                // retry this navigation once against it instead. If there's truly no context left
-                // (the whole browser window is gone), RefreshContextAsync returns BrowserClosed
-                // instead of leaving the user to decode a raw BiDi stack trace - TimerManager
-                // relaunches Chrome automatically from there (2026-08-25).
-                //
-                // Widened from just "no such frame" (2026-08-25, second pass) - a fully closed
-                // browser (whole window/process gone, not just this frame) can surface as a
-                // different BiDiException message, and RefreshContextAsync already handles that
-                // case safely too (see its own comments).
-                var refreshResult = await RefreshContextAsync();
-                if (refreshResult.IsFailed) return refreshResult;
-
-                // 2026-09-18: see ContextRefreshRetryDelay's own comment - give a possible
-                // mid-teardown context transition a moment to finish before retrying. This is
-                // the exact scenario a real log caught: the retry below hit "no such frame"
-                // with the SAME context ID as the original failure, meaning the re-resolve
-                // above found the browser still reporting a context that was mid-death.
-                await Task.Delay(ContextRefreshRetryDelay, cancellationToken);
-
-                try
-                {
-                    await _context!.NavigateAsync(url, new() { Wait = ReadinessState.Complete });
-                    return Result.Ok();
-                }
-                catch (BiDiException retryEx)
-                {
-                    // 2026-09-17, real user log: the FIRST retry above (right after re-resolving
-                    // _context) hit "no such frame" a SECOND time, and because this inner
-                    // NavigateAsync call had no try/catch of its own, the exception propagated
-                    // all the way up uncaught and paused the whole bot - exactly the failure
-                    // mode the surrounding comment describes fixing, just one level too shallow.
-                    // A context that goes stale twice in a row (screenshot from that same moment
-                    // showed the destination page had actually loaded fine, so this looks like a
-                    // transient BiDi context-tracking race rather than a truly dead browser) is
-                    // still just a transient failure, not a reason to stop the account - return
-                    // Retry.Error the same way CheckHeroHealthCommand's own health-read failure
-                    // does, so the existing Polly-based task retry (see the "will retry after
-                    // ..." log lines) handles it instead of an unhandled exception reaching
-                    // TimerManager as a hard pause.
-                    //
-                    // 2026-09-19: BEFORE returning that Retry, try the classic driver once - a
-                    // real log showed this state does NOT clear on its own (same context id on
-                    // every retry for over a minute, until the retries ran out and the whole
-                    // bot paused) while the classic session and the page itself were fine. See
-                    // _bidiNavigationBroken's comment. Only if the classic driver fails too is
-                    // the browser genuinely in trouble, and only then does the old Retry apply.
-                    var classicResult = await NavigateClassic(url, cancellationToken);
-                    if (classicResult.IsSuccess)
-                    {
-                        _bidiNavigationBroken = true;
-                        Logger?.Warning("BiDi navigation failed twice ({Message}) - the classic driver worked, so navigation will use it from now on.", retryEx.Message);
-                        return classicResult;
-                    }
-
-                    return Retry.Error
-                        .WithError($"Navigate failed twice in a row (context kept going stale): {retryEx.Message}")
-                        .WithErrors(classicResult.Errors);
-                }
-            }
-        }
-
-        // 2026-09-19: classic-WebDriver equivalents of Navigate/Refresh, used as the fallback
-        // (and, once _bidiNavigationBroken is set, the primary path) - see that field's comment.
-        // GoToUrl/Refresh block until the page's load event, same as the BiDi calls'
-        // ReadinessState.Complete, and the PageLoad timeout set in Setup applies to them.
-        private async Task<Result> NavigateClassic(string url, CancellationToken cancellationToken)
-        {
-            var driver = _driver;
-            if (driver is null) return Stop.DriverNotReady;
+            var page = ResolvePage();
+            if (page is null) return Stop.DriverNotReady;
 
             try
             {
-                await Task.Run(() => driver.Navigate().GoToUrl(url), cancellationToken);
+                await page.GotoAsync(url, new() { WaitUntil = WaitUntilState.Load, Timeout = NavigationTimeoutMs }).WaitAsync(cancellationToken);
                 return Result.Ok();
             }
-            catch (WebDriverException ex)
+            catch (OperationCanceledException)
             {
-                return Retry.Error.WithError($"Classic navigation to {url} failed: {ex.Message}");
+                return Cancel.Error;
             }
-        }
-
-        private async Task<Result> RefreshClassic(CancellationToken cancellationToken)
-        {
-            var driver = _driver;
-            if (driver is null) return Stop.DriverNotReady;
-
-            try
-            {
-                await Task.Run(() => driver.Navigate().Refresh(), cancellationToken);
-                return Result.Ok();
-            }
-            catch (WebDriverException ex)
-            {
-                return Retry.Error.WithError($"Classic refresh failed: {ex.Message}");
-            }
-        }
-
-        // Re-resolves _context to whatever the browser's current top-level browsing context is
-        // right now, for recovering after the cached one has been closed/replaced. Used by both
-        // Navigate and Refresh above - see their comments for why this exists.
-        private async Task<Result> RefreshContextAsync()
-        {
-            if (_bidi is null)
+            catch (PlaywrightException ex) when (IsBrowserGone(ex))
             {
                 await Close();
                 return BrowserClosed.Error;
             }
+            catch (PlaywrightException ex)
+            {
+                return Retry.Error.WithError($"Navigation to {url} failed: {FirstLine(ex.Message)}");
+            }
+        }
+
+        public async Task<Result> Refresh(CancellationToken cancellationToken)
+        {
+            var page = ResolvePage();
+            if (page is null) return Stop.DriverNotReady;
 
             try
             {
-                var contexts = await _bidi.BrowsingContext.GetTreeAsync();
-                if (contexts.Contexts.Count == 0)
-                {
-                    // 2026-08-25: used to return Stop.Error here and tell the user to restart
-                    // the bot manually. Now returns BrowserClosed instead - TimerManager
-                    // relaunches Chrome automatically on the next tick, so no manual restart
-                    // is needed anymore.
-                    await Close();
-                    return BrowserClosed.Error;
-                }
-
-                _context = contexts.Contexts[0].Context;
+                await page.ReloadAsync(new() { WaitUntil = WaitUntilState.Load, Timeout = NavigationTimeoutMs }).WaitAsync(cancellationToken);
                 return Result.Ok();
             }
-            catch
+            catch (OperationCanceledException)
             {
-                // The BiDi connection itself is dead (the whole browser process is gone, not
-                // just the one tab/frame we were tracking) - GetTreeAsync can throw instead of
-                // returning an empty list in that case. Same outcome as the empty-tree branch
-                // above: nothing left to recover here.
+                return Cancel.Error;
+            }
+            catch (PlaywrightException ex) when (IsBrowserGone(ex))
+            {
                 await Close();
                 return BrowserClosed.Error;
+            }
+            catch (PlaywrightException ex)
+            {
+                return Retry.Error.WithError($"Refresh failed: {FirstLine(ex.Message)}");
             }
         }
 
         public async Task<Result<IWebElement>> GetElement(By by, CancellationToken cancellationToken, [CallerArgumentExpression("by")] string? expression = null)
         {
-            IWebElement getElement()
+            return await PollForElement(driver =>
             {
-                var element = _wait.Until((driver) =>
-                {
-                    var elements = driver.FindElements(by);
-                    if (elements.Count == 0) return null;
-                    var element = elements[0];
-                    if (!element.Displayed || !element.Enabled) return null;
-                    return element;
-                }, cancellationToken);
+                var elements = driver.FindElements(by);
+                if (elements.Count == 0) return null;
+                var element = elements[0];
+                if (!element.Displayed || !element.Enabled) return null;
                 return element;
-            }
-
-            try
-            {
-                var element = await Task.Run(getElement, cancellationToken);
-                return Result.Ok(element);
-            }
-            catch (OperationCanceledException)
-            {
-                return Cancel.Error;
-            }
-            catch (WebDriverTimeoutException ex)
-            {
-                var error = Retry.Error.WithError(ex.Message);
-                if (expression is not null) return error.WithError(expression);
-                return error;
-            }
+            }, cancellationToken, expression);
         }
 
         public async Task<Result<IWebElement>> GetElement(Func<HtmlDocument, HtmlNode?> nodeGenerator, CancellationToken cancellationToken, [CallerArgumentExpression("nodeGenerator")] string? expression = null)
         {
-            IWebElement getElement()
+            return await PollForElement(driver =>
             {
-                var element = _wait.Until((driver) =>
-                {
-                    var htmlDoc = new HtmlDocument();
-                    htmlDoc.LoadHtml(driver.PageSource);
+                var htmlDoc = new HtmlDocument();
+                htmlDoc.LoadHtml(driver.PageSource);
 
-                    var node = nodeGenerator(htmlDoc);
-                    if (node is null) return null;
+                var node = nodeGenerator(htmlDoc);
+                if (node is null) return null;
 
-                    var elements = driver.FindElements(By.XPath(node.XPath));
-                    if (elements.Count == 0) return null;
-                    var element = elements[0];
-                    if (!element.Displayed || !element.Enabled) return null;
-                    return element;
-                }, cancellationToken);
+                var elements = driver.FindElements(By.XPath(node.XPath));
+                if (elements.Count == 0) return null;
+                var element = elements[0];
+                if (!element.Displayed || !element.Enabled) return null;
                 return element;
-            }
+            }, cancellationToken, expression);
+        }
+
+        public async Task<Result> Click(IWebElement element, CancellationToken cancellationToken)
+        {
+            if (_context is null) return Stop.DriverNotReady;
+            if (element is not PlaywrightElement target) return Stop.Error.WithError("Click needs an element returned by IChromeBrowser.");
 
             try
             {
-                var element = await Task.Run(getElement, cancellationToken);
-                return Result.Ok(element);
+                await target.Locator.ClickAsync(new() { Timeout = ClickTimeoutMs }).WaitAsync(cancellationToken);
+                return Result.Ok();
             }
             catch (OperationCanceledException)
             {
                 return Cancel.Error;
             }
-            catch (WebDriverTimeoutException ex)
+            catch (PlaywrightException ex) when (!IsBrowserGone(ex))
             {
-                var error = Retry.Error.WithError(ex.Message);
-                if (expression is not null) return error.WithError(expression);
-                return error;
+                // Typically "not stable" (an animation never settles) or "intercepted" (something
+                // is on top). The old Selenium click was a plain coordinate click that ignored all
+                // of that, and pages like Travian's keep a few such elements, so fall back to it.
+                Logger?.Warning("Click was not accepted normally ({Message}) - retrying without the actionability checks.", FirstLine(ex.Message));
             }
-        }
+            catch (PlaywrightException)
+            {
+                await Close();
+                return BrowserClosed.Error;
+            }
 
-        public async Task<Result> Click(IWebElement element, CancellationToken cancellationToken)
-        {
-            if (Driver is null) return Stop.DriverNotReady;
-
-            await Task.Run(new Actions(Driver).Click(element).Perform);
-            return Result.Ok();
+            try
+            {
+                await target.Locator.ClickAsync(new() { Force = true, Timeout = ForceClickTimeoutMs }).WaitAsync(cancellationToken);
+                return Result.Ok();
+            }
+            catch (OperationCanceledException)
+            {
+                return Cancel.Error;
+            }
+            catch (PlaywrightException ex) when (IsBrowserGone(ex))
+            {
+                await Close();
+                return BrowserClosed.Error;
+            }
+            catch (PlaywrightException ex)
+            {
+                return Retry.Error.WithError($"Click failed: {FirstLine(ex.Message)}");
+            }
         }
 
         public async Task<Result> Input(IWebElement element, string content, CancellationToken cancellationToken)
         {
-            void input()
-            {
-                element.SendKeys(Keys.Home);
-                element.SendKeys(Keys.Shift + Keys.End);
-                element.SendKeys(content);
-            }
+            if (_context is null) return Stop.DriverNotReady;
+            if (element is not PlaywrightElement target) return Stop.Error.WithError("Input needs an element returned by IChromeBrowser.");
 
-            await Task.Run(input);
-            return Result.Ok();
+            try
+            {
+                // Select the line and type over it - real key events, not Fill(), because the game's
+                // forms listen to keyup (see the Defend/Donate notes in CLAUDE.md).
+                await target.Locator.PressAsync("Home").WaitAsync(cancellationToken);
+                await target.Locator.PressAsync("Shift+End").WaitAsync(cancellationToken);
+                await target.Locator.PressSequentiallyAsync(content).WaitAsync(cancellationToken);
+                return Result.Ok();
+            }
+            catch (OperationCanceledException)
+            {
+                return Cancel.Error;
+            }
+            catch (PlaywrightException ex) when (IsBrowserGone(ex))
+            {
+                await Close();
+                return BrowserClosed.Error;
+            }
+            catch (PlaywrightException ex)
+            {
+                return Retry.Error.WithError($"Typing into the element failed: {FirstLine(ex.Message)}");
+            }
         }
 
         public async Task<Result> ExecuteJsScript(string javascript)
         {
-            if (Driver is null) return Stop.DriverNotReady;
-            await Task.CompletedTask;
-            var js = Driver as IJavaScriptExecutor;
-            js.ExecuteScript(javascript);
-            return Result.Ok();
+            var page = ResolvePage();
+            if (page is null) return Stop.DriverNotReady;
+
+            try
+            {
+                // Selenium's ExecuteScript ran the text as a function BODY ("var x=..;" statements,
+                // a trailing "return false;"). Playwright's Evaluate takes an expression, so wrap
+                // it, and discard the return value so a non-serializable result cannot throw.
+                await page.EvaluateAsync($"(() => {{ (function() {{\n{javascript}\n}})(); return null; }})()");
+                return Result.Ok();
+            }
+            catch (PlaywrightException ex) when (IsBrowserGone(ex))
+            {
+                await Close();
+                return BrowserClosed.Error;
+            }
+            catch (PlaywrightException ex)
+            {
+                return Retry.Error.WithError($"Script failed: {FirstLine(ex.Message)}");
+            }
+        }
+
+        public async Task<Result<int>> CloseExtraTabs()
+        {
+            var context = _context;
+            var main = ResolvePage();
+            if (context is null || main is null) return Stop.DriverNotReady;
+
+            try
+            {
+                var extra = context.Pages.Where(x => x != main && !x.IsClosed).ToList();
+                foreach (var page in extra)
+                {
+                    await page.CloseAsync();
+                }
+                return Result.Ok(extra.Count);
+            }
+            catch (PlaywrightException ex)
+            {
+                return Retry.Error.WithError($"Could not close the extra tabs: {FirstLine(ex.Message)}");
+            }
         }
 
         public async Task<Result> WaitPageChanged(string url, CancellationToken cancellationToken)
@@ -502,147 +401,136 @@ namespace MainCore.Services
 
         public async Task<Result> Wait(Predicate<IWebDriver> condition, CancellationToken cancellationToken, [CallerArgumentExpression("condition")] string? expression = null)
         {
-            void wait()
-            {
-                _wait.Until(driver => condition(driver), cancellationToken);
-            }
+            var driver = _driver;
+            if (driver is null) return Stop.DriverNotReady;
+
+            var deadline = DateTime.UtcNow + WaitTimeout;
+            string? lastError = null;
 
             try
             {
-                await Task.Run(wait, cancellationToken);
+                while (true)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    if (ResolvePage() is null)
+                    {
+                        await Close();
+                        return BrowserClosed.Error;
+                    }
+
+                    try
+                    {
+                        if (await Task.Run(() => condition(driver), cancellationToken)) return Result.Ok();
+                    }
+                    catch (BrowserException ex)
+                    {
+                        // page is navigating / re-rendering right now - just look again
+                        lastError = ex.Message;
+                    }
+
+                    if (DateTime.UtcNow >= deadline) break;
+                    await Task.Delay(PollInterval, cancellationToken);
+                }
             }
             catch (OperationCanceledException)
             {
                 return Cancel.Error;
             }
-            catch (WebDriverTimeoutException ex)
-            {
-                var error = Retry.Error.WithError(ex.Message);
-                if (expression is not null) return error.WithError(expression);
-                return error;
-            }
-            return Result.Ok();
+
+            return TimedOut(lastError, expression);
         }
 
-        public async Task Close()
+        // Polls like the old WebDriverWait: every 250 ms for up to 3 minutes, an element counts only
+        // when it is displayed and enabled.
+        private async Task<Result<IWebElement>> PollForElement(Func<IWebDriver, IWebElement?> probe, CancellationToken cancellationToken, string? expression)
         {
+            var driver = _driver;
+            if (driver is null) return Stop.DriverNotReady;
+
+            var deadline = DateTime.UtcNow + WaitTimeout;
+            string? lastError = null;
+
             try
             {
-                if (_bidi is not null)
+                while (true)
                 {
-                    await _bidi.DisposeAsync();
-                }
+                    cancellationToken.ThrowIfCancellationRequested();
 
-                await Task.Run(() => _driver?.Quit());
+                    if (ResolvePage() is null)
+                    {
+                        await Close();
+                        return BrowserClosed.Error;
+                    }
+
+                    try
+                    {
+                        var element = await Task.Run(() => probe(driver), cancellationToken);
+                        if (element is not null) return Result.Ok(element);
+                    }
+                    catch (BrowserException ex)
+                    {
+                        lastError = ex.Message;
+                    }
+
+                    if (DateTime.UtcNow >= deadline) break;
+                    await Task.Delay(PollInterval, cancellationToken);
+                }
             }
-            catch
+            catch (OperationCanceledException)
             {
-                // ignore
+                return Cancel.Error;
             }
-            finally
-            {
-                // 2026-08-25: null these out so IsOpen (and RefreshContextAsync's "_bidi is
-                // null" check) accurately reflect that nothing usable is left, whether Close()
-                // was called on purpose (SleepCommand's cycle) or as recovery from finding the
-                // browser already dead. Setup() always overwrites all four fresh, so there's
-                // nothing that still needs the old references after this.
-                _driver = null;
-                _bidi = null;
-                _context = null;
-                _authIntercept = null;
-                _bidiNavigationBroken = false;
-            }
+
+            return TimedOut(lastError, expression);
         }
 
-        public static class ChromeOptionsExtensions
+        private static Result TimedOut(string? lastError, string? expression)
         {
-            private const string background_js = @"
-var config = {
-	mode: ""fixed_servers"",
-    rules: {
-        singleProxy: {
-            scheme: ""http"",
-            host: ""{HOST}"",
-            port: parseInt({PORT})
-        },
-        bypassList: []
-	}
-};
+            var message = $"Timed out after {(int)WaitTimeout.TotalSeconds} seconds";
+            if (!string.IsNullOrEmpty(lastError)) message += $" (last browser error: {FirstLine(lastError)})";
 
-chrome.proxy.settings.set({ value: config, scope: ""regular"" }, function() { });
+            var error = Retry.Error.WithError(message);
+            if (expression is not null) error = error.WithError(expression);
+            return error;
+        }
 
-function callbackFn(details)
-{
-	return {
-		authCredentials:
-		{
-			username: ""{USERNAME}"",
-			password: ""{PASSWORD}""
-		}
-	};
-}
+        // The main page, or - if it was closed (ad pop-up that took over, user closed the tab) - the
+        // first page that is still open. Null means the whole browser is gone.
+        private IPage? ResolvePage()
+        {
+            var context = _context;
+            if (context is null) return null;
 
-chrome.webRequest.onAuthRequired.addListener(
-	callbackFn,
-	{ urls:[""<all_urls>""] },
-    ['blocking']
-);";
+            var page = _page;
+            if (page is not null && !page.IsClosed) return page;
 
-            private const string manifest_json = @"
-{
-    ""version"": ""1.0.0"",
-    ""manifest_version"": 3,
-    ""name"": ""Chrome Proxy Authentication"",
-    ""permissions"": [
-        ""proxy"",
-        ""tabs"",
-        ""unlimitedStorage"",
-        ""storage"",
-        ""webRequest"",
-        ""webRequestAuthProvider""
-    ],
-    ""host_permissions"": [
-        ""<all_urls>""
-    ],
-    ""background"": {
-        ""service_worker"": ""background.js""
-    },
-    ""minimum_chrome_version"": ""108""
-}";
-
-            /// <summary>
-            /// Add HTTP-proxy by <paramref name="userName"/> and <paramref name="password"/>
-            /// </summary>
-            /// <param name="options">Chrome options</param>
-            /// <param name="host">Proxy host</param>
-            /// <param name="port">Proxy port</param>
-            /// <param name="userName">Proxy username</param>
-            /// <param name="password">Proxy password</param>
-            public static string CreateHttpProxyExtension(string host, int port, string userName, string password)
+            try
             {
-                var background_proxy_js = ReplaceTemplates(background_js, host, port, userName, password);
-
-                const string path = "Plugins";
-                if (Directory.Exists(path)) Directory.Delete(path);
-                Directory.CreateDirectory(path);
-
-                var manifestPath = $"{path}/manifest.json";
-                var backgroundPath = $"{path}/background.js";
-
-                File.WriteAllText(manifestPath, manifest_json);
-                File.WriteAllText(backgroundPath, background_proxy_js);
-
-                return path;
+                page = context.Pages.FirstOrDefault(x => !x.IsClosed);
+            }
+            catch (PlaywrightException)
+            {
+                page = null;
             }
 
-            private static string ReplaceTemplates(string str, string host, int port, string userName, string password)
-            {
-                return str
-                    .Replace("{HOST}", host)
-                    .Replace("{PORT}", port.ToString())
-                    .Replace("{USERNAME}", userName)
-                    .Replace("{PASSWORD}", password);
-            }
+            _page = page;
+            return page;
+        }
+
+        private bool IsBrowserGone(PlaywrightException ex)
+        {
+            if (ex.Message.Contains("has been closed", StringComparison.OrdinalIgnoreCase)) return true;
+            if (ex.Message.Contains("Target closed", StringComparison.OrdinalIgnoreCase)) return true;
+            if (ex.Message.Contains("Browser closed", StringComparison.OrdinalIgnoreCase)) return true;
+            return ResolvePage() is null;
+        }
+
+        // Playwright errors carry a long call log after the first line; the first line is the cause.
+        private static string FirstLine(string message)
+        {
+            var index = message.IndexOfAny(['\r', '\n']);
+            return index < 0 ? message : message[..index];
         }
     }
 }
