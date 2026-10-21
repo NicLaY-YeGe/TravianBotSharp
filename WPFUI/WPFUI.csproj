@@ -8,6 +8,9 @@
     <SelfContained>true</SelfContained>
     <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
   </PropertyGroup>
+       <PropertyGroup>
+       <PlaywrightPlatform>win</PlaywrightPlatform>
+     </PropertyGroup>
 
   <PropertyGroup>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
