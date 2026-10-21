@@ -17,6 +17,11 @@ namespace MainCore.Services
     //    refused it is retried once with Force, which is what the old coordinate click did.
     //  - GetElement/Wait poll every 250 ms for up to 3 minutes, like the old WebDriverWait, and
     //    time out with the same "Timed out after 180 seconds" text.
+    //  - 2026-10-21: Playwright's own timeouts (Click, Goto, Reload, Press...) surface as
+    //    System.TimeoutException, which is NOT a PlaywrightException. The catch blocks below only
+    //    knew PlaywrightException, so a timed-out Click skipped the Force retry and a timed-out
+    //    Goto escaped as a raw exception (live log 13:01:09 / 14:12:51). Every Playwright call
+    //    here now also handles System.TimeoutException.
     public sealed class ChromeBrowser : IChromeBrowser
     {
         private static readonly TimeSpan WaitTimeout = TimeSpan.FromMinutes(3);
@@ -202,6 +207,10 @@ namespace MainCore.Services
                 await Close();
                 return BrowserClosed.Error;
             }
+            catch (System.TimeoutException ex)
+            {
+                return Retry.Error.WithError($"Navigation to {url} timed out: {FirstLine(ex.Message)}");
+            }
             catch (PlaywrightException ex)
             {
                 return Retry.Error.WithError($"Navigation to {url} failed: {FirstLine(ex.Message)}");
@@ -226,6 +235,10 @@ namespace MainCore.Services
             {
                 await Close();
                 return BrowserClosed.Error;
+            }
+            catch (System.TimeoutException ex)
+            {
+                return Retry.Error.WithError($"Refresh timed out: {FirstLine(ex.Message)}");
             }
             catch (PlaywrightException ex)
             {
@@ -255,7 +268,7 @@ namespace MainCore.Services
                 var node = nodeGenerator(htmlDoc);
                 if (node is null) return null;
 
-                var elements = driver.FindElements(By.XPath(node.XPath));
+                var elements = driver.FindElements(By.XPath(node.StableXPath()));
                 if (elements.Count == 0) return null;
                 var element = elements[0];
                 if (!element.Displayed || !element.Enabled) return null;
@@ -284,6 +297,12 @@ namespace MainCore.Services
                 // of that, and pages like Travian's keep a few such elements, so fall back to it.
                 Logger?.Warning("Click was not accepted normally ({Message}) - retrying without the actionability checks.", FirstLine(ex.Message));
             }
+            catch (System.TimeoutException ex)
+            {
+                // Same fall-through as "not accepted": the normal click timed out (element not
+                // stable / covered / not found yet). One forced attempt follows.
+                Logger?.Warning("Click timed out ({Message}) - retrying without the actionability checks.", FirstLine(ex.Message));
+            }
             catch (PlaywrightException)
             {
                 await Close();
@@ -303,6 +322,12 @@ namespace MainCore.Services
             {
                 await Close();
                 return BrowserClosed.Error;
+            }
+            catch (System.TimeoutException ex)
+            {
+                // Still nothing to click after the forced attempt: the element left the page
+                // (re-render / navigation) between GetElement and Click. Retry re-resolves it.
+                return Retry.Error.WithError($"Click timed out, the element is probably no longer on the page: {FirstLine(ex.Message)}");
             }
             catch (PlaywrightException ex)
             {
@@ -332,6 +357,10 @@ namespace MainCore.Services
             {
                 await Close();
                 return BrowserClosed.Error;
+            }
+            catch (System.TimeoutException ex)
+            {
+                return Retry.Error.WithError($"Typing into the element timed out: {FirstLine(ex.Message)}");
             }
             catch (PlaywrightException ex)
             {

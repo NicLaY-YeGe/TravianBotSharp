@@ -75,7 +75,7 @@ namespace MainCore.Commands.Features.DodgeTroop
             var node = RallyPointSendTroopsParser.GetTroopInput(browser.Html, troopSlot);
             if (node is null) return Retry.Error.WithError($"Cannot find troop slot {troopSlot} input.");
 
-            var (_, isFailed, element, errors) = await browser.GetElement(By.XPath(node.XPath), cancellationToken);
+            var (_, isFailed, element, errors) = await browser.GetElement(By.XPath(node.StableXPath()), cancellationToken);
             if (isFailed) return Result.Fail(errors);
 
             return await browser.Input(element, $"{amount}", cancellationToken);
@@ -86,7 +86,7 @@ namespace MainCore.Commands.Features.DodgeTroop
             var xNode = RallyPointSendTroopsParser.GetXInput(browser.Html);
             if (xNode is null) return Retry.Error.WithError("Cannot find X coordinate input.");
 
-            var (_, xFailed, xElement, xErrors) = await browser.GetElement(By.XPath(xNode.XPath), cancellationToken);
+            var (_, xFailed, xElement, xErrors) = await browser.GetElement(By.XPath(xNode.StableXPath()), cancellationToken);
             if (xFailed) return Result.Fail(xErrors);
 
             var result = await browser.Input(xElement, $"{x}", cancellationToken);
@@ -95,7 +95,7 @@ namespace MainCore.Commands.Features.DodgeTroop
             var yNode = RallyPointSendTroopsParser.GetYInput(browser.Html);
             if (yNode is null) return Retry.Error.WithError("Cannot find Y coordinate input.");
 
-            var (_, yFailed, yElement, yErrors) = await browser.GetElement(By.XPath(yNode.XPath), cancellationToken);
+            var (_, yFailed, yElement, yErrors) = await browser.GetElement(By.XPath(yNode.StableXPath()), cancellationToken);
             if (yFailed) return Result.Fail(yErrors);
 
             return await browser.Input(yElement, $"{y}", cancellationToken);
@@ -106,7 +106,7 @@ namespace MainCore.Commands.Features.DodgeTroop
             var node = RallyPointSendTroopsParser.GetEventTypeRadio(browser.Html, ReinforcementEventType);
             if (node is null) return Retry.Error.WithError("Cannot find the 'Reinforcement' movement type option.");
 
-            var (_, isFailed, element, errors) = await browser.GetElement(By.XPath(node.XPath), cancellationToken);
+            var (_, isFailed, element, errors) = await browser.GetElement(By.XPath(node.StableXPath()), cancellationToken);
             if (isFailed) return Result.Fail(errors);
 
             return await browser.Click(element, cancellationToken);
@@ -117,7 +117,7 @@ namespace MainCore.Commands.Features.DodgeTroop
             var node = RallyPointSendTroopsParser.GetSendButton(browser.Html);
             if (node is null) return Retry.Error.WithError("Cannot find the send button.");
 
-            var (_, isFailed, element, errors) = await browser.GetElement(By.XPath(node.XPath), cancellationToken);
+            var (_, isFailed, element, errors) = await browser.GetElement(By.XPath(node.StableXPath()), cancellationToken);
             if (isFailed) return Result.Fail(errors);
 
             return await browser.Click(element, cancellationToken);
@@ -128,7 +128,7 @@ namespace MainCore.Commands.Features.DodgeTroop
             var node = RallyPointSendTroopsParser.GetConfirmButton(browser.Html);
             if (node is null) return Retry.Error.WithError("Cannot find the confirm button.");
 
-            var (_, isFailed, element, errors) = await browser.GetElement(By.XPath(node.XPath), cancellationToken);
+            var (_, isFailed, element, errors) = await browser.GetElement(By.XPath(node.StableXPath()), cancellationToken);
             if (isFailed) return Result.Fail(errors);
 
             return await browser.Click(element, cancellationToken);

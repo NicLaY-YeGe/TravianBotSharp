@@ -31,3 +31,12 @@ MainCore.Test/Parsers/BaseParser.Test.cs
 MainCore.Test/Parsers/QuestParser.Test.cs
 MainCore/Commands/Features/SyncAttack/WakeWindowRules.cs
 MainCore.Test/Commands/Features/SyncAttack/WakeWindowRulesTest.cs
+MainCore/Parsers/TravianCoordinateText.cs
+MainCore/Parsers/RallyPointOverviewParser.cs
+MainCore.Test/Parsers/RallyPointOverviewParser.Test.cs
+MainCore.Test/Parsers/TravianCoordinateTextTest.cs
+MainCore/Parsers/NumberParser.cs
+MainCore/Parsers/BuildingTabParser.cs
+MainCore.Test/Parsers/BuildingTabParser.Test.cs
+MainCore/Parsers/HtmlNodeXPathExtensions.cs
+MainCore.Test/Parsers/HtmlNodeXPathExtensionsTest.cs

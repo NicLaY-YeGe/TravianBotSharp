@@ -46,17 +46,15 @@ namespace MainCore.Parsers
         // village's dodge attempt whenever more than one village was dodging at once (or
         // simply never matched). The headline text itself is the reliable source: Travian
         // prints the raw target coordinates there for movements without a named destination
-        // village - confirmed for the settler-founding case ("Founding a new village
-        // (X|Y)"), and assumed to hold for attack-type movements by the same pattern. If a
-        // live "outgoing attack to an empty coordinate" capture ever shows a different
-        // headline format, fix the pattern here first before suspecting the caller.
+        // village. CONFIRMED live 2026-10-20 for raids/attacks on an unoccupied oasis
+        // ("Raid unoccupied oasis (35|-5)"), but the coordinates are wrapped in invisible bidi
+        // characters and use U+2212 as the minus sign - hence the normalisation below (the
+        // earlier plain Contains never matched, so Recall never found the button).
         public static HtmlNode? GetOutgoingAttackAbortButton(HtmlDocument doc, int targetX, int targetY)
         {
             var tables = doc.DocumentNode
                 .Descendants("table")
                 .Where(x => x.GetAttributeValue("class", "").Contains("troop_details"));
-
-            var coordText = $"({targetX}|{targetY})";
 
             foreach (var table in tables)
             {
@@ -64,8 +62,9 @@ namespace MainCore.Parsers
                     .FirstOrDefault(x => x.GetAttributeValue("class", "").Contains("troopHeadline"));
                 if (headline is null) continue;
 
-                var text = headline.InnerText;
-                if (!text.Contains(coordText, StringComparison.OrdinalIgnoreCase)) continue;
+                // 2026-10-20: the raw text carries invisible bidi characters and U+2212 minus
+                // signs, so it is normalised first (see TravianCoordinateText).
+                if (!TravianCoordinateText.ContainsCoordinate(headline.InnerText, targetX, targetY)) continue;
 
                 var abortDiv = table.Descendants("div")
                     .FirstOrDefault(x => x.GetAttributeValue("class", "") == "abort");
@@ -74,6 +73,19 @@ namespace MainCore.Parsers
             }
 
             return null;
+        }
+
+        // Diagnostics for RecallTroopCommand: the normalised headline of every outgoing movement
+        // on the page, so a miss can be explained from the log alone.
+        public static List<string> GetOutgoingMovementHeadlines(HtmlDocument doc)
+        {
+            return doc.DocumentNode
+                .Descendants("table")
+                .Where(x => x.GetAttributeValue("class", "").Contains("troop_details"))
+                .Select(t => t.Descendants("td").FirstOrDefault(x => x.GetAttributeValue("class", "").Contains("troopHeadline")))
+                .Where(h => h is not null)
+                .Select(h => TravianCoordinateText.Normalize(h!.InnerText))
+                .ToList();
         }
 
         // Seconds remaining until the soonest incoming attack lands, if this village has one.
