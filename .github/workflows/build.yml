@@ -35,3 +35,4 @@ jobs:
         with:
           name: TravianBotSharp-win-x64
           path: publish/
+          include-hidden-files: true

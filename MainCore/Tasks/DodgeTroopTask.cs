@@ -127,6 +127,7 @@ namespace MainCore.Tasks
             }
 
             var attackSeconds = RallyPointOverviewParser.GetIncomingAttackSeconds(browser.Html);
+            var impactAt = DateTime.Now.AddSeconds(attackSeconds ?? 0);
             if (attackSeconds is null)
             {
                 // No incoming attack showing right now (already landed, already dodged, or
@@ -206,10 +207,29 @@ namespace MainCore.Tasks
                 return Skip.Error;
             }
 
+            // 2026-10-22: the send gets a hard deadline just before impact. 2026-10-21 17:49: the send
+            // sat in an element wait with no limit (180 s) and the attack landed unanswered. Past
+            // impact a send is pointless, so give up on time instead of holding the queue.
+            var sendTimeoutSeconds = (int)(impactAt - DateTime.Now).TotalSeconds - 2;
+            if (sendTimeoutSeconds < 5)
+            {
+                logger.Warning("Dodge on {VillageId}: only {Seconds}s left before impact after reaching the send form, skipping.", task.VillageId, sendTimeoutSeconds);
+                return Skip.Error;
+            }
+
             var sendResult = await sendTroopsCommand.HandleAsync(
-                new(task.VillageId, targetX, targetY, RallyPointEventTypeEnums.AttackNormal, troopAmounts, Confirm: true),
+                new(task.VillageId, targetX, targetY, RallyPointEventTypeEnums.AttackNormal, troopAmounts, Confirm: true, TimeoutSeconds: sendTimeoutSeconds),
                 cancellationToken);
-            if (sendResult.IsFailed) return Result.Fail(sendResult.Errors);
+            if (sendResult.IsFailed)
+            {
+                if (cancellationToken.IsCancellationRequested) return Cancel.Error;
+
+                // A Retry/Stop here would hold the single-threaded queue (Polly delay ~40 s) past
+                // impact or pause the account; a late retry cannot save the troops anyway.
+                logger.Warning("Dodge send from {VillageId} to ({X}|{Y}) failed, no recall will be scheduled: {Errors}",
+                    task.VillageId, targetX, targetY, string.Join(" | ", sendResult.Errors.Select(e => e.Message)));
+                return Skip.Error.WithErrors(sendResult.Errors);
+            }
 
             var recallAfterSeconds = context.ByName(task.VillageId, VillageSettingEnums.DodgeRecallSecondsAfterSend);
             if (recallAfterSeconds <= 0) recallAfterSeconds = 50;

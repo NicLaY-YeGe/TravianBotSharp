@@ -26,7 +26,10 @@
             }
             catch (Exception ex)
             {
-                _ = ex;
+                // 2026-10-21: this used to swallow the exception completely, so a browser that
+                // failed to start (first Playwright run: nothing in the log, account just went
+                // Offline) left no trace at all. Log the full exception.
+                logger.Error(ex, "Could not start the browser: {Type}: {Message}", ex.GetType().Name, ex.Message);
                 taskManager.SetStatus(accountId, StatusEnums.Offline);
                 return;
             }
