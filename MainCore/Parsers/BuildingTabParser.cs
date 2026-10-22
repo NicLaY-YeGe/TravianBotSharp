@@ -35,6 +35,16 @@
             return tab;
         }
 
+        // 2026-10-21: null-returning variant for code that looks at a LIVE page (SwitchTabCommand's
+        // wait predicate). Right after a click the page is mid-navigation - the old one unloading,
+        // the new one not rendered yet - and has no tab bar at all; GetTab's ElementAt then threw
+        // ArgumentOutOfRangeException (live log 13:01:43, TS12) and killed the wait.
+        public static HtmlNode? TryGetTab(HtmlDocument doc, int index)
+        {
+            if (index < 0) return null;
+            return GetTabs(doc).Skip(index).FirstOrDefault();
+        }
+
         public static bool IsTabActive(HtmlNode node)
         {
             return node.HasClass("active");
