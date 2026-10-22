@@ -193,7 +193,7 @@
             var dontShowThisAgain = browser.Html.GetElementbyId("dontShowThisAgain");
             if (dontShowThisAgain is not null)
             {
-                (_, isFailed, element, errors) = await browser.GetElement(By.XPath(dontShowThisAgain.XPath), cancellationToken);
+                (_, isFailed, element, errors) = await browser.GetElement(By.XPath(dontShowThisAgain.StableXPath()), cancellationToken);
                 if (isFailed) return Result.Fail(errors).WithError("Failed to find [Don't show this again] checkbox");
 
                 result = await browser.Click(element, cancellationToken);

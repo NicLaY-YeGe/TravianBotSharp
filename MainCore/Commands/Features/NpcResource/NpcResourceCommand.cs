@@ -152,7 +152,7 @@
 
             for (var i = 0; i < 4; i++)
             {
-                var (_, isFailed, element, errors) = await browser.GetElement(By.XPath(inputs[i].XPath), cancellationToken);
+                var (_, isFailed, element, errors) = await browser.GetElement(By.XPath(inputs[i].StableXPath()), cancellationToken);
                 if (isFailed) return Result.Fail(errors);
 
                 var result = await browser.Input(element, $"{values[i]}", cancellationToken);

@@ -210,7 +210,7 @@ namespace MainCore.Tasks
             }
 
             var sendResult = await sendTroopsCommand.HandleAsync(
-                new(villageId, x, y, RallyPointEventTypeEnums.AttackRaid, troopAmounts, Confirm: true, IncludeHero: includeHero),
+                new(villageId, x, y, RallyPointEventTypeEnums.AttackRaid, troopAmounts, Confirm: true, IncludeHero: includeHero, TimeoutSeconds: 60),
                 cancellationToken);
             if (sendResult.IsFailed) return Result.Fail(sendResult.Errors);
 
