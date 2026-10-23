@@ -78,7 +78,7 @@ namespace MainCore.Commands.Features.ClaimQuest
                 var quest = QuestParser.GetQuestCollectButton(browser.Html);
                 if (quest is not null)
                 {
-                    var (_, isFailed, element, errors) = await browser.GetElement(By.XPath(quest.XPath), cancellationToken);
+                    var (_, isFailed, element, errors) = await browser.GetElement(By.XPath(quest.StableXPath()), cancellationToken);
                     if (isFailed) return Result.Fail(errors);
 
                     var clickResult = await browser.Click(element, cancellationToken);
@@ -92,7 +92,7 @@ namespace MainCore.Commands.Features.ClaimQuest
                 var nextPage = QuestParser.GetNextPageButton(browser.Html);
                 if (nextPage is null) return claimedAny; // last page of this tab
 
-                var (_, pageFailed, pageElement, pageErrors) = await browser.GetElement(By.XPath(nextPage.XPath), cancellationToken);
+                var (_, pageFailed, pageElement, pageErrors) = await browser.GetElement(By.XPath(nextPage.StableXPath()), cancellationToken);
                 if (pageFailed) return Result.Fail(pageErrors);
 
                 var pageClickResult = await browser.Click(pageElement, cancellationToken);

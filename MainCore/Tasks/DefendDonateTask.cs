@@ -1,27 +1,28 @@
 using MainCore.Commands.Features.DefendDonate;
 using MainCore.Commands.Features.DodgeTroop;
-using MainCore.Commands.Features.SendResource;
 using MainCore.Enums;
 using MainCore.Parsers;
 using MainCore.Tasks.Base;
 
 namespace MainCore.Tasks
 {
-    // Reworked 2026-10-19 per explicit user decision (the 09-27 "train + donate to the alliance"
-    // version hung 180 s on the Alliance Bonus page and pushed Dodge past impact - CHANGELOG.md).
-    // The "Donate" in the name is historical; the village setting / task class keep it so saved
-    // settings and the dispatch in CustomServiceScopeFactory stay valid.
+    // Reworked again 2026-10-22 per explicit user decision (history: 09-27 train + donate to the
+    // alliance, which hung 180 s on the Alliance Bonus page and pushed Dodge past impact; 10-19 train
+    // + send the rest to another own village by Marketplace, which in 3 live attacks never ran
+    // because "No free merchants" - CHANGELOG.md). The "Donate" in the name is historical no more:
+    // donating is back, the village setting / task class keep their names so saved settings and the
+    // dispatch in CustomServiceScopeFactory stay valid.
     //
-    // New behaviour, ONCE per incoming attack, right when the attack is seen:
+    // Behaviour, ONCE per incoming attack, right when the attack is seen:
     //   1. train the tribe's cheapest troop (T1 infantry, Barracks) with the village's whole stock;
-    //   2. send EVERYTHING that is left (Cranny protection is deliberately ignored) with the
-    //      Marketplace to another own village - random, but a village whose storage has room is
-    //      preferred, villages under attack are avoided (DefendResourceTargetRules);
-    //   3. no Marketplace / no free merchant -> nothing is sent, the task just ends;
-    //   4. never run again for this attack, whatever the outcome (DefendAttackMemory).
+    //   2. donate EVERYTHING that is left to the alliance's Recruitment (troop production) bonus
+    //      (DonateAllianceBonusCommand). If the daily donation limit is used up the rest simply stays
+    //      in the village - no merchant fallback (user decision);
+    //   3. never run again for this attack, whatever the outcome (DefendAttackMemory).
     // Top priority is that Dodge still works: the whole sequence runs under a hard time budget
-    // that ends before Dodge's send moment, and every failure is Skip (never Retry/Stop, which
-    // would hold the single-threaded queue or pause the account - CLAUDE.md 2l).
+    // that ends before Dodge's send moment, the donation has its own cap on top of that, and every
+    // failure is Skip (never Retry/Stop, which would hold the single-threaded queue or pause the
+    // account - CLAUDE.md 2l).
     [Handler]
     public static partial class DefendDonateTask
     {
@@ -31,7 +32,7 @@ namespace MainCore.Tasks
             {
             }
 
-            protected override string TaskName => "Defend: train + send resources away";
+            protected override string TaskName => "Defend: train + donate";
 
             public override bool CanStart(AppDbContext context)
             {
@@ -48,6 +49,10 @@ namespace MainCore.Tasks
 
         // The attack counts as handled until this long after its impact.
         private const int HandledGraceSeconds = 90;
+
+        // Own cap for the donation step (it is the last step, so it can only ever eat its own time).
+        // The 2026-09-27 version hung 180 s here.
+        private const int DonationTimeoutSeconds = 60;
 
         // Seconds kept free before impact when Dodge is off.
         private const int ReserveBeforeImpactSeconds = 15;
@@ -79,10 +84,10 @@ namespace MainCore.Tasks
         }
 
         // Seconds the sequence may use: it has to be over before Dodge's send moment.
-        private static int GetBudgetSeconds(AppDbContext context, VillageId villageId, int attackSeconds)
+        private static int GetBudgetSeconds(AppDbContext context, VillageId villageId, int attackSeconds, bool dodgeWillRun)
         {
             var reserve = ReserveBeforeImpactSeconds;
-            if (context.BooleanByName(villageId, VillageSettingEnums.DodgeEnable))
+            if (dodgeWillRun)
             {
                 var dodgeLead = context.ByName(villageId, VillageSettingEnums.DodgeSendSecondsBeforeImpact);
                 if (dodgeLead <= 0) dodgeLead = 30;
@@ -97,8 +102,7 @@ namespace MainCore.Tasks
             IChromeBrowser browser,
             ToRallyPointOverviewCommand.Handler toOverviewCommand,
             TrainCheapestTroopCommand.Handler trainCheapestTroopCommand,
-            ToSendResourcePageCommand.Handler toSendResourcePageCommand,
-            SendResourceCommand.Handler sendResourceCommand,
+            DonateAllianceBonusCommand.Handler donateAllianceBonusCommand,
             ILogger logger,
             CancellationToken cancellationToken)
         {
@@ -113,14 +117,19 @@ namespace MainCore.Tasks
                 return overviewResult;
             }
 
-            var attackSeconds = RallyPointOverviewParser.GetIncomingAttackSeconds(browser.Html);
-            if (attackSeconds is null)
+            // 2026-10-23: Defend reacts to attacks AND raids (both hit the stock and the garrison).
+            var movements = RallyPointOverviewParser.GetIncomingMovements(browser.Html);
+            var first = movements.OrderBy(x => x.Seconds).FirstOrDefault();
+            if (first is null)
             {
-                // No incoming attack showing right now (already landed, resolved, or the
+                // No incoming attack or raid showing right now (already landed, resolved, or the
                 // IsUnderAttack flag was stale) - nothing to do, and nothing marked as handled.
+                // Logged instead of skipping silently (2026-10-22 log: 14 silent skips).
                 AttackWakeWindow.ReleaseReservation(task.AccountId, task.VillageId);
+                await IncomingMovementDiagnostics.ReportNothingToDoAsync(browser, logger, task.VillageId, "Defend", movements);
                 return Skip.Error;
             }
+            var attackSeconds = (int?)first.Seconds;
 
             // 2026-10-19: the 3-5 minutes before impact belong to the defensive tasks.
             AttackWakeWindow.Reserve(task.AccountId, task.VillageId, attackSeconds.Value, logger);
@@ -129,18 +138,22 @@ namespace MainCore.Tasks
             var now = DateTime.Now;
             DefendAttackMemory.MarkHandled(task.VillageId.Value, now.AddSeconds(attackSeconds.Value + HandledGraceSeconds), now);
 
-            var budgetSeconds = GetBudgetSeconds(context, task.VillageId, attackSeconds.Value);
+            // Dodge only holds its send moment for this movement if it will actually react to it.
+            var dodgeWillRun = context.BooleanByName(task.VillageId, VillageSettingEnums.DodgeEnable)
+                && (first.Kind == RallyPointOverviewParser.IncomingKind.Attack
+                    || context.BooleanByName(task.VillageId, VillageSettingEnums.DodgeRaidEnable));
+            var budgetSeconds = GetBudgetSeconds(context, task.VillageId, attackSeconds.Value, dodgeWillRun);
             if (budgetSeconds < MinimumActionTimeSeconds)
             {
                 logger.Warning(
-                    "Incoming attack on {VillageId} lands in {Seconds}s - only {Budget}s would be left before Dodge, skipping defend so Dodge is not blocked.",
-                    task.VillageId, attackSeconds.Value, budgetSeconds);
+                    "Incoming {Kind} on {VillageId} lands in {Seconds}s - only {Budget}s would be left before Dodge, skipping defend so Dodge is not blocked.",
+                    first.Kind.ToString().ToLowerInvariant(), task.VillageId, attackSeconds.Value, budgetSeconds);
                 return Skip.Error;
             }
 
             logger.Information(
-                "Incoming attack on {VillageId} lands in {Seconds}s - defending now (budget {Budget}s, once for this attack).",
-                task.VillageId, attackSeconds.Value, budgetSeconds);
+                "Incoming {Kind} on {VillageId} lands in {Seconds}s - defending now (budget {Budget}s, once for this movement).",
+                first.Kind.ToString().ToLowerInvariant(), task.VillageId, attackSeconds.Value, budgetSeconds);
 
             using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             budget.CancelAfter(TimeSpan.FromSeconds(budgetSeconds));
@@ -149,7 +162,7 @@ namespace MainCore.Tasks
             {
                 return await RunAsync(
                     task, context, browser,
-                    trainCheapestTroopCommand, toSendResourcePageCommand, sendResourceCommand,
+                    trainCheapestTroopCommand, donateAllianceBonusCommand,
                     logger, budget.Token, cancellationToken);
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
@@ -164,14 +177,13 @@ namespace MainCore.Tasks
             AppDbContext context,
             IChromeBrowser browser,
             TrainCheapestTroopCommand.Handler trainCheapestTroopCommand,
-            ToSendResourcePageCommand.Handler toSendResourcePageCommand,
-            SendResourceCommand.Handler sendResourceCommand,
+            DonateAllianceBonusCommand.Handler donateAllianceBonusCommand,
             ILogger logger,
             CancellationToken token,
             CancellationToken pauseToken)
         {
             // 1) Train the cheapest troop with the whole stock. A failure here must NOT stop the
-            //    evacuation below - the resources are the thing worth saving.
+            //    donation below.
             var storage = context.Storages.FirstOrDefault(x => x.VillageId == task.VillageId.Value);
             var trained = 0;
             if (storage is null)
@@ -185,7 +197,7 @@ namespace MainCore.Tasks
                 if (trainResult.IsFailed)
                 {
                     if (token.IsCancellationRequested) return Abort(pauseToken, trainResult.Errors, logger);
-                    logger.Warning("Training failed in {VillageId}, still sending the resources away: {Errors}",
+                    logger.Warning("Training failed in {VillageId}, still donating what is there: {Errors}",
                         task.VillageId, string.Join(" | ", trainResult.Errors.Select(e => e.Message)));
                 }
                 else
@@ -203,84 +215,21 @@ namespace MainCore.Tasks
                 StorageParser.GetCrop(browser.Html));
             if (stock.Total <= 0)
             {
-                logger.Information("Nothing left to send away in {VillageId} (trained {Trained}).", task.VillageId, trained);
+                logger.Information("Nothing left to donate in {VillageId} (trained {Trained}).", task.VillageId, trained);
                 return Result.Ok();
             }
 
-            // 3) Marketplace + merchants. None -> skip the sending, nothing else to do.
-            var pageResult = await toSendResourcePageCommand.HandleAsync(new(task.VillageId), token);
-            if (pageResult.IsFailed)
-            {
-                if (pageResult.HasError<MissingBuilding>())
-                {
-                    logger.Warning("No marketplace in {VillageId}, cannot send resources away (trained {Trained}).", task.VillageId, trained);
-                    return Skip.Error.WithErrors(pageResult.Errors);
-                }
-                return Abort(pauseToken, pageResult.Errors, logger);
-            }
-
-            var freeMerchants = SendResourceParser.GetFreeMerchants(browser.Html);
-            if (freeMerchants <= 0)
-            {
-                logger.Information("No free merchants in {VillageId}, skipping the resource send (trained {Trained}).", task.VillageId, trained);
-                return Result.Ok();
-            }
-
-            var capacity = SendResourceParser.GetMerchantCapacity(browser.Html);
-            if (capacity <= 0) capacity = 1;
-            var send = DefendResourceTargetRules.ScaleToCapacity(stock, (long)freeMerchants * capacity);
-
-            // 2026-10-20 diagnostics: the 12:29 attack sent only crop=8 although ~3.8k wood and ~36k
-            // crop were left; this line shows which of stock / merchants / capacity caused it.
-            logger.Information(
-                "Defend send plan for {VillageId}: stock w{Wood} c{Clay} i{Iron} cr{Crop}; free merchants {Merchants} x capacity {Capacity} = {Max}; plan w{PW} c{PC} i{PI} cr{PCr}",
-                task.VillageId, stock.Wood, stock.Clay, stock.Iron, stock.Crop,
-                freeMerchants, capacity, (long)freeMerchants * capacity,
-                send.Wood, send.Clay, send.Iron, send.Crop);
-
-            if (send.Total <= 0) return Result.Ok();
-
-            // 4) Pick the receiving village: random, preferring one with room, avoiding villages
-            //    that are under attack themselves.
-            var others = context.Villages
-                .Where(v => v.AccountId == task.AccountId.Value && v.Id != task.VillageId.Value)
-                .Select(v => new { v.Id, v.IsUnderAttack })
-                .ToList();
-            var otherIds = others.Select(v => v.Id).ToList();
-            var storages = context.Storages.Where(s => otherIds.Contains(s.VillageId)).ToList();
-
-            var candidates = others
-                .Select(v =>
-                {
-                    var s = storages.FirstOrDefault(x => x.VillageId == v.Id);
-                    var stockOfTarget = s is null
-                        ? new DefendResources(0, 0, 0, 0)
-                        : new DefendResources(s.Wood, s.Clay, s.Iron, s.Crop);
-                    return new DefendTargetCandidate(v.Id, stockOfTarget, s?.Warehouse ?? 0, s?.Granary ?? 0, v.IsUnderAttack);
-                })
-                .ToList();
-
-            var targetId = DefendResourceTargetRules.ChooseTarget(candidates, send, Random.Shared);
-            if (targetId is null)
-            {
-                logger.Warning("No other village to send {VillageId}'s resources to.", task.VillageId);
-                return Result.Ok();
-            }
-
-            var amounts = new Dictionary<string, long>();
-            if (send.Wood > 0) amounts["wood"] = send.Wood;
-            if (send.Clay > 0) amounts["clay"] = send.Clay;
-            if (send.Iron > 0) amounts["iron"] = send.Iron;
-            if (send.Crop > 0) amounts["crop"] = send.Crop;
-
-            var sendResult = await sendResourceCommand.HandleAsync(
-                new(task.VillageId, new VillageId(targetId.Value), amounts), token);
-            if (sendResult.IsFailed) return Abort(pauseToken, sendResult.Errors, logger);
+            // 3) Donate all of it to the alliance's Recruitment bonus. The command caps each resource at
+            //    the page's own maximum (= this village's stock) and at the daily limit; anything it
+            //    cannot donate stays in the village.
+            var donateResult = await donateAllianceBonusCommand.HandleAsync(
+                new(task.VillageId, stock.Wood, stock.Clay, stock.Iron, stock.Crop, DonationTimeoutSeconds), token);
+            if (donateResult.IsFailed) return Abort(pauseToken, donateResult.Errors, logger);
 
             logger.Information(
-                "Defend done for {VillageId}: trained {Trained} troop(s), sent {Plan} to village {Target}.",
-                task.VillageId, trained,
-                string.Join(", ", amounts.Select(x => $"{x.Key}={x.Value}")), targetId.Value);
+                "Defend done for {VillageId}: trained {Trained} troop(s), donated {Donated} of {Stock} resources to the alliance Recruitment bonus{Note}.",
+                task.VillageId, trained, donateResult.Value, stock.Total,
+                donateResult.Value >= stock.Total ? "" : " (the rest stays in the village)");
 
             return Result.Ok();
         }
