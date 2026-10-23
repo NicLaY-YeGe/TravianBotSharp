@@ -54,6 +54,9 @@ namespace MainCore.Tasks
         // The 2026-09-27 version hung 180 s here.
         private const int DonationTimeoutSeconds = 60;
 
+        // Amount passed for a resource whose value could not be read (the donation command caps it at the page maximum).
+        private const long AskForAllAmount = 1_000_000_000;
+
         // Seconds kept free before impact when Dodge is off.
         private const int ReserveBeforeImpactSeconds = 15;
 
@@ -208,11 +211,29 @@ namespace MainCore.Tasks
 
             // 2) Whatever is left, read live off the page we are on (the resource bar is on every
             //    in-game page) instead of tracking what training consumed.
-            var stock = new DefendResources(
+            // 2026-10-23 live log: Wood came back as -1 on BOTH defends (clay/iron/crop were fine), so
+            // ~3.8k wood stayed in the village and the log said "donated 11465 of 11464". The parser
+            // returns -1 when it cannot read a value. An unreadable value is therefore asked for as
+            // "all" (AskForAllAmount): the donation command caps every resource at the alliance page's own
+            // maximum, which is the real stock, so nothing can be over-donated.
+            var rawStock = new[]
+            {
                 StorageParser.GetWood(browser.Html),
                 StorageParser.GetClay(browser.Html),
                 StorageParser.GetIron(browser.Html),
-                StorageParser.GetCrop(browser.Html));
+                StorageParser.GetCrop(browser.Html),
+            };
+            var unreadable = rawStock.Count(x => x < 0);
+            if (unreadable > 0)
+            {
+                logger.Warning("Defend in {VillageId}: {Count} resource value(s) could not be read from the page ({Values}), donating those as 'all' (capped by the alliance page).",
+                    task.VillageId, unreadable, string.Join("/", rawStock));
+            }
+            var stock = new DefendResources(
+                rawStock[0] < 0 ? AskForAllAmount : rawStock[0],
+                rawStock[1] < 0 ? AskForAllAmount : rawStock[1],
+                rawStock[2] < 0 ? AskForAllAmount : rawStock[2],
+                rawStock[3] < 0 ? AskForAllAmount : rawStock[3]);
             if (stock.Total <= 0)
             {
                 logger.Information("Nothing left to donate in {VillageId} (trained {Trained}).", task.VillageId, trained);
@@ -227,9 +248,9 @@ namespace MainCore.Tasks
             if (donateResult.IsFailed) return Abort(pauseToken, donateResult.Errors, logger);
 
             logger.Information(
-                "Defend done for {VillageId}: trained {Trained} troop(s), donated {Donated} of {Stock} resources to the alliance Recruitment bonus{Note}.",
-                task.VillageId, trained, donateResult.Value, stock.Total,
-                donateResult.Value >= stock.Total ? "" : " (the rest stays in the village)");
+                "Defend done for {VillageId}: trained {Trained} troop(s), donated {Donated} resources to the alliance Recruitment bonus{Note}.",
+                task.VillageId, trained, donateResult.Value,
+                unreadable > 0 || donateResult.Value >= stock.Total ? "" : " (the rest stays in the village)");
 
             return Result.Ok();
         }
