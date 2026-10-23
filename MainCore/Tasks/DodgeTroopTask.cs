@@ -126,13 +126,22 @@ namespace MainCore.Tasks
                 return overviewResult;
             }
 
-            var attackSeconds = RallyPointOverviewParser.GetIncomingAttackSeconds(browser.Html);
+            // 2026-10-23: attacks are always dodged; raids only when DodgeRaidEnable is on.
+            var dodgeRaids = context.BooleanByName(task.VillageId, VillageSettingEnums.DodgeRaidEnable);
+            var movements = RallyPointOverviewParser.GetIncomingMovements(browser.Html);
+            var relevant = movements
+                .Where(x => dodgeRaids || x.Kind == RallyPointOverviewParser.IncomingKind.Attack)
+                .OrderBy(x => x.Seconds)
+                .FirstOrDefault();
+            int? attackSeconds = relevant?.Seconds;
             var impactAt = DateTime.Now.AddSeconds(attackSeconds ?? 0);
             if (attackSeconds is null)
             {
-                // No incoming attack showing right now (already landed, already dodged, or
-                // the IsUnderAttack flag was stale) - nothing to do this pass.
+                // Nothing to dodge showing right now (already landed, already dodged, only a raid
+                // while raid dodge is off, or the IsUnderAttack flag was stale). Say which, instead
+                // of skipping silently (2026-10-22 log: 14 silent skips).
                 AttackWakeWindow.ReleaseReservation(task.AccountId, task.VillageId);
+                await IncomingMovementDiagnostics.ReportNothingToDoAsync(browser, logger, task.VillageId, "Dodge", movements);
                 return Skip.Error;
             }
 
@@ -156,8 +165,8 @@ namespace MainCore.Tasks
             {
                 task.ExecuteAt = DateTime.Now.AddSeconds(secondsUntilSend);
                 AttackWakeWindow.Apply(context, taskManager, task.AccountId, task.ExecuteAt, DateTime.Now.AddSeconds(attackSeconds.Value), task.SetWakeWindow, logger);
-                logger.Information("Incoming attack on {VillageId} lands in {Seconds}s - will send dodge troops in {SendIn}s.",
-                    task.VillageId, attackSeconds.Value, secondsUntilSend);
+                logger.Information("Incoming {Kind} on {VillageId} lands in {Seconds}s - will send dodge troops in {SendIn}s.",
+                    relevant!.Kind.ToString().ToLowerInvariant(), task.VillageId, attackSeconds.Value, secondsUntilSend);
                 return Result.Ok();
             }
 

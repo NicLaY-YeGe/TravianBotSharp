@@ -279,5 +279,10 @@
         // Recruitment) and the 60s deadline are fixed by explicit user choice, not
         // per-village-configurable. See DefendDonateTask.
         DefendDonateEnable,
+
+        // 2026-10-23: also dodge incoming RAIDS (Rally Point class "inRaid", "X raids Y"). Off by
+        // default: raids are frequent and low-risk, attacks are always dodged. Defend (train +
+        // donate) reacts to both attacks and raids. Appended last so existing numbering is unchanged.
+        DodgeRaidEnable,
     }
 }

@@ -32,7 +32,7 @@ namespace MainCore.Tasks
             {
             }
 
-            protected override string TaskName => "Defend: train + send resources away";
+            protected override string TaskName => "Defend: train + donate";
 
             public override bool CanStart(AppDbContext context)
             {
@@ -84,10 +84,10 @@ namespace MainCore.Tasks
         }
 
         // Seconds the sequence may use: it has to be over before Dodge's send moment.
-        private static int GetBudgetSeconds(AppDbContext context, VillageId villageId, int attackSeconds)
+        private static int GetBudgetSeconds(AppDbContext context, VillageId villageId, int attackSeconds, bool dodgeWillRun)
         {
             var reserve = ReserveBeforeImpactSeconds;
-            if (context.BooleanByName(villageId, VillageSettingEnums.DodgeEnable))
+            if (dodgeWillRun)
             {
                 var dodgeLead = context.ByName(villageId, VillageSettingEnums.DodgeSendSecondsBeforeImpact);
                 if (dodgeLead <= 0) dodgeLead = 30;
@@ -117,14 +117,19 @@ namespace MainCore.Tasks
                 return overviewResult;
             }
 
-            var attackSeconds = RallyPointOverviewParser.GetIncomingAttackSeconds(browser.Html);
-            if (attackSeconds is null)
+            // 2026-10-23: Defend reacts to attacks AND raids (both hit the stock and the garrison).
+            var movements = RallyPointOverviewParser.GetIncomingMovements(browser.Html);
+            var first = movements.OrderBy(x => x.Seconds).FirstOrDefault();
+            if (first is null)
             {
-                // No incoming attack showing right now (already landed, resolved, or the
+                // No incoming attack or raid showing right now (already landed, resolved, or the
                 // IsUnderAttack flag was stale) - nothing to do, and nothing marked as handled.
+                // Logged instead of skipping silently (2026-10-22 log: 14 silent skips).
                 AttackWakeWindow.ReleaseReservation(task.AccountId, task.VillageId);
+                await IncomingMovementDiagnostics.ReportNothingToDoAsync(browser, logger, task.VillageId, "Defend", movements);
                 return Skip.Error;
             }
+            var attackSeconds = (int?)first.Seconds;
 
             // 2026-10-19: the 3-5 minutes before impact belong to the defensive tasks.
             AttackWakeWindow.Reserve(task.AccountId, task.VillageId, attackSeconds.Value, logger);
@@ -133,18 +138,22 @@ namespace MainCore.Tasks
             var now = DateTime.Now;
             DefendAttackMemory.MarkHandled(task.VillageId.Value, now.AddSeconds(attackSeconds.Value + HandledGraceSeconds), now);
 
-            var budgetSeconds = GetBudgetSeconds(context, task.VillageId, attackSeconds.Value);
+            // Dodge only holds its send moment for this movement if it will actually react to it.
+            var dodgeWillRun = context.BooleanByName(task.VillageId, VillageSettingEnums.DodgeEnable)
+                && (first.Kind == RallyPointOverviewParser.IncomingKind.Attack
+                    || context.BooleanByName(task.VillageId, VillageSettingEnums.DodgeRaidEnable));
+            var budgetSeconds = GetBudgetSeconds(context, task.VillageId, attackSeconds.Value, dodgeWillRun);
             if (budgetSeconds < MinimumActionTimeSeconds)
             {
                 logger.Warning(
-                    "Incoming attack on {VillageId} lands in {Seconds}s - only {Budget}s would be left before Dodge, skipping defend so Dodge is not blocked.",
-                    task.VillageId, attackSeconds.Value, budgetSeconds);
+                    "Incoming {Kind} on {VillageId} lands in {Seconds}s - only {Budget}s would be left before Dodge, skipping defend so Dodge is not blocked.",
+                    first.Kind.ToString().ToLowerInvariant(), task.VillageId, attackSeconds.Value, budgetSeconds);
                 return Skip.Error;
             }
 
             logger.Information(
-                "Incoming attack on {VillageId} lands in {Seconds}s - defending now (budget {Budget}s, once for this attack).",
-                task.VillageId, attackSeconds.Value, budgetSeconds);
+                "Incoming {Kind} on {VillageId} lands in {Seconds}s - defending now (budget {Budget}s, once for this movement).",
+                first.Kind.ToString().ToLowerInvariant(), task.VillageId, attackSeconds.Value, budgetSeconds);
 
             using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             budget.CancelAfter(TimeSpan.FromSeconds(budgetSeconds));
