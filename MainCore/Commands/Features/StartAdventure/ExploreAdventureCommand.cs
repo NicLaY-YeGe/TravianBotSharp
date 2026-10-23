@@ -20,7 +20,7 @@ namespace MainCore.Commands.Features.StartAdventure
 
             logger.Information("Start adventure {Adventure}", AdventureParser.GetAdventureInfo(adventureButton));
 
-            var (_, isFailed, element, errors) = await browser.GetElement(By.XPath(adventureButton.XPath), cancellationToken);
+            var (_, isFailed, element, errors) = await browser.GetElement(By.XPath(adventureButton.StableXPath()), cancellationToken);
             if (isFailed) return Result.Fail(errors).WithError($"Failed to find adventure button [{adventureButton.XPath}]");
 
             var result = await browser.Click(element, cancellationToken);

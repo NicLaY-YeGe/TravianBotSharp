@@ -72,6 +72,7 @@ namespace WPFUI.Views.Tabs.Villages
 
                 this.Bind(ViewModel, vm => vm.VillageSettingInput.DodgeEnable, v => v.DodgeEnable.IsChecked).DisposeWith(d);
                 this.Bind(ViewModel, vm => vm.VillageSettingInput.DefendDonateEnable, v => v.DefendDonateEnable.IsChecked).DisposeWith(d);
+                this.Bind(ViewModel, vm => vm.VillageSettingInput.DodgeRaidEnable, v => v.DodgeRaidEnable.IsChecked).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.DodgeTroopSlots.Items, v => v.DodgeTroopItems.ItemsSource).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.DodgeTargetX, v => v.DodgeTargetX.ViewModel).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.DodgeTargetY, v => v.DodgeTargetY.ViewModel).DisposeWith(d);
