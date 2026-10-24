@@ -47,6 +47,7 @@ namespace MainCore.Tasks
             IChromeBrowser browser,
             ToSurroundingReportPageCommand.Handler toSurroundingReportPageCommand,
             ToMapTileCommand.Handler toMapTileCommand,
+            CloseTileDialogCommand.Handler closeTileDialogCommand,
             ToSendTroopsPageCommand.Handler toSendTroopsPageCommand,
             SendTroopsCommand.Handler sendTroopsCommand,
             GetHeroAttackPowerCommand.Handler getHeroAttackPowerCommand,
@@ -93,10 +94,15 @@ namespace MainCore.Tasks
                 if (!OasisTileParser.IsUnoccupiedOasis(browser.Html))
                 {
                     logger.Information("Oasis scout: ({X}|{Y}) is no longer an unoccupied oasis - skipping.", x, y);
+                    await closeTileDialogCommand.HandleAsync(new(), cancellationToken);
                     continue;
                 }
 
                 var animals = OasisTileParser.GetAnimals(browser.Html);
+
+                // 2026-10-24: everything needed from the tile dialog is read; close it so it cannot cover
+                // the navigation bar for the next step (see CloseTileDialogCommand).
+                await closeTileDialogCommand.HandleAsync(new(), cancellationToken);
 
                 if (animals.Count == 0)
                 {
@@ -170,6 +176,9 @@ namespace MainCore.Tasks
             return Result.Ok();
         }
 
+        // Own time limit for opening the Send troops page (ToDorf + building + tab switch normally ~3 s).
+        private const int NavigationTimeoutSeconds = 45;
+
         // Pre-checks troop/hero availability against the currently loaded Send Troops page
         // BEFORE calling SendTroopsCommand, same as RaidListTask does - SendTroopsCommand's
         // own internal availability check returns a generic Retry-class error (shared with
@@ -185,8 +194,28 @@ namespace MainCore.Tasks
             IChromeBrowser browser,
             CancellationToken cancellationToken)
         {
-            var toPageResult = await toSendTroopsPageCommand.HandleAsync(new(villageId), cancellationToken);
-            if (toPageResult.IsFailed) return toPageResult;
+            // 2026-10-24: the navigation used to wait up to 180 s per element (about 20 stalls of 3-9 minutes in
+            // one 8 h log). A send is routine work, so it gets its own limit and is skipped when it is exceeded.
+            using var navigationCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            navigationCts.CancelAfter(TimeSpan.FromSeconds(NavigationTimeoutSeconds));
+            Result toPageResult;
+            try
+            {
+                toPageResult = await toSendTroopsPageCommand.HandleAsync(new(villageId), navigationCts.Token);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                return Skip.Error.WithError($"village {villageId}: opening the Send troops page took longer than {NavigationTimeoutSeconds}s");
+            }
+
+            if (toPageResult.IsFailed)
+            {
+                if (navigationCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+                {
+                    return Skip.Error.WithError($"village {villageId}: opening the Send troops page took longer than {NavigationTimeoutSeconds}s");
+                }
+                return toPageResult;
+            }
 
             foreach (var (slot, amount) in troopAmounts)
             {

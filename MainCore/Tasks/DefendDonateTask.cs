@@ -2,6 +2,7 @@ using MainCore.Commands.Features.DefendDonate;
 using MainCore.Commands.Features.DodgeTroop;
 using MainCore.Enums;
 using MainCore.Parsers;
+using MainCore.Services;
 using MainCore.Tasks.Base;
 
 namespace MainCore.Tasks
@@ -34,6 +35,17 @@ namespace MainCore.Tasks
 
             protected override string TaskName => "Defend: train + donate";
 
+            // 2026-10-24: two passes per movement. Pass 1 runs when the movement is first seen (possibly
+            // hours before impact); pass 2 is the SAME task instance rescheduled to SecondPassLeadSeconds
+            // before impact (Dodge's self-reschedule pattern), so what was produced meanwhile is spent too.
+            public int Pass { get; private set; } = 1;
+
+            public void ScheduleSecondPass(DateTime executeAt)
+            {
+                Pass = 2;
+                ExecuteAt = executeAt;
+            }
+
             public override bool CanStart(AppDbContext context)
             {
                 var enabled = context.BooleanByName(VillageId, VillageSettingEnums.DefendDonateEnable);
@@ -53,6 +65,16 @@ namespace MainCore.Tasks
         // Own cap for the donation step (it is the last step, so it can only ever eat its own time).
         // The 2026-09-27 version hung 180 s here.
         private const int DonationTimeoutSeconds = 60;
+
+        // Pass 2 starts this long before impact (user decision 2026-10-24: 15 minutes).
+        private const int SecondPassLeadSeconds = 15 * 60;
+
+        // Pass 2 is only scheduled if it would start at least this long after pass 1 ends.
+        private const int SecondPassMinGapSeconds = 60;
+
+        // Unreadable-resource page dump: at most once per this long (the cause is not known yet).
+        private static readonly TimeSpan UnreadableDumpInterval = TimeSpan.FromMinutes(60);
+        private static DateTime _lastUnreadableDump = DateTime.MinValue;
 
         // Amount passed for a resource whose value could not be read (the donation command caps it at the page maximum).
         private const long AskForAllAmount = 1_000_000_000;
@@ -140,6 +162,7 @@ namespace MainCore.Tasks
             // From here on this attack is handled - success, failure or skip alike.
             var now = DateTime.Now;
             DefendAttackMemory.MarkHandled(task.VillageId.Value, now.AddSeconds(attackSeconds.Value + HandledGraceSeconds), now);
+            var impactAt = now.AddSeconds(attackSeconds.Value);
 
             // Dodge only holds its send moment for this movement if it will actually react to it.
             var dodgeWillRun = context.BooleanByName(task.VillageId, VillageSettingEnums.DodgeEnable)
@@ -155,15 +178,16 @@ namespace MainCore.Tasks
             }
 
             logger.Information(
-                "Incoming {Kind} on {VillageId} lands in {Seconds}s - defending now (budget {Budget}s, once for this movement).",
-                first.Kind.ToString().ToLowerInvariant(), task.VillageId, attackSeconds.Value, budgetSeconds);
+                "Incoming {Kind} on {VillageId} lands in {Seconds}s - defending now (pass {Pass}, budget {Budget}s).",
+                first.Kind.ToString().ToLowerInvariant(), task.VillageId, attackSeconds.Value, task.Pass, budgetSeconds);
 
             using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             budget.CancelAfter(TimeSpan.FromSeconds(budgetSeconds));
 
+            Result result;
             try
             {
-                return await RunAsync(
+                result = await RunAsync(
                     task, context, browser,
                     trainCheapestTroopCommand, donateAllianceBonusCommand,
                     logger, budget.Token, cancellationToken);
@@ -171,8 +195,27 @@ namespace MainCore.Tasks
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
                 logger.Warning("Defend ran out of its {Budget}s budget in {VillageId}, stopping so Dodge is not blocked.", budgetSeconds, task.VillageId);
-                return Skip.Error;
+                result = Skip.Error;
             }
+
+            // A user pause must surface untouched.
+            if (cancellationToken.IsCancellationRequested) return result;
+
+            // Pass 1 done (whatever its outcome): come back SecondPassLeadSeconds before impact. The task
+            // simply stays in the queue with a new ExecuteAt (same as Dodge's wait-for-send-moment).
+            if (task.Pass == 1)
+            {
+                var secondAt = impactAt.AddSeconds(-SecondPassLeadSeconds);
+                if (secondAt > DateTime.Now.AddSeconds(SecondPassMinGapSeconds))
+                {
+                    task.ScheduleSecondPass(secondAt);
+                    logger.Information("Defend in {VillageId}: second pass (train + donate what was produced meanwhile) scheduled for {At:HH:mm:ss}, {Lead} min before impact.",
+                        task.VillageId, secondAt, SecondPassLeadSeconds / 60);
+                    return Result.Ok();
+                }
+            }
+
+            return result;
         }
 
         private static async ValueTask<Result> RunAsync(
@@ -226,8 +269,23 @@ namespace MainCore.Tasks
             var unreadable = rawStock.Count(x => x < 0);
             if (unreadable > 0)
             {
-                logger.Warning("Defend in {VillageId}: {Count} resource value(s) could not be read from the page ({Values}), donating those as 'all' (capped by the alliance page).",
-                    task.VillageId, unreadable, string.Join("/", rawStock));
+                // 2026-10-24: wood reads -1 on every defend (3 logs). Say what the node looked like, and
+                // save the page once an hour so the real cause can be seen.
+                var resourceIds = new[] { "l1", "l2", "l3", "l4" };
+                var nodeInfo = string.Join("; ", Enumerable.Range(0, 4).Where(i => rawStock[i] < 0).Select(i =>
+                {
+                    var node = browser.Html.GetElementbyId(resourceIds[i]);
+                    return node is null
+                        ? $"#{resourceIds[i]} missing"
+                        : $"#{resourceIds[i]} text='{node.InnerText.Trim()}' class='{node.GetAttributeValue("class", "")}'";
+                }));
+                logger.Warning("Defend in {VillageId}: {Count} resource value(s) could not be read from the page ({Values}; {Nodes}), donating those as 'all' (capped by the alliance page).",
+                    task.VillageId, unreadable, string.Join("/", rawStock), nodeInfo);
+                if (DateTime.Now - _lastUnreadableDump > UnreadableDumpInterval)
+                {
+                    _lastUnreadableDump = DateTime.Now;
+                    await PageDump.SaveAsync(browser, logger, $"resource-unreadable-{task.VillageId.Value}");
+                }
             }
             var stock = new DefendResources(
                 rawStock[0] < 0 ? AskForAllAmount : rawStock[0],
