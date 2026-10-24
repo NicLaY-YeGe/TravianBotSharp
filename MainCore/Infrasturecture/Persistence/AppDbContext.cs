@@ -190,6 +190,7 @@ namespace MainCore.Infrasturecture.Persistence
             {VillageSettingEnums.DodgeTroopSlot, 1 },
 
             {VillageSettingEnums.DefendDonateEnable, 0 },
+            {VillageSettingEnums.DodgeRaidEnable, 0 },
 
             {VillageSettingEnums.SmithyUpgradeEnable, 0 },
             {VillageSettingEnums.SmithyUpgradeTroopSlot, 1 },
