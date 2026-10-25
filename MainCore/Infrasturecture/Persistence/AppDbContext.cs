@@ -84,6 +84,7 @@ namespace MainCore.Infrasturecture.Persistence
             {AccountSettingEnums.ScoutAutoAttackTroop9, 0 },
             {AccountSettingEnums.ScoutAutoAttackTroop10, 0 },
             {AccountSettingEnums.EnableClaimDailyQuestReward, 1 },
+            {AccountSettingEnums.EnableAttackCheck, 1 },
         }.ToImmutableDictionary();
 
         // All 24 bits set (hour 0 .. hour 23) = no restriction, matches pre-existing behavior
@@ -190,6 +191,7 @@ namespace MainCore.Infrasturecture.Persistence
             {VillageSettingEnums.DodgeTroopSlot, 1 },
 
             {VillageSettingEnums.DefendDonateEnable, 0 },
+            {VillageSettingEnums.DodgeRaidEnable, 0 },
 
             {VillageSettingEnums.SmithyUpgradeEnable, 0 },
             {VillageSettingEnums.SmithyUpgradeTroopSlot, 1 },
