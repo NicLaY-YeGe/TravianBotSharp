@@ -14,10 +14,10 @@ namespace MainCore.Tasks
     //   - A building that could not be trained (not enough resources) or whose queue could not be
     //     read keeps the user's normal repeat time (TrainTroopRepeatTime), and the EARLIEST wait of
     //     all buildings wins - a busy Barracks never delays the retry of a starved Stable.
-    // The queue countdown is read from `table.under_progress` (TrainQueueParser); that markup has
-    // NOT been checked against a capture of an ACTIVE training queue yet. If it does not match,
-    // nothing is read and every path above falls back to the normal repeat time - i.e. the old
-    // behaviour. Waits taken from the page are capped at 3 hours (QueueDeferRules).
+    // The queue countdown is read from `table.under_progress` (TrainQueueParser); the markup was
+    // checked against a REAL active Barracks queue (2026-10-25; the timers are cumulative, the last
+    // batch's timer is the queue end). If it ever does not match, nothing is read and every path
+    // above falls back to the normal repeat time - i.e. the old behaviour. Waits taken from the page are capped at 3 hours (QueueDeferRules).
     [Handler]
     public static partial class TrainTroopTask
     {

@@ -1,3 +1,6 @@
+using HtmlAgilityPack;
+using MainCore.Parsers;
+
 namespace MainCore.Test.Parsers
 {
     public class TrainQueueParserTest
@@ -33,6 +36,25 @@ namespace MainCore.Test.Parsers
             var html = "<table class=\"under_progress\"><tr><td><span class=\"timer\" value=\"100\"></span></td></tr><tr><td><span class=\"timer\" value=\"900\"></span></td></tr></table>";
             TrainQueueParser.GetSecondsRemaining(Doc(html)).ShouldBe(100);
             TrainQueueParser.CountTimers(Doc(html)).ShouldBe(2);
+        }
+
+        [Fact]
+        public void RealBarracksCapture_QueueEndIsTheLastBatchsCumulativeTimer()
+        {
+            var doc = new HtmlDocument();
+            doc.Load("Parsers/TrainQueue/BarracksActiveQueue.html");
+
+            // batches: 419 s and 3153 s (= 419 + 5 x 547); the "Next soldier" row repeats 419 and is ignored
+            TrainQueueParser.GetSecondsRemaining(doc).ShouldBe(3153);
+            TrainQueueParser.HasQueueTable(doc).ShouldBeTrue();
+            TrainQueueParser.CountTimers(doc).ShouldBe(3);
+        }
+
+        [Fact]
+        public void DurCells_LastBatchWins_NextSoldierRowIgnored()
+        {
+            var html = "<table class=\"under_progress\"><tr><td class=\"dur\"><span class=\"timer\" value=\"100\"></span></td></tr><tr><td class=\"dur\"><span class=\"timer\" value=\"900\"></span></td></tr><tr class=\"next\"><td><span class=\"timer\" value=\"100\"></span></td></tr></table>";
+            TrainQueueParser.GetSecondsRemaining(Doc(html)).ShouldBe(900);
         }
 
         [Fact]

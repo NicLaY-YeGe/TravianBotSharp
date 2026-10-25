@@ -82,15 +82,11 @@ namespace MainCore.Tasks
             return Math.Max(0, current - thresholdAmount);
         }
 
-        // Rounds to the nearest 100 with a small random jitter (+/-3%) first, so shipment
-        // amounts don't look like they came out of exact machine math every single time.
+        // 2026-10-25, user request: shipments are multiples of one merchant's load (750), rounded
+        // DOWN (this is a surplus send - never more than asked). Was: nearest 100 with +/-3% jitter.
         private static long RoundHumanLike(double raw)
         {
-            if (raw <= 0) return 0;
-            var jitter = 1 + ((Random.Shared.NextDouble() * 0.06) - 0.03);
-            var jittered = raw * jitter;
-            var rounded = Math.Round(jittered / 100.0) * 100;
-            return (long)Math.Max(0, rounded);
+            return MerchantAmountRules.RoundDown(raw);
         }
 
         // Splits totalToSend across "resources" proportional to each one's weight (how much

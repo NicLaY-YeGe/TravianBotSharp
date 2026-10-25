@@ -4,29 +4,42 @@ namespace MainCore.Parsers
     // Stable / Workshop (training), the Trapper (traps), the Smithy (research) and the Town Hall
     // (celebration) show above their forms.
     //
-    // CHECKED against real captures: only the Smithy and Town Hall variants (see SmithyParser /
-    // TownHallParser, 2026-07/08). NOT checked: the training and trap queue - the repository has no
-    // capture of a Barracks / Stable / Trapper page with an ACTIVE queue (the fixtures are idle
-    // pages). Two things are therefore assumptions, and callers must stay safe if they are wrong:
-    //   1. the queue sits in `table.under_progress` (same class the Smithy page uses);
-    //   2. the FIRST timer in it is the batch that is running now, so its value is when the next
-    //      batch finishes. When the queue holds several batches this is NOT the end of the whole
-    //      queue - which is why TrainTroopTask only adds a batch when the queue is empty (then the
-    //      first timer IS the end), and why its waits are capped (QueueDeferRules).
-    // Timer markup also differs between captures: `value="123"` (Sept 2024 Barracks page) and
-    // `data-value="123"` (the Smithy parser's capture), so both are accepted.
+    // CHECKED against real captures: the Smithy and Town Hall variants (see SmithyParser /
+    // TownHallParser, 2026-07/08) and, since 2026-10-25, a REAL Barracks page with an active queue
+    // (fixture Parsers/TrainQueue/BarracksActiveQueue.html, two batches: 1 Swordsman 419 s, 5
+    // Swordsmen 3153 s). What that capture showed:
+    //   1. the queue is `table.under_progress`, one row per batch, the countdown is `td.dur > span.timer`;
+    //   2. the batch timers are CUMULATIVE: 3153 = 419 + 5 x 547 s, i.e. each row's timer is the time
+    //      until THAT batch is finished, so the LAST row's timer is the end of the whole queue;
+    //   3. the extra row `tr.next` ("Next soldier will be ready in <span class=timer>") repeats the
+    //      first unit's time and is not in a `td.dur` cell - it must not be taken for the queue end.
+    // GetSecondsRemaining therefore returns the largest timer found in `td.dur` cells (= the end of the
+    // whole queue); a table without `td.dur` cells (the Smithy / Town Hall variants) falls back to the
+    // first timer in the table. NOT checked: the Trapper's queue (no capture of an active one).
+    // Timer markup differs between captures: `value="123"` and `data-value="123"` (the real Barracks
+    // page carries both), so both are accepted.
     public static class TrainQueueParser
     {
         // A longer countdown than this is not a training/queue timer but a misread (30 days).
         private const int MaxPlausibleSeconds = 30 * 24 * 60 * 60;
 
-        // Seconds until the running batch finishes; null when there is no queue table or timer.
+        // Seconds until the whole queue is finished (see the header: the last batch's cumulative timer);
+        // null when there is no queue table or no readable timer.
         public static int? GetSecondsRemaining(HtmlDocument doc)
         {
             var table = doc.DocumentNode
                 .Descendants("table")
                 .FirstOrDefault(x => x.HasClass("under_progress"));
             if (table is null) return null;
+
+            var batchTimers = table.Descendants("td")
+                .Where(x => x.HasClass("dur"))
+                .SelectMany(x => x.Descendants("span").Where(s => s.HasClass("timer")))
+                .Select(GetTimerSeconds)
+                .Where(x => x is not null)
+                .Select(x => x!.Value)
+                .ToList();
+            if (batchTimers.Count > 0) return batchTimers.Max();
 
             foreach (var span in table.Descendants("span").Where(x => x.HasClass("timer")))
             {
