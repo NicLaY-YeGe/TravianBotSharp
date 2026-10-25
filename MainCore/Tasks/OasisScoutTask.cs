@@ -1,5 +1,6 @@
 using MainCore.Commands.Features.DodgeTroop;
 using MainCore.Commands.Features.OasisScout;
+using MainCore.Commands.Features.StartAdventure;
 using MainCore.Commands.Features.SyncAttack;
 using MainCore.Commands.NextExecute;
 using MainCore.Tasks.Base;
@@ -51,11 +52,48 @@ namespace MainCore.Tasks
             ToSendTroopsPageCommand.Handler toSendTroopsPageCommand,
             SendTroopsCommand.Handler sendTroopsCommand,
             GetHeroAttackPowerCommand.Handler getHeroAttackPowerCommand,
+            CheckHeroHealthCommand.Handler checkHeroHealthCommand,
             NextExecuteOasisScoutTaskCommand.Handler nextExecuteOasisScoutTaskCommand,
             ILogger logger,
             CancellationToken cancellationToken)
         {
             var villageId = task.VillageId;
+
+            // 2026-10-25, user decision: with the hero below the same minimum health the adventure uses
+            // (MinHeroHealthPercent, 0 = no restriction) Oasis scout does not run at all - no page
+            // visits, no sends - and looks again later. In the 2026-10-24 log the hero stood at 0% and
+            // every run spent 5-6 oasis tiles on sends that could only fail. The reading is shared
+            // with StartAdventureTask (HeroHealthReader), so this costs at most one hero page load
+            // per ten minutes for the whole account. A health page that cannot be read is treated as
+            // "not safe to send" for this run (never as healthy); defensive/secondary rule: it never
+            // fails the task (CLAUDE.md rule 4), only a closed browser or a user pause pass through.
+            var minHeroHealthPercent = settingService.ByName(task.AccountId, AccountSettingEnums.MinHeroHealthPercent);
+            if (minHeroHealthPercent > 0)
+            {
+                var healthResult = await HeroHealthReader.GetAsync(task.AccountId, checkHeroHealthCommand, cancellationToken);
+                if (healthResult.IsFailed)
+                {
+                    if (healthResult.HasError<BrowserClosed>() || healthResult.HasError<Cancel>())
+                    {
+                        return Result.Fail(healthResult.Errors);
+                    }
+
+                    task.ExecuteAt = DateTime.Now.AddMinutes(HeroHealthGate.FailedReadRecheckMinutes);
+                    logger.Warning(
+                        "Oasis scout: could not read the hero's health ({Error}) - not sending anything now, looking again at {Time:HH:mm}.",
+                        healthResult.Errors.FirstOrDefault()?.Message, task.ExecuteAt);
+                    return Result.Ok();
+                }
+
+                if (HeroHealthGate.IsBelowMinimum(healthResult.Value, minHeroHealthPercent))
+                {
+                    task.ExecuteAt = DateTime.Now.AddMinutes(HeroHealthGate.RecheckMinutes);
+                    logger.Information(
+                        "Oasis scout: hero health {HealthPercent}% is below the configured minimum {MinPercent}% - skipping this run, looking again at {Time:HH:mm}.",
+                        healthResult.Value, minHeroHealthPercent, task.ExecuteAt);
+                    return Result.Ok();
+                }
+            }
 
             var maxDistance = settingService.ByName(villageId, VillageSettingEnums.OasisScoutMaxDistance);
             var troopSlot = settingService.ByName(villageId, VillageSettingEnums.OasisScoutTroopSlot);
