@@ -80,6 +80,9 @@ namespace MainCore.UI.Models.Input
         private bool _defendDonateEnable;
 
         [Reactive]
+        private bool _dodgeRaidEnable;
+
+        [Reactive]
         private bool _autoSettleEnable;
 
         public AmountInputViewModel AutoSettleTargetX { get; } = new();
@@ -233,6 +236,7 @@ namespace MainCore.UI.Models.Input
             DodgeRecallSecondsAfterSend.Set(settings.GetValueOrDefault(VillageSettingEnums.DodgeRecallSecondsAfterSend));
 
             DefendDonateEnable = settings.GetValueOrDefault(VillageSettingEnums.DefendDonateEnable) == 1;
+            DodgeRaidEnable = settings.GetValueOrDefault(VillageSettingEnums.DodgeRaidEnable) == 1;
 
             AutoSettleEnable = settings.GetValueOrDefault(VillageSettingEnums.AutoSettleEnable) == 1;
             // Unset row (village never explicitly saved this) defaults to checked/enabled -
@@ -341,6 +345,7 @@ namespace MainCore.UI.Models.Input
             var dodgeRecallSecondsAfterSend = DodgeRecallSecondsAfterSend.Get();
 
             var defendDonateEnable = DefendDonateEnable ? 1 : 0;
+            var dodgeRaidEnable = DodgeRaidEnable ? 1 : 0;
 
             var autoSettleEnable = AutoSettleEnable ? 1 : 0;
             var autoApplyBuildTemplateEnable = AutoApplyBuildTemplateEnable ? 1 : 0;
@@ -442,6 +447,7 @@ namespace MainCore.UI.Models.Input
                 { VillageSettingEnums.DodgeRecallSecondsAfterSend, dodgeRecallSecondsAfterSend },
 
                 { VillageSettingEnums.DefendDonateEnable, defendDonateEnable },
+                { VillageSettingEnums.DodgeRaidEnable, dodgeRaidEnable },
 
                 { VillageSettingEnums.AutoSettleEnable, autoSettleEnable },
                 { VillageSettingEnums.AutoApplyBuildTemplateEnable, autoApplyBuildTemplateEnable },

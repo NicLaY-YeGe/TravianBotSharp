@@ -8,6 +8,9 @@
     <SelfContained>true</SelfContained>
     <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
   </PropertyGroup>
+       <PropertyGroup>
+       <PlaywrightPlatform>win</PlaywrightPlatform>
+     </PropertyGroup>
 
   <PropertyGroup>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
@@ -40,4 +43,16 @@
     </AssemblyAttribute>
   </ItemGroup>
   
-</Project>
+  <!-- 2026-10-21: Playwright'in kendi kurali surucuyu (.playwright klasoru) tek-dosya yayina
+       koymadi. Yayindan sonra dogrudan paketten kopyala. Microsoft.Playwright surumu degisirse
+       asagidaki 1.60.0'i de degistir. -->
+  <Target Name="CopyPlaywrightDriverToPublish" AfterTargets="Publish">
+    <ItemGroup>
+      <_PwNode Include="$(NuGetPackageRoot)microsoft.playwright\1.60.0\.playwright\node\win32_x64\**" />
+      <_PwPackage Include="$(NuGetPackageRoot)microsoft.playwright\1.60.0\.playwright\package\**" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_PwNode)" DestinationFiles="@(_PwNode->'$(PublishDir).playwright\node\win32_x64\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(_PwPackage)" DestinationFiles="@(_PwPackage->'$(PublishDir).playwright\package\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+  </Project>
+
