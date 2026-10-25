@@ -144,7 +144,12 @@ namespace MainCore.Tasks
                     logger.Warning("No marketplace in {VillageId}, cannot send overflow to hammer.", task.VillageId);
                     return Skip.Error.WithErrors(pageResult.Errors);
                 }
-                return Stop.Error.WithErrors(pageResult.Errors);
+                if (pageResult.HasError<Cancel>()) return pageResult;
+                // Secondary task: a page problem (e.g. "Found 0 tabs", live log 17:29) must not Stop/pause
+                // the account (CLAUDE.md rule 4). Skip, and try again in a few minutes.
+                task.ExecuteAt = DateTime.Now.AddMinutes(Random.Shared.Next(3, 6));
+                logger.Warning("Overflow to hammer in {VillageId}: could not open the send page, retrying at {Time:HH:mm}.", task.VillageId, task.ExecuteAt);
+                return Result.Ok();
             }
 
             var freeMerchants = SendResourceParser.GetFreeMerchants(browser.Html);
@@ -174,7 +179,18 @@ namespace MainCore.Tasks
             }
 
             var amounts = DistributeProportionally(overflowing, weights, maxPerResource, totalToSend);
-            if (amounts.Values.Sum() <= 0) return Skip.Error;
+            if (amounts.Values.Sum() <= 0)
+            {
+                // 2026-10-25 (live log): this was a silent Skip.Error, and UpdateStorageCommand re-adds the
+                // task after every storage update, so a village whose surplus (or the hammer's free room)
+                // is below one 750 merchant load visited the Marketplace every ~80 s for nothing.
+                // Say why, and move the task out so the re-add finds it already queued.
+                task.ExecuteAt = DateTime.Now.AddMinutes(Random.Shared.Next(20, 31));
+                logger.Information(
+                    "Overflow to hammer in {VillageId}: nothing worth sending (surplus or the hammer's free room is below one merchant load), next look at {Time:HH:mm}.",
+                    task.VillageId, task.ExecuteAt);
+                return Result.Ok();
+            }
 
             var sendResult = await sendResourceCommand.HandleAsync(new(task.VillageId, hammerVillageId.Value, amounts), cancellationToken);
             // SendResourceCommand already classifies its failures (Skip for form problems, Cancel for

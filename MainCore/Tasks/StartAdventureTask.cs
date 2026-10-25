@@ -63,7 +63,19 @@ namespace MainCore.Tasks
             result = await toAdventurePageCommand.HandleAsync(new(), cancellationToken);
             if (result.IsFailed) return result;
             result = await exploreAdventureCommand.HandleAsync(new(), cancellationToken);
-            if (result.IsFailed) return result;
+            if (result.IsFailed)
+            {
+                // 2026-10-25 (live log 14:17 and 16:56): "No adventure available" is a Skip with
+                // ExecuteAt unchanged, which TimerManager answers by REMOVING the task - adventures
+                // then never came back. Keep the task and look again later (CLAUDE.md rule 16).
+                if (result.HasError<Skip>())
+                {
+                    task.ExecuteAt = DateTime.Now.AddMinutes(Random.Shared.Next(20, 31));
+                    logger.Information("Start adventure: nothing to start now, looking again at {Time:HH:mm}.", task.ExecuteAt);
+                    return Result.Ok();
+                }
+                return result;
+            }
 
             await nextExecuteStartAdventureTaskCommand.HandleAsync(new(task), cancellationToken);
             return Result.Ok();
