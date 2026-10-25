@@ -65,5 +65,64 @@ namespace MainCore.Test.Parsers
             headlines.Count.ShouldBe(3);
             headlines[0].ShouldBe("Raidunoccupiedoasis(35|-5)");
         }
+
+        private const string RaidAndAttackPage = "Parsers/RallyPointOverview/IncomingRaidAndAttack.html";
+
+        // Real capture 2026-10-23: one raid ("X raids Y", table class inRaid, in 569 s) and one attack
+        // ("X attacks Y", table class inAttack, in 2364 s). The raid was missed by the old inAttack-only
+        // parser, so a village that was only raided looked flagged but had "no attack" on the page.
+        [Fact]
+        public void GetIncomingMovements_ReadsRaidAndAttack()
+        {
+            _html.Load(RaidAndAttackPage);
+
+            var movements = MainCore.Parsers.RallyPointOverviewParser.GetIncomingMovements(_html);
+
+            movements.Count.ShouldBe(2);
+            var raid = movements.Single(x => x.Kind == MainCore.Parsers.RallyPointOverviewParser.IncomingKind.Raid);
+            raid.Seconds.ShouldBe(569);
+            raid.Headline.ShouldContain("raids");
+            var attack = movements.Single(x => x.Kind == MainCore.Parsers.RallyPointOverviewParser.IncomingKind.Attack);
+            attack.Seconds.ShouldBe(2364);
+            attack.Headline.ShouldContain("attacks");
+        }
+
+        [Fact]
+        public void GetIncomingAttackSeconds_IgnoresRaids()
+        {
+            _html.Load(RaidAndAttackPage);
+
+            MainCore.Parsers.RallyPointOverviewParser.GetIncomingAttackSeconds(_html).ShouldBe(2364);
+        }
+
+        [Fact]
+        public void GetIncomingHostileSeconds_RaidsIncluded_PicksTheSoonest()
+        {
+            _html.Load(RaidAndAttackPage);
+
+            MainCore.Parsers.RallyPointOverviewParser.GetIncomingHostileSeconds(_html, includeRaids: true).ShouldBe(569);
+            MainCore.Parsers.RallyPointOverviewParser.GetIncomingHostileSeconds(_html, includeRaids: false).ShouldBe(2364);
+        }
+
+        [Fact]
+        public void OnlyARaid_HasNoIncomingAttack_ButIsStillReadAsAMovement()
+        {
+            _html.LoadHtml(
+                "<table class=\"troop_details inRaid\"><thead><tr><td class=\"troopHeadline\">Bob raids Home</td></tr></thead>" +
+                "<tbody class=\"infos\"><tr><td><span class=\"timer\" counting=\"down\" value=\"120\" data-value=\"120\">0:02:00</span></td></tr></tbody></table>");
+
+            MainCore.Parsers.RallyPointOverviewParser.GetIncomingAttackSeconds(_html).ShouldBeNull();
+            MainCore.Parsers.RallyPointOverviewParser.GetIncomingHostileSeconds(_html, includeRaids: true).ShouldBe(120);
+            MainCore.Parsers.RallyPointOverviewParser.GetIncomingMovements(_html).Count.ShouldBe(1);
+        }
+
+        [Fact]
+        public void NoMovements_ReturnsEmptyAndNull()
+        {
+            _html.LoadHtml("<div>nothing here</div>");
+
+            MainCore.Parsers.RallyPointOverviewParser.GetIncomingMovements(_html).ShouldBeEmpty();
+            MainCore.Parsers.RallyPointOverviewParser.GetIncomingHostileSeconds(_html, includeRaids: true).ShouldBeNull();
+        }
     }
 }

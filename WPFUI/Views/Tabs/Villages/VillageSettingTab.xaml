@@ -100,6 +100,7 @@
                     <StackPanel>
                         <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Dodge troops on attack" VerticalAlignment="Center" FontWeight="Bold" />
                         <CheckBox x:Name="DodgeEnable" Content="When this village is attacked, send the checked troop types out as an attack to the target below, then cancel it before it lands" />
+                        <CheckBox x:Name="DodgeRaidEnable" Content="Also dodge when the village is only being RAIDED (off = only real attacks are dodged)" />
                         <TextBlock Text="Troop types to dodge with" Margin="0,4,0,0" />
                         <ItemsControl x:Name="DodgeTroopItems">
                             <ItemsControl.ItemsPanel>
@@ -122,8 +123,8 @@
 
                 <Border Style="{DynamicResource Box}">
                     <StackPanel>
-                        <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Defend on attack (train + send resources away)" VerticalAlignment="Center" FontWeight="Bold" />
-                        <CheckBox x:Name="DefendDonateEnable" Content="When this village is attacked (once per attack, as soon as it is seen): train the cheapest troop with the stock, then send ALL remaining resources (Cranny ignored) to another of your villages - random, preferring one with free storage. Skipped if there is no marketplace or merchant; never delays Dodge" />
+                        <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Defend on attack or raid (train + donate to alliance)" VerticalAlignment="Center" FontWeight="Bold" />
+                        <CheckBox x:Name="DefendDonateEnable" Content="When this village is attacked (once per attack, as soon as it is seen): train the cheapest troop with the stock, then donate ALL remaining resources to the alliance Recruitment (troop production) bonus. Reacts to attacks and raids; the rest stays in the village if the daily donation limit is reached; never delays Dodge" />
                     </StackPanel>
                 </Border>
 
