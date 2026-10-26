@@ -150,6 +150,13 @@ namespace MainCore.Tasks
             return result;
         }
 
+        private static Result Defer(Task task, ILogger logger, string reason)
+        {
+            task.ExecuteAt = DateTime.Now.AddMinutes(Random.Shared.Next(20, 31));
+            logger.Information("Balance resources in {VillageId}: nothing to send ({Reason}), next look at {Time:HH:mm}.", task.VillageId, reason, task.ExecuteAt);
+            return Result.Ok();
+        }
+
         private static async ValueTask<Result> HandleAsync(
             Task task,
             AppDbContext context,
@@ -161,13 +168,16 @@ namespace MainCore.Tasks
             CancellationToken cancellationToken)
         {
             var overflowing = GetOverflowingResources(context, task.VillageId);
-            if (overflowing.Count == 0) return Skip.Error;
+            // 2026-10-26 (live log 2026-10-26: 9 silent "failed / Bot skip" in TS-3202): these early exits were
+            // Skip.Error with ExecuteAt unchanged and UpdateStorageCommand re-adds the task after every
+            // storage update. Now they say why and move the task out (same pattern as Overflow to hammer).
+            if (overflowing.Count == 0) return Defer(task, logger, "no resource is above the overflow percent");
 
             var targetId = GetBestTarget(context, task.AccountId, task.VillageId, overflowing);
-            if (targetId is null) return Skip.Error;
+            if (targetId is null) return Defer(task, logger, "no village has room for the surplus");
 
             var targetVillage = context.Villages.FirstOrDefault(x => x.Id == targetId.Value.Value);
-            if (targetVillage is null) return Skip.Error;
+            if (targetVillage is null) return Defer(task, logger, "the target village was not found");
 
             var pageResult = await toSendResourcePageCommand.HandleAsync(new(task.VillageId), cancellationToken);
             if (pageResult.IsFailed)
@@ -181,7 +191,11 @@ namespace MainCore.Tasks
                     logger.Warning("No marketplace in this village, disabling auto balance.");
                     return Skip.Error.WithErrors(pageResult.Errors);
                 }
-                return Stop.Error.WithErrors(pageResult.Errors);
+                if (pageResult.HasError<Cancel>()) return pageResult;
+                // Secondary task: a page problem must not Stop/pause the account (CLAUDE.md rule 4).
+                task.ExecuteAt = DateTime.Now.AddMinutes(Random.Shared.Next(3, 6));
+                logger.Warning("Balance resources in {VillageId}: could not open the send page, retrying at {Time:HH:mm}.", task.VillageId, task.ExecuteAt);
+                return Result.Ok();
             }
 
             var freeMerchants = SendResourceParser.GetFreeMerchants(browser.Html);
@@ -212,7 +226,7 @@ namespace MainCore.Tasks
             }
 
             var amounts = DistributeProportionally(overflowing, weights, maxPerResource, totalToSend);
-            if (amounts.Values.Sum() <= 0) return Skip.Error;
+            if (amounts.Values.Sum() <= 0) return Defer(task, logger, "the surplus or the target's free room is below one merchant load");
 
             var sendResult = await sendResourceCommand.HandleAsync(new(task.VillageId, targetId.Value, amounts), cancellationToken);
             // SendResourceCommand already classifies its failures (Skip for form problems, Cancel for

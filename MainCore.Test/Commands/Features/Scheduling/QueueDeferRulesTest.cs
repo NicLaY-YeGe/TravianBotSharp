@@ -105,5 +105,38 @@ namespace MainCore.Test.Commands.Features.Scheduling
             QueueDeferRules.NextTrainSeconds(new List<int?> { 20 * 3600 }, 600, new Random(1))
                 .ShouldBe(QueueDeferRules.UncheckedQueueCapSeconds);
         }
+
+        [Fact]
+        public void NextBuildingSeconds_Trained_ShortQueueDoesNotBeatTheInterval()
+        {
+            // queue ends in 90 s, the building's own interval is 30 min: no visit before the interval.
+            QueueDeferRules.NextBuildingSeconds(true, 90, 1800, new Random(1)).ShouldBe(1800);
+        }
+
+        [Fact]
+        public void NextBuildingSeconds_Trained_LongQueueWinsOverTheInterval()
+        {
+            var value = QueueDeferRules.NextBuildingSeconds(true, 7200, 1800, new Random(1));
+            (value >= 7230 && value <= 7260).ShouldBeTrue();
+        }
+
+        [Fact]
+        public void NextBuildingSeconds_Trained_UnreadableQueueUsesTheInterval()
+        {
+            QueueDeferRules.NextBuildingSeconds(true, null, 1800, new Random(1)).ShouldBe(1800);
+        }
+
+        [Fact]
+        public void NextBuildingSeconds_Busy_UsesQueueEndPlusBuffer()
+        {
+            var value = QueueDeferRules.NextBuildingSeconds(false, 600, 1800, new Random(1));
+            (value >= 630 && value <= 660).ShouldBeTrue();
+        }
+
+        [Fact]
+        public void NextBuildingSeconds_Starved_UsesTheInterval()
+        {
+            QueueDeferRules.NextBuildingSeconds(false, null, 1800, new Random(1)).ShouldBe(1800);
+        }
     }
 }

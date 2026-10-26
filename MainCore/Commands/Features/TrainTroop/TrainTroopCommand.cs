@@ -58,6 +58,16 @@ namespace MainCore.Commands.Features.TrainTroop
             {BuildingEnums.Workshop, (VillageSettingEnums.WorkshopAmountMin,VillageSettingEnums.WorkshopAmountMax ) },
         };
 
+        // 2026-10-26: per-building "not again before" interval in minutes (0/0 = use TrainTroopRepeatTimeMin/Max).
+        public static Dictionary<BuildingEnums, (VillageSettingEnums, VillageSettingEnums)> RepeatSettings { get; } = new()
+        {
+            {BuildingEnums.Barracks, (VillageSettingEnums.BarrackRepeatTimeMin,VillageSettingEnums.BarrackRepeatTimeMax ) },
+            {BuildingEnums.Stable, (VillageSettingEnums.StableRepeatTimeMin,VillageSettingEnums.StableRepeatTimeMax ) },
+            {BuildingEnums.GreatBarracks, (VillageSettingEnums.GreatBarrackRepeatTimeMin,VillageSettingEnums.GreatBarrackRepeatTimeMax ) },
+            {BuildingEnums.GreatStable, (VillageSettingEnums.GreatStableRepeatTimeMin,VillageSettingEnums.GreatStableRepeatTimeMax ) },
+            {BuildingEnums.Workshop, (VillageSettingEnums.WorkshopRepeatTimeMin,VillageSettingEnums.WorkshopRepeatTimeMax ) },
+        };
+
         private static async ValueTask<Result> TrainTroop(
             IChromeBrowser browser,
             TroopEnums troop,

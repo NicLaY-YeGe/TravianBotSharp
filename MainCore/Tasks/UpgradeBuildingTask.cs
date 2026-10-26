@@ -1,4 +1,5 @@
-﻿using MainCore.Commands.Features.UpgradeBuilding;
+﻿using MainCore.Commands.Features.Scheduling;
+using MainCore.Commands.Features.UpgradeBuilding;
 using MainCore.Tasks.Base;
 
 namespace MainCore.Tasks
@@ -48,6 +49,8 @@ namespace MainCore.Tasks
                         task.ExecuteAt = nextExecuteErrors.Select(x => x.NextExecute).Min();
                     }
 
+                    // Nothing (buildable) is waiting for resources: troops may use them again.
+                    ConstructionHold.Clear(task.VillageId);
                     return Skip.Error.WithErrors(errors);
                 }
 
@@ -89,6 +92,8 @@ namespace MainCore.Tasks
                     {
                         var time = UpgradeParser.GetTimeWhenEnoughResource(browser.Html, plan.Type);
                         task.ExecuteAt = DateTime.Now.Add(time);
+                        // "Construction first" village setting: troops of this village wait until then.
+                        ConstructionHold.Set(task.VillageId, task.ExecuteAt);
                         return Skip.Error.WithErrors(result.Errors);
                     }
 
@@ -99,6 +104,7 @@ namespace MainCore.Tasks
                 if (result.IsFailed) return result;
 
                 logger.Information("Upgrade for {Type} at location {Location} completed successfully.", plan.Type, plan.Location);
+                ConstructionHold.Clear(task.VillageId);
 
                 result = await updateBuildingCommand.HandleAsync(new(task.VillageId), cancellationToken);
                 if (result.IsFailed) return result;

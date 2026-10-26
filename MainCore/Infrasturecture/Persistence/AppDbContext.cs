@@ -192,6 +192,17 @@ namespace MainCore.Infrasturecture.Persistence
 
             {VillageSettingEnums.DefendDonateEnable, 0 },
             {VillageSettingEnums.DodgeRaidEnable, 0 },
+            {VillageSettingEnums.ConstructionFirst, 0 },
+            {VillageSettingEnums.BarrackRepeatTimeMin, 0 },
+            {VillageSettingEnums.BarrackRepeatTimeMax, 0 },
+            {VillageSettingEnums.StableRepeatTimeMin, 0 },
+            {VillageSettingEnums.StableRepeatTimeMax, 0 },
+            {VillageSettingEnums.GreatBarrackRepeatTimeMin, 0 },
+            {VillageSettingEnums.GreatBarrackRepeatTimeMax, 0 },
+            {VillageSettingEnums.GreatStableRepeatTimeMin, 0 },
+            {VillageSettingEnums.GreatStableRepeatTimeMax, 0 },
+            {VillageSettingEnums.WorkshopRepeatTimeMin, 0 },
+            {VillageSettingEnums.WorkshopRepeatTimeMax, 0 },
 
             {VillageSettingEnums.SmithyUpgradeEnable, 0 },
             {VillageSettingEnums.SmithyUpgradeTroopSlot, 1 },

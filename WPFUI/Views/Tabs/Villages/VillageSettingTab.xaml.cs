@@ -43,6 +43,12 @@ namespace WPFUI.Views.Tabs.Villages
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.GreatStableAmount, v => v.GreatStableAmount.ViewModel).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.WorkshopTroop, v => v.WorkshopTroop.ViewModel).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.WorkshopAmount, v => v.WorkshopAmount.ViewModel).DisposeWith(d);
+                this.Bind(ViewModel, vm => vm.VillageSettingInput.ConstructionFirst, v => v.ConstructionFirst.IsChecked).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.BarrackRepeatTime, v => v.BarrackRepeatTime.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.StableRepeatTime, v => v.StableRepeatTime.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.GreatBarrackRepeatTime, v => v.GreatBarrackRepeatTime.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.GreatStableRepeatTime, v => v.GreatStableRepeatTime.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.WorkshopRepeatTime, v => v.WorkshopRepeatTime.ViewModel).DisposeWith(d);
 
                 this.Bind(ViewModel, vm => vm.VillageSettingInput.TrapEnable, v => v.TrapEnable.IsChecked).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.TrapRepeatTime, v => v.TrapRepeatTime.ViewModel).DisposeWith(d);

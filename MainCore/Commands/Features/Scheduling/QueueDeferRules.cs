@@ -76,7 +76,23 @@ namespace MainCore.Commands.Features.Scheduling
             return normalRepeatSeconds;
         }
 
-        // Troop training: one entry per building that was looked at - the seconds left on its running
+        // 2026-10-26: troop training, per building. `intervalSeconds` is that building's own "not again
+        // before" time (a random pick from its setting). A batch that was just trained: the visit is at
+        // the queue end (+ buffer) but NEVER earlier than the interval; a queue end that could not be
+        // read means the interval alone. A building whose queue was still running (nothing trained):
+        // its queue end + buffer. A building that could not be trained (resources): the interval.
+        public static int NextBuildingSeconds(bool trainedNow, int? queueSecondsRemaining, int intervalSeconds, Random random)
+        {
+            var interval = Math.Max(0, intervalSeconds);
+            var queueWait = queueSecondsRemaining is > 0
+                ? BufferedSecondsCapped(queueSecondsRemaining.Value, random)
+                : (int?)null;
+
+            if (trainedNow) return Math.Max(interval, queueWait ?? 0);
+            return queueWait ?? interval;
+        }
+
+        // Troop training (before 2026-10-26, no longer used by the task): one entry per building that was looked at - the seconds left on its running
         // queue, or null when nothing is known (not enough resources, queue unreadable). A building
         // with a known queue is revisited at that end (+ buffer, capped); a building with nothing known
         // keeps the user's normal repeat time. The EARLIEST of them wins, so a busy Barracks never
