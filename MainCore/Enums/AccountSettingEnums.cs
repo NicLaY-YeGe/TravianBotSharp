@@ -161,5 +161,11 @@
         // 2026-10-06, user request: ClaimDailyQuestRewardTask collects the Daily Quests rewards.
         // Default ON (harmless, free rewards). Appended at the end on purpose.
         EnableClaimDailyQuestReward,
+
+        // 2026-10-25, user request: AttackCheckTask looks at the village list every 4-6 minutes
+        // (random) so an incoming attack is found even when the per-village auto refresh is off.
+        // Default ON (it only reloads the village overview and starts the existing Dodge/Defend
+        // chain; with it off nothing changes). Appended at the end on purpose.
+        EnableAttackCheck,
     }
 }

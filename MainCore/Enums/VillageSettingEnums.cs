@@ -279,5 +279,26 @@
         // Recruitment) and the 60s deadline are fixed by explicit user choice, not
         // per-village-configurable. See DefendDonateTask.
         DefendDonateEnable,
+
+        // 2026-10-23: also dodge incoming RAIDS (Rally Point class "inRaid", "X raids Y"). Off by
+        // default: raids are frequent and low-risk, attacks are always dodged. Defend (train +
+        // donate) reacts to both attacks and raids. Appended last so existing numbering is unchanged.
+        DodgeRaidEnable,
+
+        // 2026-10-26: troop training. ConstructionFirst = while a build plan waits for resources the
+        // village trains no troops (default 0 = troops first, the old behaviour). <Building>RepeatTime
+        // Min/Max (minutes) = the EARLIEST the building is visited again after a batch, even if its
+        // queue ends sooner; 0/0 = use TrainTroopRepeatTimeMin/Max.
+        ConstructionFirst,
+        BarrackRepeatTimeMin,
+        BarrackRepeatTimeMax,
+        StableRepeatTimeMin,
+        StableRepeatTimeMax,
+        GreatBarrackRepeatTimeMin,
+        GreatBarrackRepeatTimeMax,
+        GreatStableRepeatTimeMin,
+        GreatStableRepeatTimeMax,
+        WorkshopRepeatTimeMin,
+        WorkshopRepeatTimeMax,
     }
 }

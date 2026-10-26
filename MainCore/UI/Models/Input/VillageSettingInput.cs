@@ -37,6 +37,14 @@ namespace MainCore.UI.Models.Input
         public RangeInputViewModel GreatBarrackAmount { get; } = new();
         public RangeInputViewModel GreatStableAmount { get; } = new();
         public RangeInputViewModel WorkshopAmount { get; } = new();
+        public RangeInputViewModel BarrackRepeatTime { get; } = new();
+        public RangeInputViewModel StableRepeatTime { get; } = new();
+        public RangeInputViewModel GreatBarrackRepeatTime { get; } = new();
+        public RangeInputViewModel GreatStableRepeatTime { get; } = new();
+        public RangeInputViewModel WorkshopRepeatTime { get; } = new();
+
+        [Reactive]
+        private bool _constructionFirst;
 
         [Reactive]
         private bool _autoNPCEnable;
@@ -78,6 +86,9 @@ namespace MainCore.UI.Models.Input
 
         [Reactive]
         private bool _defendDonateEnable;
+
+        [Reactive]
+        private bool _dodgeRaidEnable;
 
         [Reactive]
         private bool _autoSettleEnable;
@@ -206,6 +217,23 @@ namespace MainCore.UI.Models.Input
                 settings.GetValueOrDefault(VillageSettingEnums.WorkshopAmountMin),
                 settings.GetValueOrDefault(VillageSettingEnums.WorkshopAmountMax));
 
+            ConstructionFirst = settings.GetValueOrDefault(VillageSettingEnums.ConstructionFirst) == 1;
+            BarrackRepeatTime.Set(
+                settings.GetValueOrDefault(VillageSettingEnums.BarrackRepeatTimeMin),
+                settings.GetValueOrDefault(VillageSettingEnums.BarrackRepeatTimeMax));
+            StableRepeatTime.Set(
+                settings.GetValueOrDefault(VillageSettingEnums.StableRepeatTimeMin),
+                settings.GetValueOrDefault(VillageSettingEnums.StableRepeatTimeMax));
+            GreatBarrackRepeatTime.Set(
+                settings.GetValueOrDefault(VillageSettingEnums.GreatBarrackRepeatTimeMin),
+                settings.GetValueOrDefault(VillageSettingEnums.GreatBarrackRepeatTimeMax));
+            GreatStableRepeatTime.Set(
+                settings.GetValueOrDefault(VillageSettingEnums.GreatStableRepeatTimeMin),
+                settings.GetValueOrDefault(VillageSettingEnums.GreatStableRepeatTimeMax));
+            WorkshopRepeatTime.Set(
+                settings.GetValueOrDefault(VillageSettingEnums.WorkshopRepeatTimeMin),
+                settings.GetValueOrDefault(VillageSettingEnums.WorkshopRepeatTimeMax));
+
             AutoNPCEnable = settings.GetValueOrDefault(VillageSettingEnums.AutoNPCEnable) == 1;
             AutoNPCOverflow = settings.GetValueOrDefault(VillageSettingEnums.AutoNPCOverflow) == 1;
             AutoNPCReverse = settings.GetValueOrDefault(VillageSettingEnums.AutoNPCReverse) == 1;
@@ -233,6 +261,7 @@ namespace MainCore.UI.Models.Input
             DodgeRecallSecondsAfterSend.Set(settings.GetValueOrDefault(VillageSettingEnums.DodgeRecallSecondsAfterSend));
 
             DefendDonateEnable = settings.GetValueOrDefault(VillageSettingEnums.DefendDonateEnable) == 1;
+            DodgeRaidEnable = settings.GetValueOrDefault(VillageSettingEnums.DodgeRaidEnable) == 1;
 
             AutoSettleEnable = settings.GetValueOrDefault(VillageSettingEnums.AutoSettleEnable) == 1;
             // Unset row (village never explicitly saved this) defaults to checked/enabled -
@@ -318,6 +347,13 @@ namespace MainCore.UI.Models.Input
             var workshopTroop = (int)WorkshopTroop.Get();
             var (workshopAmountMin, workshopAmountMax) = WorkshopAmount.Get();
 
+            var constructionFirst = ConstructionFirst ? 1 : 0;
+            var (barrackRepeatMin, barrackRepeatMax) = BarrackRepeatTime.Get();
+            var (stableRepeatMin, stableRepeatMax) = StableRepeatTime.Get();
+            var (greatBarrackRepeatMin, greatBarrackRepeatMax) = GreatBarrackRepeatTime.Get();
+            var (greatStableRepeatMin, greatStableRepeatMax) = GreatStableRepeatTime.Get();
+            var (workshopRepeatMin, workshopRepeatMax) = WorkshopRepeatTime.Get();
+
             var autoNPCEnable = AutoNPCEnable ? 1 : 0;
             var autoNPCOverflow = AutoNPCOverflow ? 1 : 0;
             var autoNPCReverse = AutoNPCReverse ? 1 : 0;
@@ -341,6 +377,7 @@ namespace MainCore.UI.Models.Input
             var dodgeRecallSecondsAfterSend = DodgeRecallSecondsAfterSend.Get();
 
             var defendDonateEnable = DefendDonateEnable ? 1 : 0;
+            var dodgeRaidEnable = DodgeRaidEnable ? 1 : 0;
 
             var autoSettleEnable = AutoSettleEnable ? 1 : 0;
             var autoApplyBuildTemplateEnable = AutoApplyBuildTemplateEnable ? 1 : 0;
@@ -442,6 +479,18 @@ namespace MainCore.UI.Models.Input
                 { VillageSettingEnums.DodgeRecallSecondsAfterSend, dodgeRecallSecondsAfterSend },
 
                 { VillageSettingEnums.DefendDonateEnable, defendDonateEnable },
+                { VillageSettingEnums.DodgeRaidEnable, dodgeRaidEnable },
+                { VillageSettingEnums.ConstructionFirst, constructionFirst },
+                { VillageSettingEnums.BarrackRepeatTimeMin, barrackRepeatMin },
+                { VillageSettingEnums.BarrackRepeatTimeMax, barrackRepeatMax },
+                { VillageSettingEnums.StableRepeatTimeMin, stableRepeatMin },
+                { VillageSettingEnums.StableRepeatTimeMax, stableRepeatMax },
+                { VillageSettingEnums.GreatBarrackRepeatTimeMin, greatBarrackRepeatMin },
+                { VillageSettingEnums.GreatBarrackRepeatTimeMax, greatBarrackRepeatMax },
+                { VillageSettingEnums.GreatStableRepeatTimeMin, greatStableRepeatMin },
+                { VillageSettingEnums.GreatStableRepeatTimeMax, greatStableRepeatMax },
+                { VillageSettingEnums.WorkshopRepeatTimeMin, workshopRepeatMin },
+                { VillageSettingEnums.WorkshopRepeatTimeMax, workshopRepeatMax },
 
                 { VillageSettingEnums.AutoSettleEnable, autoSettleEnable },
                 { VillageSettingEnums.AutoApplyBuildTemplateEnable, autoApplyBuildTemplateEnable },

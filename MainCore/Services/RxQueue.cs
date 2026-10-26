@@ -75,6 +75,14 @@ namespace MainCore.Services
                 taskManager.Add(claimDailyQuestRewardTask);
             }
 
+            // 2026-10-25: periodic attack look-out (see AttackCheckTask) - re-armed here after every
+            // login / Restart, since TaskManager.Clear() wipes it like every other task.
+            var attackCheckTask = new AttackCheckTask.Task(accountId);
+            if (attackCheckTask.CanStart(context) && !taskManager.IsExist<AttackCheckTask.Task>(accountId))
+            {
+                taskManager.Add(attackCheckTask);
+            }
+
             var villagesSpec = new VillagesSpec(accountId);
             var villages = context.Villages
                 .WithSpecification(villagesSpec)
