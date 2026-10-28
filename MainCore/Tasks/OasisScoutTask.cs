@@ -1,5 +1,6 @@
 using MainCore.Commands.Features.DodgeTroop;
 using MainCore.Commands.Features.OasisScout;
+using MainCore.Commands.Features.StartAdventure;
 using MainCore.Commands.Features.SyncAttack;
 using MainCore.Commands.NextExecute;
 using MainCore.Tasks.Base;
@@ -47,14 +48,52 @@ namespace MainCore.Tasks
             IChromeBrowser browser,
             ToSurroundingReportPageCommand.Handler toSurroundingReportPageCommand,
             ToMapTileCommand.Handler toMapTileCommand,
+            CloseTileDialogCommand.Handler closeTileDialogCommand,
             ToSendTroopsPageCommand.Handler toSendTroopsPageCommand,
             SendTroopsCommand.Handler sendTroopsCommand,
             GetHeroAttackPowerCommand.Handler getHeroAttackPowerCommand,
+            CheckHeroHealthCommand.Handler checkHeroHealthCommand,
             NextExecuteOasisScoutTaskCommand.Handler nextExecuteOasisScoutTaskCommand,
             ILogger logger,
             CancellationToken cancellationToken)
         {
             var villageId = task.VillageId;
+
+            // 2026-10-25, user decision: with the hero below the same minimum health the adventure uses
+            // (MinHeroHealthPercent, 0 = no restriction) Oasis scout does not run at all - no page
+            // visits, no sends - and looks again later. In the 2026-10-24 log the hero stood at 0% and
+            // every run spent 5-6 oasis tiles on sends that could only fail. The reading is shared
+            // with StartAdventureTask (HeroHealthReader), so this costs at most one hero page load
+            // per ten minutes for the whole account. A health page that cannot be read is treated as
+            // "not safe to send" for this run (never as healthy); defensive/secondary rule: it never
+            // fails the task (CLAUDE.md rule 4), only a closed browser or a user pause pass through.
+            var minHeroHealthPercent = settingService.ByName(task.AccountId, AccountSettingEnums.MinHeroHealthPercent);
+            if (minHeroHealthPercent > 0)
+            {
+                var healthResult = await HeroHealthReader.GetAsync(task.AccountId, checkHeroHealthCommand, cancellationToken);
+                if (healthResult.IsFailed)
+                {
+                    if (healthResult.HasError<BrowserClosed>() || healthResult.HasError<Cancel>())
+                    {
+                        return Result.Fail(healthResult.Errors);
+                    }
+
+                    task.ExecuteAt = DateTime.Now.AddMinutes(HeroHealthGate.FailedReadRecheckMinutes);
+                    logger.Warning(
+                        "Oasis scout: could not read the hero's health ({Error}) - not sending anything now, looking again at {Time:HH:mm}.",
+                        healthResult.Errors.FirstOrDefault()?.Message, task.ExecuteAt);
+                    return Result.Ok();
+                }
+
+                if (HeroHealthGate.IsBelowMinimum(healthResult.Value, minHeroHealthPercent))
+                {
+                    task.ExecuteAt = DateTime.Now.AddMinutes(HeroHealthGate.RecheckMinutes);
+                    logger.Information(
+                        "Oasis scout: hero health {HealthPercent}% is below the configured minimum {MinPercent}% - skipping this run, looking again at {Time:HH:mm}.",
+                        healthResult.Value, minHeroHealthPercent, task.ExecuteAt);
+                    return Result.Ok();
+                }
+            }
 
             var maxDistance = settingService.ByName(villageId, VillageSettingEnums.OasisScoutMaxDistance);
             var troopSlot = settingService.ByName(villageId, VillageSettingEnums.OasisScoutTroopSlot);
@@ -93,10 +132,15 @@ namespace MainCore.Tasks
                 if (!OasisTileParser.IsUnoccupiedOasis(browser.Html))
                 {
                     logger.Information("Oasis scout: ({X}|{Y}) is no longer an unoccupied oasis - skipping.", x, y);
+                    await closeTileDialogCommand.HandleAsync(new(), cancellationToken);
                     continue;
                 }
 
                 var animals = OasisTileParser.GetAnimals(browser.Html);
+
+                // 2026-10-24: everything needed from the tile dialog is read; close it so it cannot cover
+                // the navigation bar for the next step (see CloseTileDialogCommand).
+                await closeTileDialogCommand.HandleAsync(new(), cancellationToken);
 
                 if (animals.Count == 0)
                 {
@@ -170,6 +214,9 @@ namespace MainCore.Tasks
             return Result.Ok();
         }
 
+        // Own time limit for opening the Send troops page (ToDorf + building + tab switch normally ~3 s).
+        private const int NavigationTimeoutSeconds = 45;
+
         // Pre-checks troop/hero availability against the currently loaded Send Troops page
         // BEFORE calling SendTroopsCommand, same as RaidListTask does - SendTroopsCommand's
         // own internal availability check returns a generic Retry-class error (shared with
@@ -185,8 +232,28 @@ namespace MainCore.Tasks
             IChromeBrowser browser,
             CancellationToken cancellationToken)
         {
-            var toPageResult = await toSendTroopsPageCommand.HandleAsync(new(villageId), cancellationToken);
-            if (toPageResult.IsFailed) return toPageResult;
+            // 2026-10-24: the navigation used to wait up to 180 s per element (about 20 stalls of 3-9 minutes in
+            // one 8 h log). A send is routine work, so it gets its own limit and is skipped when it is exceeded.
+            using var navigationCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            navigationCts.CancelAfter(TimeSpan.FromSeconds(NavigationTimeoutSeconds));
+            Result toPageResult;
+            try
+            {
+                toPageResult = await toSendTroopsPageCommand.HandleAsync(new(villageId), navigationCts.Token);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                return Skip.Error.WithError($"village {villageId}: opening the Send troops page took longer than {NavigationTimeoutSeconds}s");
+            }
+
+            if (toPageResult.IsFailed)
+            {
+                if (navigationCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+                {
+                    return Skip.Error.WithError($"village {villageId}: opening the Send troops page took longer than {NavigationTimeoutSeconds}s");
+                }
+                return toPageResult;
+            }
 
             foreach (var (slot, amount) in troopAmounts)
             {
@@ -210,7 +277,7 @@ namespace MainCore.Tasks
             }
 
             var sendResult = await sendTroopsCommand.HandleAsync(
-                new(villageId, x, y, RallyPointEventTypeEnums.AttackRaid, troopAmounts, Confirm: true, IncludeHero: includeHero),
+                new(villageId, x, y, RallyPointEventTypeEnums.AttackRaid, troopAmounts, Confirm: true, IncludeHero: includeHero, TimeoutSeconds: 60),
                 cancellationToken);
             if (sendResult.IsFailed) return Result.Fail(sendResult.Errors);
 

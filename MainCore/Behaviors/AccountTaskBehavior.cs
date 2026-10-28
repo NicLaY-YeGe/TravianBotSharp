@@ -29,6 +29,9 @@ namespace MainCore.Behaviors
         {
             var accountId = request.AccountId;
 
+            // 2026-10-18: moved to Playwright - the raw WebDriverException below is now
+            // BrowserException (thrown by the browser.Html / element reads when the page or
+            // browser is gone); the recovery path is unchanged.
             // 2026-08-26: a real "invalid session id" log showed the browser session dying
             // remotely (chromedriver/Chrome side) while _driver stays non-null locally, so
             // IsOpen (just a null check) doesn't catch it - the first _browser.Html read below
@@ -113,7 +116,7 @@ namespace MainCore.Behaviors
                     await _updateVillageListCommand.HandleAsync(new(accountId), cancellationToken);
                 }
             }
-            catch (WebDriverException)
+            catch (BrowserException)
             {
                 await _browser.Close();
                 return (TResponse)BrowserClosed.Error;
@@ -130,7 +133,7 @@ namespace MainCore.Behaviors
                     await _updateAdventureCommand.HandleAsync(new(accountId), cancellationToken);
                 }
             }
-            catch (WebDriverException)
+            catch (BrowserException)
             {
                 await _browser.Close();
                 return (TResponse)BrowserClosed.Error;
