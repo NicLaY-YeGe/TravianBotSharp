@@ -34,6 +34,13 @@
                 if (building is not null)
                 {
                     logger.Information("{Type} at location {Location} is at level {Level}", building.Type, building.Location, building.Level);
+
+                    // 2026-10-28 safety net (the plan is normally rejected earlier, see BuildPlanSlotRules): never click Upgrade on
+                    // a different building than the plan names.
+                    if (BuildPlanSlotRules.IsOccupiedByOtherBuilding(building.Type, building.Level, plan.Type, false))
+                    {
+                        return Skip.Error.WithError($"{plan.Type} was planned at location {plan.Location}, but it holds {building.Type} level {building.Level} - not upgrading it.");
+                    }
                 }
             }
 

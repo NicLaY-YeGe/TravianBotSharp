@@ -118,6 +118,13 @@ namespace MainCore.Tasks
             // (e.g. every candidate this run turns out empty).
             int? heroPower = null;
 
+            // 2026-10-28 (live log A_1201, 7 failures in 6 h): after the hero was sent alone to one oasis, every further animal
+            // oasis of the same run tried to send him again - opening the Send troops page (~10 s each) only to find him gone,
+            // logged as "failed - Bot skip this task" (the real reason was the second error and was never printed). Once the
+            // hero is away (sent now, or reported unavailable) the animal oases of this run are skipped without any page visit;
+            // empty oases are unaffected (they use troops).
+            var heroAway = false;
+
             foreach (var (x, y, distance) in coordinates)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -125,7 +132,7 @@ namespace MainCore.Tasks
                 var tileResult = await toMapTileCommand.HandleAsync(new(x, y), cancellationToken);
                 if (tileResult.IsFailed)
                 {
-                    logger.Warning("Oasis scout: could not open tile ({X}|{Y}) - {Error}", x, y, tileResult.Errors.FirstOrDefault()?.Message);
+                    logger.Warning("Oasis scout: could not open tile ({X}|{Y}) - {Error}", x, y, DescribeFailure(tileResult));
                     continue;
                 }
 
@@ -161,7 +168,7 @@ namespace MainCore.Tasks
                     {
                         logger.Warning(
                             "Oasis scout: sending {Amount} troops (slot {Slot}) to empty oasis ({X}|{Y}) failed - {Error}",
-                            amount, troopSlot, x, y, sendResult.Errors.FirstOrDefault()?.Message);
+                            amount, troopSlot, x, y, DescribeFailure(sendResult));
                         continue;
                     }
 
@@ -171,6 +178,12 @@ namespace MainCore.Tasks
                 }
                 else
                 {
+                    if (heroAway)
+                    {
+                        logger.Information("Oasis scout: ({X}|{Y}) has animals, but the hero is already away this run - skipping.", x, y);
+                        continue;
+                    }
+
                     if (heroPower is null)
                     {
                         var powerResult = await getHeroAttackPowerCommand.HandleAsync(new(), cancellationToken);
@@ -200,9 +213,21 @@ namespace MainCore.Tasks
 
                     if (sendResult.IsFailed)
                     {
-                        logger.Warning("Oasis scout: sending hero to ({X}|{Y}) failed - {Error}", x, y, sendResult.Errors.FirstOrDefault()?.Message);
+                        var reason = DescribeFailure(sendResult);
+                        if (reason.Contains(HeroUnavailableText, StringComparison.OrdinalIgnoreCase))
+                        {
+                            // Routine (hero out on an oasis, an adventure or another movement): remember it for the rest of the run.
+                            heroAway = true;
+                            logger.Information("Oasis scout: the hero is not at home ({X}|{Y}) - {Error}", x, y, reason);
+                        }
+                        else
+                        {
+                            logger.Warning("Oasis scout: sending hero to ({X}|{Y}) failed - {Error}", x, y, reason);
+                        }
                         continue;
                     }
+
+                    heroAway = true;
 
                     logger.Information(
                         "Oasis scout: sent hero alone to ({X}|{Y}) - estimated animal power {AnimalPower} within threshold {Threshold:F0}.",
@@ -212,6 +237,22 @@ namespace MainCore.Tasks
 
             await nextExecuteOasisScoutTaskCommand.HandleAsync(new(task), cancellationToken);
             return Result.Ok();
+        }
+
+        private const string HeroUnavailableText = "hero not available";
+
+        // The first error of a Skip/Retry result is its generic text ("Bot skip this task"); the useful reason is the
+        // error added after it, which the old log lines never showed. Generic "Bot ..." texts are dropped.
+        private static string DescribeFailure(Result result)
+        {
+            var messages = result.Errors
+                .Select(e => e.Message)
+                .Where(m => !string.IsNullOrWhiteSpace(m))
+                .Distinct()
+                .ToList();
+            var specific = messages.Where(m => !m.StartsWith("Bot ", StringComparison.Ordinal)).ToList();
+            var shown = specific.Count > 0 ? specific : messages;
+            return shown.Count == 0 ? "no reason given" : string.Join("; ", shown);
         }
 
         // Own time limit for opening the Send troops page (ToDorf + building + tab switch normally ~3 s).
@@ -272,7 +313,7 @@ namespace MainCore.Tasks
                 var heroAvailable = RallyPointSendTroopsParser.GetAvailableTroopCount(browser.Html, heroSlot);
                 if (heroAvailable < 1)
                 {
-                    return Skip.Error.WithError($"village {villageId}: hero not available (already on an adventure/other movement?)");
+                    return Skip.Error.WithError($"village {villageId}: {HeroUnavailableText} (already on an adventure/other movement?)");
                 }
             }
 
