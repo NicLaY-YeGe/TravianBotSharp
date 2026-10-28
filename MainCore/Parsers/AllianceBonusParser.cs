@@ -57,6 +57,74 @@ namespace MainCore.Parsers
             return doc.GetElementbyId("donate_green");
         }
 
+        // 2026-10-22, from two real page captures (English client). The radio inputs are plain
+        // <input type="radio"> elements followed by <label for="...">; the label is the thing a
+        // human clicks, and the input itself may be visually hidden by the game's CSS. Waiting for
+        // the INPUT to be "displayed" is the prime suspect for the 180 s hang of the 2026-09-27
+        // version, so the label is what gets clicked.
+        public static HtmlNode? GetRecruitmentBonusLabel(HtmlDocument doc)
+        {
+            return doc.DocumentNode
+                .Descendants("label")
+                .FirstOrDefault(x => x.GetAttributeValue("for", "") == "bonusTroopProductionSpeed");
+        }
+
+        // The Contribute button is never really disabled: the game only adds a "disabled" CSS
+        // class (the onclick then returns false), so clicking it while the class is present does
+        // nothing and nothing complains. It loses the class once a bonus is selected AND a valid
+        // amount is typed (checkButtonState / checkAndChange), which makes it the confirmation
+        // that both steps were accepted.
+        public static bool IsContributeEnabled(HtmlDocument doc)
+        {
+            var button = doc.GetElementbyId("donate_green");
+            return button is not null && !button.HasClass("disabled");
+        }
+
+        // The "Sum:" line under the amounts (#donateSum), e.g. "‭321‬" - the game wraps the number in
+        // invisible direction marks and may add thousands separators, so keep digits only. Seen as 321
+        // in the real capture of a filled-in form (Bonuses_Filled.html).
+        public static long GetDonateSum(HtmlDocument doc)
+        {
+            var text = doc.GetElementbyId("donateSum")?.InnerText ?? "";
+            var digits = new string(text.Where(char.IsDigit).ToArray());
+            return digits.Length == 0 ? 0 : digits.ParseLong();
+        }
+
+        // Hidden input, "1" once today's limit is used up.
+        public static bool IsDailyLimitReached(HtmlDocument doc)
+        {
+            return doc.GetElementbyId("limitReached")?.GetAttributeValue("value", "0") == "1";
+        }
+
+        public static long GetDonatedToday(HtmlDocument doc)
+        {
+            return doc.GetElementbyId("donatedToday")?.GetAttributeValue("value", "0").ParseLong() ?? 0;
+        }
+
+        // 2026-10-22, confirmed by the user's snippet taken right after a real donation of 321: the
+        // VISIBLE daily counter ("<span class="donationValueNumber">321</span>/1,650,000") goes up
+        // after a contribution. Whether the hidden #donatedToday input follows is not known, so the
+        // success check uses both. Digits only (the game wraps numbers in invisible direction marks).
+        public static long GetDonatedTodayShown(HtmlDocument doc)
+        {
+            var node = doc.DocumentNode
+                .Descendants("span")
+                .FirstOrDefault(x => x.HasClass("donationValueNumber"));
+            var digits = new string((node?.InnerText ?? "").Where(char.IsDigit).ToArray());
+            return digits.Length == 0 ? 0 : digits.ParseLong();
+        }
+
+        // Text the game writes under the form after a contribution ("Contribution successful.").
+        // Empty/null until then. NOT yet seen in a real capture of a finished donation.
+        public static string? GetDonationResponseText(HtmlDocument doc)
+        {
+            var node = doc.DocumentNode
+                .Descendants("div")
+                .FirstOrDefault(x => x.HasClass("bonus-donation-response"));
+            var text = node?.InnerText?.Trim();
+            return string.IsNullOrEmpty(text) ? null : text;
+        }
+
         // Account-wide daily contribution cap. Both values are plain hidden inputs' "value"
         // attribute (not display text), read directly - no thousands-separator parsing needed.
         public static long GetDailyLimitRemaining(HtmlDocument doc)

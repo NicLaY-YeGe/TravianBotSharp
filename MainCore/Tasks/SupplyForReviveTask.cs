@@ -160,8 +160,8 @@ namespace MainCore.Tasks
                 var raw = Math.Min(Math.Min(requested, spare), totalCapacity);
                 if (raw <= 0) continue;
 
-                var jitter = 1 + ((Random.Shared.NextDouble() * 0.06) - 0.03);
-                var amount = (long)Math.Round((raw * jitter) / 100.0) * 100;
+                // 2026-10-25: full merchant loads (multiples of 750), rounded UP while the source can spare it.
+                var amount = MerchantAmountRules.RoundUpWithin(raw, Math.Min(spare, totalCapacity));
                 if (amount > 0) amounts[resourceType] = amount;
             }
 

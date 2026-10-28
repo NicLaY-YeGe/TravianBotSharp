@@ -9,15 +9,20 @@ namespace MainCore.Behaviors
     {
         private readonly ITaskManager _taskManager;
         private readonly IChromeBrowser _browser;
+        private readonly ILogger _logger;
+
+        // Delay before a task whose page was still navigating runs again (short: Dodge/Recall are time-critical).
+        private const int TransientRetrySeconds = 10;
 
         private readonly UpdateAccountInfoCommand.Handler _updateAccountInfoCommand;
         private readonly UpdateVillageListCommand.Handler _updateVillageListCommand;
         private readonly UpdateAdventureCommand.Handler _updateAdventureCommand;
         private readonly DismissCookieConsentCommand.Handler _dismissCookieConsentCommand;
 
-        public AccountTaskBehavior(IChromeBrowser browser, ITaskManager taskManager, UpdateAccountInfoCommand.Handler updateAccountInfoCommand, UpdateVillageListCommand.Handler updateVillageListCommand, UpdateAdventureCommand.Handler updateAdventureCommand, DismissCookieConsentCommand.Handler dismissCookieConsentCommand)
+        public AccountTaskBehavior(IChromeBrowser browser, ILogger logger, ITaskManager taskManager, UpdateAccountInfoCommand.Handler updateAccountInfoCommand, UpdateVillageListCommand.Handler updateVillageListCommand, UpdateAdventureCommand.Handler updateAdventureCommand, DismissCookieConsentCommand.Handler dismissCookieConsentCommand)
         {
             _browser = browser;
+            _logger = logger;
             _taskManager = taskManager;
             _updateAccountInfoCommand = updateAccountInfoCommand;
             _updateVillageListCommand = updateVillageListCommand;
@@ -29,6 +34,9 @@ namespace MainCore.Behaviors
         {
             var accountId = request.AccountId;
 
+            // 2026-10-18: moved to Playwright - the raw WebDriverException below is now
+            // BrowserException (thrown by the browser.Html / element reads when the page or
+            // browser is gone); the recovery path is unchanged.
             // 2026-08-26: a real "invalid session id" log showed the browser session dying
             // remotely (chromedriver/Chrome side) while _driver stays non-null locally, so
             // IsOpen (just a null check) doesn't catch it - the first _browser.Html read below
@@ -113,8 +121,19 @@ namespace MainCore.Behaviors
                     await _updateVillageListCommand.HandleAsync(new(accountId), cancellationToken);
                 }
             }
-            catch (WebDriverException)
+            catch (BrowserException ex) when (BrowserErrorRules.IsTransient(ex.Message))
             {
+                // 2026-10-28: the page was still navigating after the reads were repeated (SyncBridge.RunRetryingTransient).
+                // The browser is healthy - do NOT close it (that cost a re-open and a full re-login, 5x in 96 min).
+                // Come back shortly; ExecuteAt must change or TimerManager removes the task (CLAUDE.md rule 16).
+                request.ExecuteAt = DateTime.Now.AddSeconds(TransientRetrySeconds);
+                _logger.Information("{Task}: the page was still navigating, trying again in {Seconds}s ({Message})", request.Description, TransientRetrySeconds, ex.Message);
+                return (TResponse)Skip.Error.WithError("The page was still navigating - trying again shortly.");
+            }
+            catch (BrowserException ex)
+            {
+                // Log WHY the browser is treated as gone; the old code swallowed the message.
+                _logger.Warning("Browser treated as closed: {Message}", ex.Message);
                 await _browser.Close();
                 return (TResponse)BrowserClosed.Error;
             }
@@ -130,8 +149,16 @@ namespace MainCore.Behaviors
                     await _updateAdventureCommand.HandleAsync(new(accountId), cancellationToken);
                 }
             }
-            catch (WebDriverException)
+            catch (BrowserException ex) when (BrowserErrorRules.IsTransient(ex.Message))
             {
+                // The task itself already finished; only the after-task refresh hit a navigation. Keep the task's
+                // own result - the next cycle refreshes the account data again.
+                _logger.Information("{Task}: skipped the after-task refresh, the page was still navigating ({Message})", request.Description, ex.Message);
+                return response;
+            }
+            catch (BrowserException ex)
+            {
+                _logger.Warning("Browser treated as closed: {Message}", ex.Message);
                 await _browser.Close();
                 return (TResponse)BrowserClosed.Error;
             }
