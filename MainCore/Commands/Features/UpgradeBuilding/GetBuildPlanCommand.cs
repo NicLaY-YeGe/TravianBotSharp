@@ -92,6 +92,21 @@ namespace MainCore.Commands.Features.UpgradeBuilding
                 var validateResult = await validatePlanCompleteCommand.HandleAsync(new(villageId, plan), cancellationToken);
                 if (validateResult.IsFailed)
                 {
+                    // 2026-10-28: the job targets a slot that holds another building. Remove it (it can never be built there and
+                    // would block every job behind it) and say so; nothing is built and no resources are touched.
+                    var slotOccupied = validateResult.Errors
+                        .OfType<UpgradeBuildingError>()
+                        .FirstOrDefault(x => x.IsSlotOccupied);
+                    if (slotOccupied is not null)
+                    {
+                        logger.Warning(
+                            "Upgrade building in {VillageId}: removed the job \"{Plan}\" - {Reason}. Nothing was built for it; fix the build list or template if the slot is wrong.",
+                            villageId, plan, slotOccupied.Message);
+                        await deleteJobByIdCommand.HandleAsync(new(job.Id), cancellationToken);
+                        rxQueue.Enqueue(new JobsModified(villageId));
+                        continue;
+                    }
+
                     var missingPrerequisite = validateResult.Errors
                         .OfType<UpgradeBuildingError>()
                         .FirstOrDefault(x => x.PrerequisiteLevel > 0);

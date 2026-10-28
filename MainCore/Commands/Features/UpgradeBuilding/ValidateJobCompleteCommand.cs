@@ -43,6 +43,17 @@
                 return true;
             }
 
+            // 2026-10-28: the slot holds a DIFFERENT building - a plan for the wrong slot. Never fall through to the
+            // construct/upgrade path (it would upgrade whatever stands there); GetBuildPlanCommand removes the job.
+            if (oldBuilding is not null)
+            {
+                var planQueuedHere = queueBuildings.Any(x => x.Location == plan.Location && x.Type == plan.Type);
+                if (BuildPlanSlotRules.IsOccupiedByOtherBuilding(oldBuilding.Type, oldBuilding.Level, plan.Type, planQueuedHere))
+                {
+                    return Result.Fail(UpgradeBuildingError.SlotOccupied(plan.Type, plan.Location, oldBuilding.Type, oldBuilding.Level));
+                }
+            }
+
             var errors = new List<IError>();
             var prerequisiteBuildings = plan.Type.GetPrerequisiteBuildings();
 
