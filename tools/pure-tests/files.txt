@@ -59,3 +59,5 @@ MainCore.Test/Commands/Features/StartAdventure/HeroHealthGateTest.cs
 MainCore.Test/Parsers/TrainQueueParserTest.cs
 MainCore/Commands/Features/SendResource/MerchantAmountRules.cs
 MainCore.Test/Commands/Features/SendResource/MerchantAmountRulesTest.cs
+MainCore/Services/Browser/BrowserErrorRules.cs
+MainCore.Test/Services/BrowserErrorRulesTest.cs

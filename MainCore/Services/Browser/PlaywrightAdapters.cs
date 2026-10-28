@@ -22,6 +22,25 @@ namespace MainCore.Services
             }
         }
 
+        // 2026-10-28: reads that fail only because a navigation is in flight (BrowserErrorRules.IsTransient) are
+        // repeated a few times (about 3 s in total) instead of being reported as a dead browser. Used for
+        // browser.Html, which every task cycle reads right after the cookie step. Any other failure, or a
+        // navigation that outlasts the attempts, surfaces exactly as before.
+        public static T RunRetryingTransient<T>(Func<Task<T>> action, int attempts = 6, int delayMs = 500)
+        {
+            for (var attempt = 1; ; attempt++)
+            {
+                try
+                {
+                    return Run(action);
+                }
+                catch (BrowserException ex) when (attempt < attempts && BrowserErrorRules.IsTransient(ex.Message))
+                {
+                    Thread.Sleep(delayMs);
+                }
+            }
+        }
+
         public static void Run(Func<Task> action)
         {
             try
@@ -69,7 +88,7 @@ namespace MainCore.Services
     {
         private IPage Page => pageProvider() ?? throw new BrowserException("The browser page is not available (closed?).");
 
-        public string PageSource => SyncBridge.Run(() => Page.ContentAsync());
+        public string PageSource => SyncBridge.RunRetryingTransient(() => Page.ContentAsync());
 
         public string Url => Page.Url;
 
