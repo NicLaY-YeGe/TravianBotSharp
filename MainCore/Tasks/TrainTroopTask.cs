@@ -15,6 +15,11 @@ namespace MainCore.Tasks
     //     read keeps the user's normal repeat time (TrainTroopRepeatTime), and the EARLIEST wait of
     //     all buildings wins - a busy Barracks never delays the retry of a starved Stable.
     //
+    // 2026-10-27, user decision: every TROOP has its own amount (min-max) and interval (min-max minutes), set per
+    // slot (TrainTroopSlots); the general next-visit row is gone from the UI (it remains the hidden fallback
+    // for a troop whose interval is 0/0). A visit to a building trains every troop that is due; the
+    // per-troop "not before" is kept in TrainTroopSchedule. The queue logic is unchanged.
+    //
     // 2026-10-26, user decisions (live log 2026-10-26: 11.7k Phalanx in 7 h, 209 visits, no building upgraded):
     //   - Every building has its own "not again before" interval (BarrackRepeatTime..., 0/0 = the general
     //     TrainTroopRepeatTime). After a batch the next visit is the queue end + buffer but NEVER earlier
@@ -74,20 +79,26 @@ namespace MainCore.Tasks
             Result result;
             var buildings = await getTrainTroopBuildingQuery.HandleAsync(new(task.VillageId), cancellationToken);
             var settings = new Dictionary<VillageSettingEnums, int>();
+            var tribe = (TribeEnums)settingService.ByName(task.VillageId, VillageSettingEnums.Tribe);
 
-            // The moment each building may be visited again; the task comes back for the earliest.
+            // The moment each troop may be trained again; the task comes back for the earliest.
             var nextTimes = new List<DateTime>();
 
             foreach (var building in buildings)
             {
                 if (cancellationToken.IsCancellationRequested) return Cancel.Error;
 
-                var notBefore = TrainTroopSchedule.GetNotBefore(task.VillageId, building);
-                if (notBefore > DateTime.Now)
+                var plans = TrainTroopPlanner.GetPlans(building, tribe, key => settingService.ByName(task.VillageId, key));
+                var due = new List<TroopPlan>();
+                foreach (var plan in plans)
                 {
-                    nextTimes.Add(notBefore);
-                    continue;
+                    var notBefore = TrainTroopSchedule.GetNotBefore(task.VillageId, building, plan.Troop);
+                    if (notBefore > DateTime.Now) nextTimes.Add(notBefore);
+                    else due.Add(plan);
                 }
+
+                // Every troop of this building still has its own interval running.
+                if (due.Count == 0) continue;
 
                 result = await toTrainTroopPageCommand.HandleAsync(new(task.VillageId, building), cancellationToken);
                 if (result.IsFailed)
@@ -95,13 +106,11 @@ namespace MainCore.Tasks
                     if (result.HasError<MissingBuilding>())
                     {
                         logger.Warning("Disable train troop on this building.", building);
-                        settings.Add(TrainTroopCommand.TroopSettings[building], 0);
+                        DisableBuilding(settings, building);
                         continue;
                     }
                     return result;
                 }
-
-                var intervalSeconds = GetIntervalSeconds(settingService, task.VillageId, building);
 
                 var runningSeconds = TrainQueueParser.GetSecondsRemaining(browser.Html);
                 if (runningSeconds is not null)
@@ -109,30 +118,49 @@ namespace MainCore.Tasks
                     logger.Information(
                         "Train troop in {VillageId}: the {Building} queue is busy for another {Seconds}s ({Timers} timer(s) on the page) - no new batch now.",
                         task.VillageId, building, runningSeconds.Value, TrainQueueParser.CountTimers(browser.Html));
-                    var busyNext = DateTime.Now.AddSeconds(QueueDeferRules.NextBuildingSeconds(false, runningSeconds, intervalSeconds, Random.Shared));
-                    TrainTroopSchedule.Set(task.VillageId, building, busyNext);
-                    nextTimes.Add(busyNext);
+                    foreach (var plan in due)
+                    {
+                        var intervalSeconds = GetIntervalSeconds(settingService, task.VillageId, building, plan);
+                        var busyNext = DateTime.Now.AddSeconds(QueueDeferRules.NextBuildingSeconds(false, runningSeconds, intervalSeconds, Random.Shared));
+                        TrainTroopSchedule.Set(task.VillageId, building, busyNext, plan.Troop);
+                        nextTimes.Add(busyNext);
+                    }
                     continue;
                 }
 
-                result = await trainTroopCommand.HandleAsync(new(task.VillageId, building), cancellationToken);
-                if (result.IsFailed)
+                // One visit trains every troop that is due (cheaper ones may still fit when a dearer one is starved).
+                var firstTroop = true;
+                foreach (var plan in due)
                 {
-                    if (result.HasError<MissingResource>())
-                    {
-                        // Other buildings train other troops - keep going; this one retries after its interval.
-                        var starvedNext = DateTime.Now.AddSeconds(QueueDeferRules.NextBuildingSeconds(false, null, intervalSeconds, Random.Shared));
-                        TrainTroopSchedule.Set(task.VillageId, building, starvedNext);
-                        nextTimes.Add(starvedNext);
-                        continue;
-                    }
-                    return result;
-                }
+                    if (cancellationToken.IsCancellationRequested) return Cancel.Error;
 
-                var queueSeconds = await QueueWait.ReadSecondsAfterActionAsync(browser, cancellationToken);
-                var trainedNext = DateTime.Now.AddSeconds(QueueDeferRules.NextBuildingSeconds(true, queueSeconds, intervalSeconds, Random.Shared));
-                TrainTroopSchedule.Set(task.VillageId, building, trainedNext);
-                nextTimes.Add(trainedNext);
+                    // After a batch the page is no longer a clean training form: open it again for the next troop.
+                    if (!firstTroop)
+                    {
+                        result = await toTrainTroopPageCommand.HandleAsync(new(task.VillageId, building), cancellationToken);
+                        if (result.IsFailed) return result;
+                    }
+                    firstTroop = false;
+
+                    var intervalSeconds = GetIntervalSeconds(settingService, task.VillageId, building, plan);
+                    result = await trainTroopCommand.HandleAsync(new(task.VillageId, building, plan), cancellationToken);
+                    if (result.IsFailed)
+                    {
+                        if (result.HasError<MissingResource>())
+                        {
+                            var starvedNext = DateTime.Now.AddSeconds(QueueDeferRules.NextBuildingSeconds(false, null, intervalSeconds, Random.Shared));
+                            TrainTroopSchedule.Set(task.VillageId, building, starvedNext, plan.Troop);
+                            nextTimes.Add(starvedNext);
+                            continue;
+                        }
+                        return result;
+                    }
+
+                    var queueSeconds = await QueueWait.ReadSecondsAfterActionAsync(browser, cancellationToken);
+                    var trainedNext = DateTime.Now.AddSeconds(QueueDeferRules.NextBuildingSeconds(true, queueSeconds, intervalSeconds, Random.Shared));
+                    TrainTroopSchedule.Set(task.VillageId, building, trainedNext, plan.Troop);
+                    nextTimes.Add(trainedNext);
+                }
             }
 
             await saveVillageSettingCommand.HandleAsync(new(task.AccountId, task.VillageId, settings), cancellationToken);
@@ -154,21 +182,36 @@ namespace MainCore.Tasks
             return Result.Ok();
         }
 
-        // The building's own interval (minutes in the settings); 0/0 falls back to the general one.
-        private static int GetIntervalSeconds(ISettingService settingService, VillageId villageId, BuildingEnums building)
+        // The troop's own interval (minutes in its slot); 0/0 falls back to the building's old interval, then the general one.
+        private static int GetIntervalSeconds(ISettingService settingService, VillageId villageId, BuildingEnums building, TroopPlan plan)
         {
-            var (minSetting, maxSetting) = TrainTroopCommand.RepeatSettings[building];
-            var min = settingService.ByName(villageId, minSetting);
-            var max = settingService.ByName(villageId, maxSetting);
+            var min = 0;
+            var max = 0;
+            if (TrainTroopCommand.RepeatSettings.TryGetValue(building, out var keys))
+            {
+                min = settingService.ByName(villageId, keys.Item1);
+                max = settingService.ByName(villageId, keys.Item2);
+            }
+
             if (min <= 0 && max <= 0)
             {
                 min = settingService.ByName(villageId, VillageSettingEnums.TrainTroopRepeatTimeMin);
                 max = settingService.ByName(villageId, VillageSettingEnums.TrainTroopRepeatTimeMax);
             }
 
-            if (max < min) (min, max) = (max, min);
-            var seconds = Random.Shared.Next(Math.Max(0, min) * 60, Math.Max(0, max) * 60 + 1);
-            return Math.Max(60, seconds);
+            return TrainTroopPlanner.IntervalSeconds(plan, min, max, Random.Shared);
+        }
+
+        // MissingBuilding: switch the building's training off (every slot and the old single-troop setting).
+        private static void DisableBuilding(Dictionary<VillageSettingEnums, int> settings, BuildingEnums building)
+        {
+            if (TrainTroopCommand.TroopSettings.TryGetValue(building, out var troopKey)) settings[troopKey] = 0;
+            for (var slot = 1; slot <= TrainTroopSlots.SlotCount(building); slot++)
+            {
+                var (aMin, aMax, _, _) = TrainTroopSlots.Keys(building, slot);
+                settings[aMin] = 0;
+                settings[aMax] = 0;
+            }
         }
     }
 }

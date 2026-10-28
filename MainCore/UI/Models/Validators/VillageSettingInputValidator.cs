@@ -1,4 +1,5 @@
 ﻿using MainCore.UI.Models.Input;
+using MainCore.UI.ViewModels.UserControls;
 
 namespace MainCore.UI.Models.Validators
 {
@@ -17,20 +18,6 @@ namespace MainCore.UI.Models.Validators
                 .GreaterThanOrEqualTo(0)
                 .WithMessage("Minimum next train troop ({PropertyValue}) should be positive number");
 
-            RuleFor(x => x.BarrackAmount.Min)
-                .LessThanOrEqualTo(x => x.BarrackAmount.Max)
-                .WithMessage("Minimum barrack amount troop ({PropertyValue}) should be less than maximum barrack amount troop ({ComparisonValue})");
-            RuleFor(x => x.BarrackAmount.Min)
-                .GreaterThanOrEqualTo(0)
-                .WithMessage("Minimum barrack amount troop ({PropertyValue}) should be positive number");
-
-            RuleFor(x => x.StableAmount.Min)
-                .LessThanOrEqualTo(x => x.StableAmount.Max)
-                .WithMessage("Minimum stable amount troop ({PropertyValue}) should be less than maximum stable amount troop ({ComparisonValue})");
-            RuleFor(x => x.StableAmount.Min)
-                .GreaterThanOrEqualTo(0)
-                .WithMessage("Minimum stable amount troop ({PropertyValue}) should be positive number");
-
             RuleFor(x => x.GreatBarrackAmount.Min)
                 .LessThanOrEqualTo(x => x.GreatBarrackAmount.Max)
                 .WithMessage("Minimum greatbarrack amount troop ({PropertyValue}) should be less than maximum greatbarrack amount troop ({ComparisonValue})");
@@ -44,27 +31,6 @@ namespace MainCore.UI.Models.Validators
             RuleFor(x => x.GreatStableAmount.Min)
                 .GreaterThanOrEqualTo(0)
                 .WithMessage("Minimum greatstable amount troop ({PropertyValue}) should be positive number");
-
-            RuleFor(x => x.WorkshopAmount.Min)
-                .LessThanOrEqualTo(x => x.WorkshopAmount.Max)
-                .WithMessage("Minimum workshop amount troop ({PropertyValue}) should be less than maximum workshop amount troop ({ComparisonValue})");
-            RuleFor(x => x.WorkshopAmount.Min)
-                .GreaterThanOrEqualTo(0)
-                .WithMessage("Minimum workshop amount troop ({PropertyValue}) should be positive number");
-
-            RuleFor(x => x.BarrackRepeatTime.Min)
-                .LessThanOrEqualTo(x => x.BarrackRepeatTime.Max)
-                .WithMessage("Minimum barrack next visit ({PropertyValue}) should be less than maximum barrack next visit ({ComparisonValue})");
-            RuleFor(x => x.BarrackRepeatTime.Min)
-                .GreaterThanOrEqualTo(0)
-                .WithMessage("Minimum barrack next visit ({PropertyValue}) should be positive number (0 = use the general time)");
-
-            RuleFor(x => x.StableRepeatTime.Min)
-                .LessThanOrEqualTo(x => x.StableRepeatTime.Max)
-                .WithMessage("Minimum stable next visit ({PropertyValue}) should be less than maximum stable next visit ({ComparisonValue})");
-            RuleFor(x => x.StableRepeatTime.Min)
-                .GreaterThanOrEqualTo(0)
-                .WithMessage("Minimum stable next visit ({PropertyValue}) should be positive number (0 = use the general time)");
 
             RuleFor(x => x.GreatBarrackRepeatTime.Min)
                 .LessThanOrEqualTo(x => x.GreatBarrackRepeatTime.Max)
@@ -80,12 +46,28 @@ namespace MainCore.UI.Models.Validators
                 .GreaterThanOrEqualTo(0)
                 .WithMessage("Minimum greatstable next visit ({PropertyValue}) should be positive number (0 = use the general time)");
 
-            RuleFor(x => x.WorkshopRepeatTime.Min)
-                .LessThanOrEqualTo(x => x.WorkshopRepeatTime.Max)
-                .WithMessage("Minimum workshop next visit ({PropertyValue}) should be less than maximum workshop next visit ({ComparisonValue})");
-            RuleFor(x => x.WorkshopRepeatTime.Min)
-                .GreaterThanOrEqualTo(0)
-                .WithMessage("Minimum workshop next visit ({PropertyValue}) should be positive number (0 = use the general time)");
+            // 2026-10-27: per-troop rows (amount and interval).
+            RuleFor(x => x).Custom((input, context) =>
+            {
+                var groups = new (string Name, TroopSlotsViewModel Slots)[]
+                {
+                    ("infantry", input.InfantrySlots),
+                    ("cavalry", input.CavalrySlots),
+                    ("siege", input.SiegeSlots),
+                };
+                foreach (var (name, slots) in groups)
+                {
+                    foreach (var row in slots.Items)
+                    {
+                        var (amountMin, amountMax) = row.Amount.Get();
+                        var (timeMin, timeMax) = row.Time.Get();
+                        if (amountMin < 0 || amountMax < 0 || amountMin > amountMax)
+                            context.AddFailure($"{name} {row.Name}: minimum amount ({amountMin}) should be 0 or more and not above the maximum ({amountMax})");
+                        if (timeMin < 0 || timeMax < 0 || timeMin > timeMax)
+                            context.AddFailure($"{name} {row.Name}: minimum time ({timeMin}) should be 0 or more and not above the maximum ({timeMax}) (0 = use the general time)");
+                    }
+                }
+            });
         }
     }
 }

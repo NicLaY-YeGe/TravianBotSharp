@@ -198,33 +198,54 @@
                         <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Troop training settings" VerticalAlignment="Center" FontWeight="Bold" />
                         <CheckBox x:Name="TrainTroopEnable" Content="Enable train troop" />
                         <CheckBox x:Name="ConstructionFirst" Content="Construction first: no troop training while a building waits for resources (off = troops first)" />
-                        <uc:RangeInputUc x:Name="TrainTroopRepeatTime" Text="General next visit after (used when a building's own time below is 0)" Unit="mins" />
                         <CheckBox x:Name="TrainWhenLowResource" Content="Train maximum number if low on resource" />
+                        <TextBlock Text="Barracks (infantry) - amount 0/0 = not trained; time 0/0 = default 2-3 h" FontWeight="SemiBold" Margin="0,8,0,0" />
+                        <ItemsControl x:Name="InfantryItems">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding Name}" Width="150" VerticalAlignment="Bottom" Margin="0,0,10,6" />
+                                        <uc:RangeInputUc ViewModel="{Binding Amount}" Text="amount" Unit="units" />
+                                        <uc:RangeInputUc ViewModel="{Binding Time}" Text="not again before" Unit="mins" Margin="10,0,0,0" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Text="Stable (cavalry)" FontWeight="SemiBold" Margin="0,8,0,0" />
+                        <ItemsControl x:Name="CavalryItems">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding Name}" Width="150" VerticalAlignment="Bottom" Margin="0,0,10,6" />
+                                        <uc:RangeInputUc ViewModel="{Binding Amount}" Text="amount" Unit="units" />
+                                        <uc:RangeInputUc ViewModel="{Binding Time}" Text="not again before" Unit="mins" Margin="10,0,0,0" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Text="Workshop (siege)" FontWeight="SemiBold" Margin="0,8,0,0" />
+                        <ItemsControl x:Name="SiegeItems">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding Name}" Width="150" VerticalAlignment="Bottom" Margin="0,0,10,6" />
+                                        <uc:RangeInputUc ViewModel="{Binding Amount}" Text="amount" Unit="units" />
+                                        <uc:RangeInputUc ViewModel="{Binding Time}" Text="not again before" Unit="mins" Margin="10,0,0,0" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Text="Great barracks / great stable (one troop each; 0 mins = 'not again before' unused)" FontWeight="SemiBold" Margin="0,8,0,0" />
                         <StackPanel Orientation="Horizontal">
-                            <uc:TroopSelectorUc x:Name="BarrackTroop" Text="Train in barrack" />
-                            <uc:RangeInputUc x:Name="BarrackAmount" Text="for" Unit="units" Margin="10,0,0,0" />
-                            <uc:TroopSelectorUc x:Name="GreatBarrackTroop" Text="Train in greatbarrack" Margin="10,0,0,0" />
+                            <uc:TroopSelectorUc x:Name="GreatBarrackTroop" Text="Train in greatbarrack" />
                             <uc:RangeInputUc x:Name="GreatBarrackAmount" Text="for" Unit="units" Margin="10,0,0,0" />
+                            <uc:RangeInputUc x:Name="GreatBarrackRepeatTime" Text="not again before" Unit="mins" Margin="10,0,0,0" />
                         </StackPanel>
                         <StackPanel Orientation="Horizontal">
-                            <uc:RangeInputUc x:Name="BarrackRepeatTime" Text="Barrack: not again before" Unit="mins" />
-                            <uc:RangeInputUc x:Name="GreatBarrackRepeatTime" Text="Greatbarrack: not again before" Unit="mins" Margin="10,0,0,0" />
-                        </StackPanel>
-                        <StackPanel Orientation="Horizontal">
-                            <uc:TroopSelectorUc x:Name="StableTroop" Text="Train in stable" />
-                            <uc:RangeInputUc x:Name="StableAmount" Text="for" Unit="units" Margin="10,0,0,0" />
-                            <uc:TroopSelectorUc x:Name="GreatStableTroop" Text="Train in greatstable" Margin="10,0,0,0" />
+                            <uc:TroopSelectorUc x:Name="GreatStableTroop" Text="Train in greatstable" />
                             <uc:RangeInputUc x:Name="GreatStableAmount" Text="for" Unit="units" Margin="10,0,0,0" />
+                            <uc:RangeInputUc x:Name="GreatStableRepeatTime" Text="not again before" Unit="mins" Margin="10,0,0,0" />
                         </StackPanel>
-                        <StackPanel Orientation="Horizontal">
-                            <uc:RangeInputUc x:Name="StableRepeatTime" Text="Stable: not again before" Unit="mins" />
-                            <uc:RangeInputUc x:Name="GreatStableRepeatTime" Text="Greatstable: not again before" Unit="mins" Margin="10,0,0,0" />
-                        </StackPanel>
-                        <StackPanel Orientation="Horizontal">
-                            <uc:TroopSelectorUc x:Name="WorkshopTroop" Text="Train in workshop" />
-                            <uc:RangeInputUc x:Name="WorkshopAmount" Text="for" Unit="units" Margin="10,0,0,0" />
-                        </StackPanel>
-                        <uc:RangeInputUc x:Name="WorkshopRepeatTime" Text="Workshop: not again before" Unit="mins" />
                     </StackPanel>
                 </Border>
                 <Border Style="{DynamicResource Box}">

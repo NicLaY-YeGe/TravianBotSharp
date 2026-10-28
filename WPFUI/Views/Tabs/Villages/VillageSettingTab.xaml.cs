@@ -32,23 +32,16 @@ namespace WPFUI.Views.Tabs.Villages
 
                 this.Bind(ViewModel, vm => vm.VillageSettingInput.TrainTroopEnable, v => v.TrainTroopEnable.IsChecked).DisposeWith(d);
                 this.Bind(ViewModel, vm => vm.VillageSettingInput.TrainWhenLowResource, v => v.TrainWhenLowResource.IsChecked).DisposeWith(d);
-                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.TrainTroopRepeatTime, v => v.TrainTroopRepeatTime.ViewModel).DisposeWith(d);
-                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.BarrackTroop, v => v.BarrackTroop.ViewModel).DisposeWith(d);
-                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.BarrackAmount, v => v.BarrackAmount.ViewModel).DisposeWith(d);
-                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.StableTroop, v => v.StableTroop.ViewModel).DisposeWith(d);
-                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.StableAmount, v => v.StableAmount.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.InfantrySlots.Items, v => v.InfantryItems.ItemsSource).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.CavalrySlots.Items, v => v.CavalryItems.ItemsSource).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.SiegeSlots.Items, v => v.SiegeItems.ItemsSource).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.GreatBarrackTroop, v => v.GreatBarrackTroop.ViewModel).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.GreatBarrackAmount, v => v.GreatBarrackAmount.ViewModel).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.GreatStableTroop, v => v.GreatStableTroop.ViewModel).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.GreatStableAmount, v => v.GreatStableAmount.ViewModel).DisposeWith(d);
-                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.WorkshopTroop, v => v.WorkshopTroop.ViewModel).DisposeWith(d);
-                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.WorkshopAmount, v => v.WorkshopAmount.ViewModel).DisposeWith(d);
                 this.Bind(ViewModel, vm => vm.VillageSettingInput.ConstructionFirst, v => v.ConstructionFirst.IsChecked).DisposeWith(d);
-                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.BarrackRepeatTime, v => v.BarrackRepeatTime.ViewModel).DisposeWith(d);
-                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.StableRepeatTime, v => v.StableRepeatTime.ViewModel).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.GreatBarrackRepeatTime, v => v.GreatBarrackRepeatTime.ViewModel).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.GreatStableRepeatTime, v => v.GreatStableRepeatTime.ViewModel).DisposeWith(d);
-                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.WorkshopRepeatTime, v => v.WorkshopRepeatTime.ViewModel).DisposeWith(d);
 
                 this.Bind(ViewModel, vm => vm.VillageSettingInput.TrapEnable, v => v.TrapEnable.IsChecked).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.TrapRepeatTime, v => v.TrapRepeatTime.ViewModel).DisposeWith(d);

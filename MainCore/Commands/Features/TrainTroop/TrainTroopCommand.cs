@@ -5,7 +5,8 @@ namespace MainCore.Commands.Features.TrainTroop
     [Handler]
     public static partial class TrainTroopCommand
     {
-        public sealed record Command(VillageId VillageId, BuildingEnums Building) : IVillageCommand;
+        // 2026-10-27: trains ONE troop of the building (the caller loops over the troops that are due).
+        public sealed record Command(VillageId VillageId, BuildingEnums Building, TroopPlan Plan) : IVillageCommand;
 
         private static async ValueTask<Result> HandleAsync(
             Command command,
@@ -14,16 +15,15 @@ namespace MainCore.Commands.Features.TrainTroop
             ILogger logger,
             CancellationToken cancellationToken)
         {
-            var (villageId, building) = command;
-            var troop = (TroopEnums)context.ByName(villageId, TroopSettings[building]);
+            var (villageId, _, plan) = command;
+            var troop = plan.Troop;
             var maxAmount = TrainTroopParser.GetMaxAmount(browser.Html, troop);
             if (maxAmount == 0)
             {
                 return MissingResource.Error(troop);
             }
 
-            var (minSetting, maxSetting) = AmountSettings[building];
-            var amount = context.ByName(villageId, minSetting, maxSetting);
+            var amount = TrainTroopPlanner.PickAmount(plan, Random.Shared);
             if (amount > maxAmount)
             {
                 var trainWhenLowResource = context.BooleanByName(villageId, VillageSettingEnums.TrainWhenLowResource);
@@ -31,6 +31,9 @@ namespace MainCore.Commands.Features.TrainTroop
                 {
                     return MissingResource.Error(troop);
                 }
+
+                // "Train maximum number if low on resource": train what the resources allow.
+                amount = maxAmount;
             }
 
             var result = await TrainTroop(browser, troop, amount, cancellationToken);

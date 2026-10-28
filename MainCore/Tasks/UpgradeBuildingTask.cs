@@ -35,6 +35,8 @@ namespace MainCore.Tasks
             // (one for each side is the realistic worst case) before falling back to the old Stop.
             const int maxStorageResolutions = 2;
             var storageResolutions = 0;
+            const int maxCropResolutions = 2;
+            var cropResolutions = 0;
 
             while (true)
             {
@@ -64,7 +66,12 @@ namespace MainCore.Tasks
                 {
                     if (result.HasError<LackOfFreeCrop>())
                     {
-                        await addCroplandCommand.HandleAsync(new(task.VillageId), cancellationToken);
+                        if (!await addCroplandCommand.HandleAsync(new(task.VillageId), cancellationToken))
+                        {
+                            task.ExecuteAt = DateTime.Now.AddHours(UpgradeWaitRules.NoCroplandSuspendHours);
+                            logger.Warning("Upgrade building in {VillageId}: not enough free crop and no cropland left to upgrade - building tasks suspended until {Time:HH:mm}.", task.VillageId, task.ExecuteAt);
+                            return Skip.Error.WithErrors(result.Errors);
+                        }
                         continue;
                     }
 
@@ -91,9 +98,43 @@ namespace MainCore.Tasks
                     if (result.HasError<MissingResource>())
                     {
                         var time = UpgradeParser.GetTimeWhenEnoughResource(browser.Html, plan.Type);
-                        task.ExecuteAt = DateTime.Now.Add(time);
-                        // "Construction first" village setting: troops of this village wait until then.
-                        ConstructionHold.Set(task.VillageId, task.ExecuteAt);
+                        var blockedMessage = UpgradeParser.GetBlockedMessage(browser.Html, plan.Type);
+                        var cropBlocked = UpgradeWaitRules.IsCropProductionBlocked(blockedMessage);
+                        // 2026-10-27: crop production is negative - queue a cropland upgrade as the FIRST job
+                        // (any other plan, e.g. Grain Mill, can never be built before crop production rises).
+                        if (cropBlocked && plan.Type != BuildingEnums.Cropland)
+                        {
+                            if (cropResolutions < maxCropResolutions)
+                            {
+                                cropResolutions++;
+                                if (await addCroplandCommand.HandleAsync(new(task.VillageId), cancellationToken))
+                                {
+                                    logger.Information("Crop production is too low for {Type} level {Level}: queued a cropland upgrade as the first job.", plan.Type, plan.Level);
+                                    continue;
+                                }
+                            }
+
+                            // No cropland left to upgrade: suspend this village's building tasks for a while.
+                            task.ExecuteAt = DateTime.Now.AddHours(UpgradeWaitRules.NoCroplandSuspendHours);
+                            logger.Warning("Upgrade building in {VillageId}: crop production is too low for {Type} level {Level} and there is no cropland left to upgrade - building tasks suspended until {Time:HH:mm}.", task.VillageId, plan.Type, plan.Level, task.ExecuteAt);
+                            return Skip.Error.WithErrors(result.Errors);
+                        }
+
+                        // 2026-10-26: the page shows no countdown when crop production is too low; the old code then
+                        // read 0 s and retried every ~16 s (678 runs in 3 h). See UpgradeWaitRules.
+                        task.ExecuteAt = DateTime.Now.Add(UpgradeWaitRules.NextWait(time, cropBlocked, Random.Shared));
+                        if (time <= TimeSpan.Zero)
+                        {
+                            logger.Warning(
+                                cropBlocked
+                                    ? "Upgrade building in {VillageId}: {Type} level {Level} is blocked by the game (\"{Message}\") - crop production is too low, nothing can be built here until it rises. Looking again at {Time:HH:mm}."
+                                    : "Upgrade building in {VillageId}: could not read the time until enough resources (page says \"{Message}\"). Looking again at {Time:HH:mm}.",
+                                task.VillageId, plan.Type, plan.Level, blockedMessage, task.ExecuteAt);
+                        }
+
+                        // "Construction first" village setting: troops of this village wait until then - not for a
+                        // crop-blocked plan, which resources cannot unblock.
+                        if (!cropBlocked) ConstructionHold.Set(task.VillageId, task.ExecuteAt);
                         return Skip.Error.WithErrors(result.Errors);
                     }
 

@@ -300,5 +300,52 @@
         GreatStableRepeatTimeMax,
         WorkshopRepeatTimeMin,
         WorkshopRepeatTimeMax,
+
+        // 2026-10-27, user decision: every troop has its own amount (min-max) and its own "not again
+        // before" interval in minutes (0/0 = no own interval: the building's old interval, then the general
+        // TrainTroopRepeatTime). Slot N = the Nth troop of the building's list for the village tribe
+        // (Infantry = Barracks, Cavalry = Stable, Siege = Workshop; see TrainTroopSlots). A slot is
+        // active when its AmountMax > 0. The old per-building single-troop settings (BarrackTroop...)
+        // still work for the Great Barracks/Great Stable and as a fallback for configs saved before this.
+        TrainInfantry1AmountMin,
+        TrainInfantry1AmountMax,
+        TrainInfantry1RepeatMin,
+        TrainInfantry1RepeatMax,
+        TrainInfantry2AmountMin,
+        TrainInfantry2AmountMax,
+        TrainInfantry2RepeatMin,
+        TrainInfantry2RepeatMax,
+        TrainInfantry3AmountMin,
+        TrainInfantry3AmountMax,
+        TrainInfantry3RepeatMin,
+        TrainInfantry3RepeatMax,
+        TrainInfantry4AmountMin,
+        TrainInfantry4AmountMax,
+        TrainInfantry4RepeatMin,
+        TrainInfantry4RepeatMax,
+        TrainCavalry1AmountMin,
+        TrainCavalry1AmountMax,
+        TrainCavalry1RepeatMin,
+        TrainCavalry1RepeatMax,
+        TrainCavalry2AmountMin,
+        TrainCavalry2AmountMax,
+        TrainCavalry2RepeatMin,
+        TrainCavalry2RepeatMax,
+        TrainCavalry3AmountMin,
+        TrainCavalry3AmountMax,
+        TrainCavalry3RepeatMin,
+        TrainCavalry3RepeatMax,
+        TrainCavalry4AmountMin,
+        TrainCavalry4AmountMax,
+        TrainCavalry4RepeatMin,
+        TrainCavalry4RepeatMax,
+        TrainSiege1AmountMin,
+        TrainSiege1AmountMax,
+        TrainSiege1RepeatMin,
+        TrainSiege1RepeatMax,
+        TrainSiege2AmountMin,
+        TrainSiege2AmountMax,
+        TrainSiege2RepeatMin,
+        TrainSiege2RepeatMax,
     }
 }
