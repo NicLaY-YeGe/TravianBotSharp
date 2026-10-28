@@ -1,5 +1,6 @@
 using MainCore.Commands.Features.Scheduling;
 using MainCore.Commands.Features.TrainTroop;
+using MainCore.Entities;
 using MainCore.Enums;
 
 namespace MainCore.Test.Commands.Features.TrainTroop
