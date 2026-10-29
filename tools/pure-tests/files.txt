@@ -61,3 +61,7 @@ MainCore/Commands/Features/SendResource/MerchantAmountRules.cs
 MainCore.Test/Commands/Features/SendResource/MerchantAmountRulesTest.cs
 MainCore/Services/Browser/BrowserErrorRules.cs
 MainCore.Test/Services/BrowserErrorRulesTest.cs
+MainCore/Commands/Features/UseHeroItem/HeroResourceAmountRules.cs
+MainCore.Test/Commands/Features/UseHeroItem/HeroResourceAmountRulesTest.cs
+MainCore/Services/Browser/TransientStreak.cs
+MainCore.Test/Services/TransientStreakTest.cs

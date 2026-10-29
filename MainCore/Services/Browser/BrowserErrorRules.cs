@@ -33,6 +33,12 @@ namespace MainCore.Services
             "page is not available",
         ];
 
+        // 2026-10-29: this many transient failures in a row (one per task start, 10 s apart = about a minute) mean the page
+        // is stuck, not loading: AccountTaskBehavior then treats the browser as closed (re-open + re-login) as before 2026-10-28.
+        public const int MaxConsecutiveTransient = 6;
+
+        public static bool ShouldGiveUp(int consecutiveTransientFailures) => consecutiveTransientFailures >= MaxConsecutiveTransient;
+
         public static bool IsTransient(string? message)
         {
             if (string.IsNullOrWhiteSpace(message)) return false;

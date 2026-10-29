@@ -126,8 +126,18 @@ namespace MainCore.Behaviors
                 // 2026-10-28: the page was still navigating after the reads were repeated (SyncBridge.RunRetryingTransient).
                 // The browser is healthy - do NOT close it (that cost a re-open and a full re-login, 5x in 96 min).
                 // Come back shortly; ExecuteAt must change or TimerManager removes the task (CLAUDE.md rule 16).
+                var streak = TransientStreak.Increment(accountId.Value);
+                if (BrowserErrorRules.ShouldGiveUp(streak))
+                {
+                    // A page that stays "navigating" for about a minute is stuck: recover the old way (close, re-open, re-login).
+                    TransientStreak.Reset(accountId.Value);
+                    _logger.Warning("Browser treated as closed: the page was still navigating {Count} times in a row ({Message})", streak, ex.Message);
+                    await _browser.Close();
+                    return (TResponse)BrowserClosed.Error;
+                }
+
                 request.ExecuteAt = DateTime.Now.AddSeconds(TransientRetrySeconds);
-                _logger.Information("{Task}: the page was still navigating, trying again in {Seconds}s ({Message})", request.Description, TransientRetrySeconds, ex.Message);
+                _logger.Information("{Task}: the page was still navigating, trying again in {Seconds}s (attempt {Streak} of {Max}) ({Message})", request.Description, TransientRetrySeconds, streak, BrowserErrorRules.MaxConsecutiveTransient, ex.Message);
                 return (TResponse)Skip.Error.WithError("The page was still navigating - trying again shortly.");
             }
             catch (BrowserException ex)
@@ -137,6 +147,9 @@ namespace MainCore.Behaviors
                 await _browser.Close();
                 return (TResponse)BrowserClosed.Error;
             }
+
+            // The pre-task reads worked: the page is not stuck.
+            TransientStreak.Reset(accountId.Value);
 
             var response = await Next(request, cancellationToken);
 
