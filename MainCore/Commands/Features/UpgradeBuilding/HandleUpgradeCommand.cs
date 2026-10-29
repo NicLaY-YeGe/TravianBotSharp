@@ -34,6 +34,13 @@
                 if (building is not null)
                 {
                     logger.Information("{Type} at location {Location} is at level {Level}", building.Type, building.Location, building.Level);
+
+                    // 2026-10-28 safety net (the plan is normally rejected earlier, see BuildPlanSlotRules): never click Upgrade on
+                    // a different building than the plan names.
+                    if (BuildPlanSlotRules.IsOccupiedByOtherBuilding(building.Type, building.Level, plan.Type, false))
+                    {
+                        return Skip.Error.WithError($"{plan.Type} was planned at location {plan.Location}, but it holds {building.Type} level {building.Level} - not upgrading it.");
+                    }
                 }
             }
 
@@ -125,17 +132,9 @@
             CancellationToken cancellationToken
         )
         {
-            var driver = browser.Driver;
-            if (driver is null) return Stop.DriverNotReady;
-
-            var current = driver.CurrentWindowHandle;
-            while (driver.WindowHandles.Count > 1)
-            {
-                var others = driver.WindowHandles.First(x => !x.Equals(current));
-                driver.SwitchTo().Window(others);
-                driver.Close();
-                driver.SwitchTo().Window(current);
-            }
+            // 2026-10-18 (Playwright): close any ad pop-up tab/window, the main page stays active.
+            var closeResult = await browser.CloseExtraTabs();
+            if (closeResult.IsFailed) return Result.Fail(closeResult.Errors);
 
             static bool videoFeatureShown(IWebDriver driver)
             {
@@ -175,28 +174,21 @@
             result = await browser.Click(element, cancellationToken);
             if (result.IsFailed) return result;
 
-            driver.SwitchTo().DefaultContent();
-
             // close if bot click on playing ads
             // chrome will open new tab & pause ads
+            // (2026-10-18, Playwright: no window-handle / iframe switching needed any more - the
+            // main page stays the active one, the extra tabs are simply closed)
             do
             {
-                var handles = driver.WindowHandles;
-                if (handles.Count <= 1) break;
-
-                current = driver.CurrentWindowHandle;
-                var other = driver.WindowHandles.First(x => !x.Equals(current));
-                driver.SwitchTo().Window(other);
-                driver.Close();
-                driver.SwitchTo().Window(current);
+                closeResult = await browser.CloseExtraTabs();
+                if (closeResult.IsFailed) return Result.Fail(closeResult.Errors);
+                if (closeResult.Value == 0) break;
 
                 (_, isFailed, element, errors) = await browser.GetElement(doc => doc.GetElementbyId("videoFeature"), cancellationToken);
                 if (isFailed) return Result.Fail(errors).WithError("Failed to find [Play ads video] button");
 
                 result = await browser.Click(element, cancellationToken);
                 if (result.IsFailed) return result;
-
-                driver.SwitchTo().DefaultContent();
             }
             while (true);
 
@@ -208,7 +200,7 @@
             var dontShowThisAgain = browser.Html.GetElementbyId("dontShowThisAgain");
             if (dontShowThisAgain is not null)
             {
-                (_, isFailed, element, errors) = await browser.GetElement(By.XPath(dontShowThisAgain.XPath), cancellationToken);
+                (_, isFailed, element, errors) = await browser.GetElement(By.XPath(dontShowThisAgain.StableXPath()), cancellationToken);
                 if (isFailed) return Result.Fail(errors).WithError("Failed to find [Don't show this again] checkbox");
 
                 result = await browser.Click(element, cancellationToken);

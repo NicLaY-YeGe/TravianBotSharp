@@ -25,7 +25,14 @@
 
             await updateInventoryCommand.HandleAsync(new(accountId), cancellationToken);
 
-            resource = resource.Select(RoundUpTo100).ToArray();
+            // Rounded up to 100, but never above what the hero really holds while the stock still covers the need
+            // (HeroResourceAmountRules; the inventory was just refreshed above).
+            var stockByType = context.HeroItems
+                .Where(x => x.AccountId == accountId.Value)
+                .ToList();
+            long StockOf(HeroItemEnums type) => stockByType.Where(x => x.Type == type).Sum(x => (long)x.Amount);
+            var stock = new[] { StockOf(HeroItemEnums.Wood), StockOf(HeroItemEnums.Clay), StockOf(HeroItemEnums.Iron), StockOf(HeroItemEnums.Crop) };
+            resource = HeroResourceAmountRules.AmountsToUse(resource, stock);
 
             // Rounding up can push the target past the warehouse/granary CAPACITY even though
             // the un-rounded requirement was already confirmed to fit (HandleResourceCommand's
@@ -50,13 +57,6 @@
 
             await delayService.DelayClick(cancellationToken);
             return Result.Ok();
-        }
-
-        private static long RoundUpTo100(long res)
-        {
-            if (res == 0) return 0;
-            var remainder = res % 100;
-            return res + (100 - remainder);
         }
 
         // Wood/Clay/Iron share the warehouse cap, Crop uses the granary cap. Storage.Warehouse

@@ -38,7 +38,16 @@
             var result = await browser.ExecuteJsScript(
                 $"(document.querySelector('#cmpwrapper')?.shadowRoot?.querySelector('{CookieConsentParser.AcceptButtonSelector}') " +
                 $"?? document.querySelector('{CookieConsentParser.AcceptButtonSelector}'))?.click();");
-            if (result.IsFailed) return result;
+            if (result.IsFailed)
+            {
+                // 2026-10-28: a click on the popup (or a page that was just loading) can destroy the JS context while the
+                // script runs ("Execution context was destroyed"). The command is best effort and runs every cycle, so
+                // that is not a failure - it used to surface as "Bot must retry" (2x in the 10-28 log). A closed
+                // browser or an unusable driver still fails as before.
+                var message = string.Join(" ", result.Reasons.Select(x => x.Message));
+                if (result.HasError<Retry>() && BrowserErrorRules.IsTransient(message)) return Result.Ok();
+                return result;
+            }
 
             // Best-effort settle time for the overlay's close transition. Not using
             // browser.Wait() here on purpose — its shared WebDriverWait carries a long

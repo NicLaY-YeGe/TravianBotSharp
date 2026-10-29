@@ -5,6 +5,17 @@
     {
         public sealed record Command(VillageId VillageId) : IVillageCommand;
 
+        private static readonly BuildingEnums[] TrainingBuildings =
+        {
+            BuildingEnums.Barracks,
+            BuildingEnums.Stable,
+            BuildingEnums.GreatBarracks,
+            BuildingEnums.GreatStable,
+            BuildingEnums.Workshop,
+        };
+
+        // A building is used when at least one troop is configured for it (per-troop slots, or the old
+        // single-troop setting - see TrainTroopPlanner).
         private static async ValueTask<List<BuildingEnums>> HandleAsync(
             Command command,
             AppDbContext context)
@@ -14,35 +25,13 @@
 
             var settings = context.VillagesSetting
                 .Where(x => x.VillageId == villageId.Value)
-                .Where(x => TrainTroopCommand.TroopSettings.Values.Contains(x.Setting))
-                .Where(x => x.Value != 0)
-                .Select(x => x.Setting)
+                .ToDictionary(x => x.Setting, x => x.Value);
+            int Get(VillageSettingEnums key) => settings.GetValueOrDefault(key);
+
+            var tribe = (TribeEnums)Get(VillageSettingEnums.Tribe);
+            return TrainingBuildings
+                .Where(building => TrainTroopPlanner.GetPlans(building, tribe, Get).Count > 0)
                 .ToList();
-
-            var buildings = new List<BuildingEnums>();
-
-            if (settings.Contains(VillageSettingEnums.BarrackTroop))
-            {
-                buildings.Add(BuildingEnums.Barracks);
-            }
-            if (settings.Contains(VillageSettingEnums.StableTroop))
-            {
-                buildings.Add(BuildingEnums.Stable);
-            }
-            if (settings.Contains(VillageSettingEnums.GreatBarrackTroop))
-            {
-                buildings.Add(BuildingEnums.GreatBarracks);
-            }
-            if (settings.Contains(VillageSettingEnums.GreatStableTroop))
-            {
-                buildings.Add(BuildingEnums.GreatStable);
-            }
-            if (settings.Contains(VillageSettingEnums.WorkshopTroop))
-            {
-                buildings.Add(BuildingEnums.Workshop);
-            }
-
-            return buildings;
         }
     }
 }
