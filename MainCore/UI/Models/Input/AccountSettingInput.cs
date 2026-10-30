@@ -45,6 +45,7 @@ namespace MainCore.UI.Models.Input
             ScoutAutoAttackTroop9.Set(settings.GetValueOrDefault(AccountSettingEnums.ScoutAutoAttackTroop9));
             ScoutAutoAttackTroop10.Set(settings.GetValueOrDefault(AccountSettingEnums.ScoutAutoAttackTroop10));
             EnableClaimDailyQuestReward = settings.GetValueOrDefault(AccountSettingEnums.EnableClaimDailyQuestReward, 1) == 1;
+            EnableAttackCheck = settings.GetValueOrDefault(AccountSettingEnums.EnableAttackCheck, 1) == 1;
         }
 
         public Dictionary<AccountSettingEnums, int> Get()
@@ -77,6 +78,7 @@ namespace MainCore.UI.Models.Input
 
             var enableScoutAutoAttack = EnableScoutAutoAttack ? 1 : 0;
             var enableClaimDailyQuestReward = EnableClaimDailyQuestReward ? 1 : 0;
+            var enableAttackCheck = EnableAttackCheck ? 1 : 0;
 
             var settings = new Dictionary<AccountSettingEnums, int>()
             {
@@ -129,6 +131,7 @@ namespace MainCore.UI.Models.Input
                 { AccountSettingEnums.ScoutAutoAttackTroop9, ScoutAutoAttackTroop9.Get() },
                 { AccountSettingEnums.ScoutAutoAttackTroop10, ScoutAutoAttackTroop10.Get() },
                 { AccountSettingEnums.EnableClaimDailyQuestReward, enableClaimDailyQuestReward },
+                { AccountSettingEnums.EnableAttackCheck, enableAttackCheck },
             };
             return settings;
         }
@@ -173,6 +176,9 @@ namespace MainCore.UI.Models.Input
 
         [Reactive]
         private bool _enableClaimDailyQuestReward;
+
+        [Reactive]
+        private bool _enableAttackCheck;
 
         public AmountInputViewModel ScoutAutoAttackVillageId { get; } = new();
         public AmountInputViewModel ScoutAutoAttackType { get; } = new();
