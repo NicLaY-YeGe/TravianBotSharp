@@ -100,6 +100,7 @@
                     <StackPanel>
                         <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Dodge troops on attack" VerticalAlignment="Center" FontWeight="Bold" />
                         <CheckBox x:Name="DodgeEnable" Content="When this village is attacked, send the checked troop types out as an attack to the target below, then cancel it before it lands" />
+                        <CheckBox x:Name="DodgeRaidEnable" Content="Also dodge when the village is only being RAIDED (off = only real attacks are dodged)" />
                         <TextBlock Text="Troop types to dodge with" Margin="0,4,0,0" />
                         <ItemsControl x:Name="DodgeTroopItems">
                             <ItemsControl.ItemsPanel>
@@ -122,8 +123,8 @@
 
                 <Border Style="{DynamicResource Box}">
                     <StackPanel>
-                        <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Defend on attack (train + send resources away)" VerticalAlignment="Center" FontWeight="Bold" />
-                        <CheckBox x:Name="DefendDonateEnable" Content="When this village is attacked (once per attack, as soon as it is seen): train the cheapest troop with the stock, then send ALL remaining resources (Cranny ignored) to another of your villages - random, preferring one with free storage. Skipped if there is no marketplace or merchant; never delays Dodge" />
+                        <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Defend on attack or raid (train + donate to alliance)" VerticalAlignment="Center" FontWeight="Bold" />
+                        <CheckBox x:Name="DefendDonateEnable" Content="When this village is attacked (once per attack, as soon as it is seen): train the cheapest troop with the stock, then donate ALL remaining resources to the alliance Recruitment (troop production) bonus. Reacts to attacks and raids; the rest stays in the village if the daily donation limit is reached; never delays Dodge" />
                     </StackPanel>
                 </Border>
 
@@ -196,23 +197,63 @@
                     <StackPanel>
                         <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Troop training settings" VerticalAlignment="Center" FontWeight="Bold" />
                         <CheckBox x:Name="TrainTroopEnable" Content="Enable train troop" />
-                        <uc:RangeInputUc x:Name="TrainTroopRepeatTime" Text="Next train troop execute after" Unit="mins" />
+                        <CheckBox x:Name="ConstructionFirst" Content="Construction first: no troop training while a building waits for resources (off = troops first)" />
                         <CheckBox x:Name="TrainWhenLowResource" Content="Train maximum number if low on resource" />
+                        <TextBlock Text="Queue horizon (keeps the queue filled ahead of time; 0/0 = off, the building is trained after its queue ends)" FontWeight="SemiBold" Margin="0,8,0,0" TextWrapping="Wrap" />
+                        <TextBlock TextWrapping="Wrap" FontStyle="Italic" Opacity="0.7" Text="First box = come back when the queue has this many minutes left; second box = fill the queue up to this many minutes. With a horizon on, a troop's 'amount max' is the most units one visit may add (a big number = no limit). Shortly before the account's offline hours the queue is filled to last until the bot works again (see the offline cap in Account Setting)." />
+                        <uc:RangeInputUc x:Name="BarrackHorizon" Text="Barracks: at least / fill up to" Unit="mins" />
+                        <uc:RangeInputUc x:Name="StableHorizon" Text="Stable: at least / fill up to" Unit="mins" />
+                        <uc:RangeInputUc x:Name="WorkshopHorizon" Text="Workshop: at least / fill up to" Unit="mins" />
+                        <uc:RangeInputUc x:Name="GreatBarrackHorizon" Text="Great barracks: at least / fill up to" Unit="mins" />
+                        <uc:RangeInputUc x:Name="GreatStableHorizon" Text="Great stable: at least / fill up to" Unit="mins" />
+                        <CheckBox x:Name="TrainUseNpc" Content="If a batch costs more than the village holds: NPC trade first (costs gold, only redistributes what the village has)" />
+                        <CheckBox x:Name="TrainUseHeroResource" Content="Then take the missing resources from the hero's inventory (keeps the account's hero reserve)" />
+                        <TextBlock Text="Barracks (infantry) - amount 0/0 = not trained; time 0/0 = default 2-3 h" FontWeight="SemiBold" Margin="0,8,0,0" />
+                        <ItemsControl x:Name="InfantryItems">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding Name}" Width="150" VerticalAlignment="Bottom" Margin="0,0,10,6" />
+                                        <uc:RangeInputUc ViewModel="{Binding Amount}" Text="amount" Unit="units" />
+                                        <uc:RangeInputUc ViewModel="{Binding Time}" Text="not again before" Unit="mins" Margin="10,0,0,0" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Text="Stable (cavalry)" FontWeight="SemiBold" Margin="0,8,0,0" />
+                        <ItemsControl x:Name="CavalryItems">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding Name}" Width="150" VerticalAlignment="Bottom" Margin="0,0,10,6" />
+                                        <uc:RangeInputUc ViewModel="{Binding Amount}" Text="amount" Unit="units" />
+                                        <uc:RangeInputUc ViewModel="{Binding Time}" Text="not again before" Unit="mins" Margin="10,0,0,0" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Text="Workshop (siege)" FontWeight="SemiBold" Margin="0,8,0,0" />
+                        <ItemsControl x:Name="SiegeItems">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding Name}" Width="150" VerticalAlignment="Bottom" Margin="0,0,10,6" />
+                                        <uc:RangeInputUc ViewModel="{Binding Amount}" Text="amount" Unit="units" />
+                                        <uc:RangeInputUc ViewModel="{Binding Time}" Text="not again before" Unit="mins" Margin="10,0,0,0" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Text="Great barracks / great stable (one troop each; 0 mins = 'not again before' unused)" FontWeight="SemiBold" Margin="0,8,0,0" />
                         <StackPanel Orientation="Horizontal">
-                            <uc:TroopSelectorUc x:Name="BarrackTroop" Text="Train in barrack" />
-                            <uc:RangeInputUc x:Name="BarrackAmount" Text="for" Unit="units" Margin="10,0,0,0" />
-                            <uc:TroopSelectorUc x:Name="GreatBarrackTroop" Text="Train in greatbarrack" Margin="10,0,0,0" />
+                            <uc:TroopSelectorUc x:Name="GreatBarrackTroop" Text="Train in greatbarrack" />
                             <uc:RangeInputUc x:Name="GreatBarrackAmount" Text="for" Unit="units" Margin="10,0,0,0" />
+                            <uc:RangeInputUc x:Name="GreatBarrackRepeatTime" Text="not again before" Unit="mins" Margin="10,0,0,0" />
                         </StackPanel>
                         <StackPanel Orientation="Horizontal">
-                            <uc:TroopSelectorUc x:Name="StableTroop" Text="Train in stable" />
-                            <uc:RangeInputUc x:Name="StableAmount" Text="for" Unit="units" Margin="10,0,0,0" />
-                            <uc:TroopSelectorUc x:Name="GreatStableTroop" Text="Train in greatstable" Margin="10,0,0,0" />
+                            <uc:TroopSelectorUc x:Name="GreatStableTroop" Text="Train in greatstable" />
                             <uc:RangeInputUc x:Name="GreatStableAmount" Text="for" Unit="units" Margin="10,0,0,0" />
-                        </StackPanel>
-                        <StackPanel Orientation="Horizontal">
-                            <uc:TroopSelectorUc x:Name="WorkshopTroop" Text="Train in workshop" />
-                            <uc:RangeInputUc x:Name="WorkshopAmount" Text="for" Unit="units" Margin="10,0,0,0" />
+                            <uc:RangeInputUc x:Name="GreatStableRepeatTime" Text="not again before" Unit="mins" Margin="10,0,0,0" />
                         </StackPanel>
                     </StackPanel>
                 </Border>

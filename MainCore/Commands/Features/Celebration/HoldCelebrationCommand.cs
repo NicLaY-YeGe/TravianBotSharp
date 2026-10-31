@@ -27,7 +27,7 @@ namespace MainCore.Commands.Features.Celebration
             var node = TownHallParser.GetHoldButton(browser.Html, celebrationName);
             if (node is null) return Stop.Error.WithError($"Cannot find the Hold button for '{celebrationName}'.");
 
-            var (_, isFailed, element, errors) = await browser.GetElement(By.XPath(node.XPath), cancellationToken);
+            var (_, isFailed, element, errors) = await browser.GetElement(By.XPath(node.StableXPath()), cancellationToken);
             if (isFailed) return Stop.Error.WithErrors(errors);
 
             var result = await browser.Click(element, cancellationToken);

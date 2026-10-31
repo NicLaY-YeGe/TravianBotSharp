@@ -27,6 +27,21 @@ namespace MainCore.Test.Parsers
             result.ShouldNotBeNull();
         }
 
+        [Fact]
+        public void GetUnitSeconds_ReadsThePerUnitClock()
+        {
+            // Real capture: Phalanx "0:05:47".
+            _html.Load(BarrackPage);
+            MainCore.Parsers.TrainTroopParser.GetUnitSeconds(_html, TroopEnums.Phalanx).ShouldBe(347);
+        }
+
+        [Fact]
+        public void GetUnitSeconds_StablePage_IsPositive()
+        {
+            _html.Load(StablePage);
+            MainCore.Parsers.TrainTroopParser.GetUnitSeconds(_html, TroopEnums.Pathfinder).ShouldBeGreaterThan(0);
+        }
+
         [Theory]
         [InlineData(BarrackPage, TroopEnums.Phalanx)]
         [InlineData(StablePage, TroopEnums.Pathfinder)]

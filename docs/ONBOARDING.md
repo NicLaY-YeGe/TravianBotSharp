@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-TravianBotSharp is a Windows-only Travian automation bot built on .NET 8 with WPF, ReactiveUI, Entity Framework Core, Selenium, and Serilog. The repo is split into a desktop shell, a core automation/runtime layer, and tests that enforce host and architecture rules. The main story is: start the shell, prepare browser and persistence services, sync live game state, schedule tasks, execute automation, and keep everything observable and recoverable.
+TravianBotSharp is a Windows-only Travian automation bot built on .NET 8 with WPF, ReactiveUI, Entity Framework Core, Microsoft.Playwright (Chromium), and Serilog. The repo is split into a desktop shell, a core automation/runtime layer, and tests that enforce host and architecture rules. The main story is: start the shell, prepare browser and persistence services, sync live game state, schedule tasks, execute automation, and keep everything observable and recoverable.
 
 ## Architecture Layers
 

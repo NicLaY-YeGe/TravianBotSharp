@@ -31,6 +31,7 @@ namespace WPFUI.Views.Tabs
                 this.Bind(ViewModel, vm => vm.AccountSettingInput.HeadlessChrome, v => v.HeadlessChrome.IsChecked).DisposeWith(d);
                 this.Bind(ViewModel, vm => vm.AccountSettingInput.EnableAutoStartAdventure, v => v.EnableAutoStartAdventure.IsChecked).DisposeWith(d);
                 this.Bind(ViewModel, vm => vm.AccountSettingInput.EnableClaimDailyQuestReward, v => v.EnableClaimDailyQuestReward.IsChecked).DisposeWith(d);
+                this.Bind(ViewModel, vm => vm.AccountSettingInput.EnableAttackCheck, v => v.EnableAttackCheck.IsChecked).DisposeWith(d);
                 this.Bind(ViewModel, vm => vm.AccountSettingInput.EnableAutoHeroRevive, v => v.EnableAutoHeroRevive.IsChecked).DisposeWith(d);
                 this.Bind(ViewModel, vm => vm.AccountSettingInput.RaidSendGap, v => v.RaidSendGap.ViewModel).DisposeWith(d);
                 this.Bind(ViewModel, vm => vm.AccountSettingInput.EnableRaidReport, v => v.EnableRaidReport.IsChecked).DisposeWith(d);
@@ -42,6 +43,8 @@ namespace WPFUI.Views.Tabs
                 this.Bind(ViewModel, vm => vm.AccountSettingInput.AttackWakeBefore, v => v.AttackWakeBefore.ViewModel).DisposeWith(d);
                 this.Bind(ViewModel, vm => vm.AccountSettingInput.AttackWakeAfter, v => v.AttackWakeAfter.ViewModel).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.AccountSettingInput.MinHeroHealthPercent, v => v.MinHeroHealthPercent.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.AccountSettingInput.TrainOfflineCoverMaxMinutes, v => v.TrainOfflineCoverMaxMinutes.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.AccountSettingInput.HeroResourceReserve, v => v.HeroResourceReserve.ViewModel).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.AccountSettingInput.HammerVillageId, v => v.HammerVillageId.ViewModel).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.AccountSettingInput.HammerReservePercent, v => v.HammerReservePercent.ViewModel).DisposeWith(d);
                 this.Bind(ViewModel, vm => vm.AccountSettingInput.EnableScoutAutoAttack, v => v.EnableScoutAutoAttack.IsChecked).DisposeWith(d);
