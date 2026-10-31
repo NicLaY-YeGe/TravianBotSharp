@@ -65,3 +65,11 @@ MainCore/Commands/Features/UseHeroItem/HeroResourceAmountRules.cs
 MainCore.Test/Commands/Features/UseHeroItem/HeroResourceAmountRulesTest.cs
 MainCore/Services/Browser/TransientStreak.cs
 MainCore.Test/Services/TransientStreakTest.cs
+MainCore/Commands/Features/Scheduling/OnlineHoursRules.cs
+MainCore/Commands/Features/Scheduling/QueueHorizonRules.cs
+MainCore/Commands/Features/TrainTroop/TrainResourceRules.cs
+MainCore/Parsers/DurationText.cs
+MainCore.Test/Commands/Features/Scheduling/OnlineHoursRulesTest.cs
+MainCore.Test/Commands/Features/Scheduling/QueueHorizonRulesTest.cs
+MainCore.Test/Commands/Features/TrainTroop/TrainResourceRulesTest.cs
+MainCore.Test/Parsers/DurationTextTest.cs

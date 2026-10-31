@@ -167,5 +167,13 @@
         // Default ON (it only reloads the village overview and starts the existing Dodge/Defend
         // chain; with it off nothing changes). Appended at the end on purpose.
         EnableAttackCheck,
+
+        // 2026-10-30, user decision (training queue horizon): shortly before the offline hours start, a training
+        // queue is filled so it lasts until the bot works again, but never for more than this many minutes
+        // (default 180; 0 = do not extend the fill for offline hours). HeroResourceReserve = amount of EACH
+        // resource that training never takes from the hero's inventory (kept for Defend / Revive; default 0).
+        // Appended at the end on purpose.
+        TrainOfflineCoverMaxMinutes,
+        HeroResourceReserve,
     }
 }

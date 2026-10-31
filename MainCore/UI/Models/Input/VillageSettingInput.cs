@@ -40,6 +40,19 @@ namespace MainCore.UI.Models.Input
         public RangeInputViewModel GreatBarrackRepeatTime { get; } = new();
         public RangeInputViewModel GreatStableRepeatTime { get; } = new();
 
+        // 2026-10-30: queue horizon per training building (Min = "at least", Max = "fill up to", minutes; 0/0 = off).
+        public RangeInputViewModel BarrackHorizon { get; } = new();
+        public RangeInputViewModel StableHorizon { get; } = new();
+        public RangeInputViewModel WorkshopHorizon { get; } = new();
+        public RangeInputViewModel GreatBarrackHorizon { get; } = new();
+        public RangeInputViewModel GreatStableHorizon { get; } = new();
+
+        [Reactive]
+        private bool _trainUseNpc;
+
+        [Reactive]
+        private bool _trainUseHeroResource;
+
         [Reactive]
         private bool _constructionFirst;
 
@@ -210,6 +223,24 @@ namespace MainCore.UI.Models.Input
                 settings.GetValueOrDefault(VillageSettingEnums.GreatStableRepeatTimeMin),
                 settings.GetValueOrDefault(VillageSettingEnums.GreatStableRepeatTimeMax));
 
+            BarrackHorizon.Set(
+                settings.GetValueOrDefault(VillageSettingEnums.BarrackHorizonMin),
+                settings.GetValueOrDefault(VillageSettingEnums.BarrackHorizonTarget));
+            StableHorizon.Set(
+                settings.GetValueOrDefault(VillageSettingEnums.StableHorizonMin),
+                settings.GetValueOrDefault(VillageSettingEnums.StableHorizonTarget));
+            WorkshopHorizon.Set(
+                settings.GetValueOrDefault(VillageSettingEnums.WorkshopHorizonMin),
+                settings.GetValueOrDefault(VillageSettingEnums.WorkshopHorizonTarget));
+            GreatBarrackHorizon.Set(
+                settings.GetValueOrDefault(VillageSettingEnums.GreatBarrackHorizonMin),
+                settings.GetValueOrDefault(VillageSettingEnums.GreatBarrackHorizonTarget));
+            GreatStableHorizon.Set(
+                settings.GetValueOrDefault(VillageSettingEnums.GreatStableHorizonMin),
+                settings.GetValueOrDefault(VillageSettingEnums.GreatStableHorizonTarget));
+            TrainUseNpc = settings.GetValueOrDefault(VillageSettingEnums.TrainUseNpc) == 1;
+            TrainUseHeroResource = settings.GetValueOrDefault(VillageSettingEnums.TrainUseHeroResource) == 1;
+
             AutoNPCEnable = settings.GetValueOrDefault(VillageSettingEnums.AutoNPCEnable) == 1;
             AutoNPCOverflow = settings.GetValueOrDefault(VillageSettingEnums.AutoNPCOverflow) == 1;
             AutoNPCReverse = settings.GetValueOrDefault(VillageSettingEnums.AutoNPCReverse) == 1;
@@ -320,6 +351,14 @@ namespace MainCore.UI.Models.Input
             var constructionFirst = ConstructionFirst ? 1 : 0;
             var (greatBarrackRepeatMin, greatBarrackRepeatMax) = GreatBarrackRepeatTime.Get();
             var (greatStableRepeatMin, greatStableRepeatMax) = GreatStableRepeatTime.Get();
+
+            var (barrackHorizonMin, barrackHorizonTarget) = BarrackHorizon.Get();
+            var (stableHorizonMin, stableHorizonTarget) = StableHorizon.Get();
+            var (workshopHorizonMin, workshopHorizonTarget) = WorkshopHorizon.Get();
+            var (greatBarrackHorizonMin, greatBarrackHorizonTarget) = GreatBarrackHorizon.Get();
+            var (greatStableHorizonMin, greatStableHorizonTarget) = GreatStableHorizon.Get();
+            var trainUseNpc = TrainUseNpc ? 1 : 0;
+            var trainUseHeroResource = TrainUseHeroResource ? 1 : 0;
 
             var autoNPCEnable = AutoNPCEnable ? 1 : 0;
             var autoNPCOverflow = AutoNPCOverflow ? 1 : 0;
@@ -458,6 +497,18 @@ namespace MainCore.UI.Models.Input
                 { VillageSettingEnums.GreatStableRepeatTimeMax, greatStableRepeatMax },
                 { VillageSettingEnums.WorkshopRepeatTimeMin, 0 },
                 { VillageSettingEnums.WorkshopRepeatTimeMax, 0 },
+                { VillageSettingEnums.BarrackHorizonMin, barrackHorizonMin },
+                { VillageSettingEnums.BarrackHorizonTarget, barrackHorizonTarget },
+                { VillageSettingEnums.StableHorizonMin, stableHorizonMin },
+                { VillageSettingEnums.StableHorizonTarget, stableHorizonTarget },
+                { VillageSettingEnums.GreatBarrackHorizonMin, greatBarrackHorizonMin },
+                { VillageSettingEnums.GreatBarrackHorizonTarget, greatBarrackHorizonTarget },
+                { VillageSettingEnums.GreatStableHorizonMin, greatStableHorizonMin },
+                { VillageSettingEnums.GreatStableHorizonTarget, greatStableHorizonTarget },
+                { VillageSettingEnums.WorkshopHorizonMin, workshopHorizonMin },
+                { VillageSettingEnums.WorkshopHorizonTarget, workshopHorizonTarget },
+                { VillageSettingEnums.TrainUseNpc, trainUseNpc },
+                { VillageSettingEnums.TrainUseHeroResource, trainUseHeroResource },
 
                 { VillageSettingEnums.AutoSettleEnable, autoSettleEnable },
                 { VillageSettingEnums.AutoApplyBuildTemplateEnable, autoApplyBuildTemplateEnable },

@@ -32,6 +32,13 @@ namespace WPFUI.Views.Tabs.Villages
 
                 this.Bind(ViewModel, vm => vm.VillageSettingInput.TrainTroopEnable, v => v.TrainTroopEnable.IsChecked).DisposeWith(d);
                 this.Bind(ViewModel, vm => vm.VillageSettingInput.TrainWhenLowResource, v => v.TrainWhenLowResource.IsChecked).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.BarrackHorizon, v => v.BarrackHorizon.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.StableHorizon, v => v.StableHorizon.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.WorkshopHorizon, v => v.WorkshopHorizon.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.GreatBarrackHorizon, v => v.GreatBarrackHorizon.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.GreatStableHorizon, v => v.GreatStableHorizon.ViewModel).DisposeWith(d);
+                this.Bind(ViewModel, vm => vm.VillageSettingInput.TrainUseNpc, v => v.TrainUseNpc.IsChecked).DisposeWith(d);
+                this.Bind(ViewModel, vm => vm.VillageSettingInput.TrainUseHeroResource, v => v.TrainUseHeroResource.IsChecked).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.InfantrySlots.Items, v => v.InfantryItems.ItemsSource).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.CavalrySlots.Items, v => v.CavalryItems.ItemsSource).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.SiegeSlots.Items, v => v.SiegeItems.ItemsSource).DisposeWith(d);

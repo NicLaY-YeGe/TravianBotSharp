@@ -347,5 +347,24 @@
         TrainSiege2AmountMax,
         TrainSiege2RepeatMin,
         TrainSiege2RepeatMax,
+
+        // 2026-10-30, user decision: keep every training building's queue filled AHEAD of time (see
+        // QueueHorizonRules). <Building>HorizonMin = "at least" (minutes the queue should still hold when the
+        // bot comes back), <Building>HorizonTarget = "fill up to" (minutes of work after a visit); 0 = off for
+        // that building (the old queue-end behaviour). TrainUseNpc / TrainUseHeroResource: when a batch costs
+        // more than the village holds, make up the difference by an NPC trade (gold) and then from the hero's
+        // inventory (never below the account's HeroResourceReserve). Appended last on purpose (numbering).
+        BarrackHorizonMin,
+        BarrackHorizonTarget,
+        StableHorizonMin,
+        StableHorizonTarget,
+        GreatBarrackHorizonMin,
+        GreatBarrackHorizonTarget,
+        GreatStableHorizonMin,
+        GreatStableHorizonTarget,
+        WorkshopHorizonMin,
+        WorkshopHorizonTarget,
+        TrainUseNpc,
+        TrainUseHeroResource,
     }
 }

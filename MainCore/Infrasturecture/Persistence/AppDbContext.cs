@@ -85,6 +85,8 @@ namespace MainCore.Infrasturecture.Persistence
             {AccountSettingEnums.ScoutAutoAttackTroop10, 0 },
             {AccountSettingEnums.EnableClaimDailyQuestReward, 1 },
             {AccountSettingEnums.EnableAttackCheck, 1 },
+            {AccountSettingEnums.TrainOfflineCoverMaxMinutes, 180 },
+            {AccountSettingEnums.HeroResourceReserve, 0 },
         }.ToImmutableDictionary();
 
         // All 24 bits set (hour 0 .. hour 23) = no restriction, matches pre-existing behavior
@@ -243,6 +245,18 @@ namespace MainCore.Infrasturecture.Persistence
             {VillageSettingEnums.TrainSiege2AmountMax, 0 },
             {VillageSettingEnums.TrainSiege2RepeatMin, 0 },
             {VillageSettingEnums.TrainSiege2RepeatMax, 0 },
+            {VillageSettingEnums.BarrackHorizonMin, 0 },
+            {VillageSettingEnums.BarrackHorizonTarget, 0 },
+            {VillageSettingEnums.StableHorizonMin, 0 },
+            {VillageSettingEnums.StableHorizonTarget, 0 },
+            {VillageSettingEnums.GreatBarrackHorizonMin, 0 },
+            {VillageSettingEnums.GreatBarrackHorizonTarget, 0 },
+            {VillageSettingEnums.GreatStableHorizonMin, 0 },
+            {VillageSettingEnums.GreatStableHorizonTarget, 0 },
+            {VillageSettingEnums.WorkshopHorizonMin, 0 },
+            {VillageSettingEnums.WorkshopHorizonTarget, 0 },
+            {VillageSettingEnums.TrainUseNpc, 0 },
+            {VillageSettingEnums.TrainUseHeroResource, 0 },
 
             {VillageSettingEnums.SmithyUpgradeEnable, 0 },
             {VillageSettingEnums.SmithyUpgradeTroopSlot, 1 },

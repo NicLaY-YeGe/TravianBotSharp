@@ -18,6 +18,8 @@ namespace MainCore.UI.Models.Input
             EnableAutoHeroRevive = settings.GetValueOrDefault(AccountSettingEnums.EnableAutoHeroRevive) == 1;
             EnableRaidReport = settings.GetValueOrDefault(AccountSettingEnums.EnableRaidReport) == 1;
             MinHeroHealthPercent.Set(settings.GetValueOrDefault(AccountSettingEnums.MinHeroHealthPercent));
+            TrainOfflineCoverMaxMinutes.Set(settings.GetValueOrDefault(AccountSettingEnums.TrainOfflineCoverMaxMinutes, 180));
+            HeroResourceReserve.Set(settings.GetValueOrDefault(AccountSettingEnums.HeroResourceReserve));
             RaidSendGap.Set(settings.GetValueOrDefault(AccountSettingEnums.RaidListSendGapMinSeconds, 30), settings.GetValueOrDefault(AccountSettingEnums.RaidListSendGapMaxSeconds, 90));
             EnableCombatCheckOnRaidList = settings.GetValueOrDefault(AccountSettingEnums.EnableCombatCheckOnRaidList) == 1;
             EnableCombatCheckOnAttack = settings.GetValueOrDefault(AccountSettingEnums.EnableCombatCheckOnAttack) == 1;
@@ -67,6 +69,8 @@ namespace MainCore.UI.Models.Input
             var hammerReservePercent = HammerReservePercent.Get();
             var onlineHoursMask = OnlineHours.Get();
             var minHeroHealthPercent = MinHeroHealthPercent.Get();
+            var trainOfflineCoverMaxMinutes = TrainOfflineCoverMaxMinutes.Get();
+            var heroResourceReserve = HeroResourceReserve.Get();
             var (raidSendGapMin, raidSendGapMax) = RaidSendGap.Get();
             var enableCombatCheckOnRaidList = EnableCombatCheckOnRaidList ? 1 : 0;
             var enableCombatCheckOnAttack = EnableCombatCheckOnAttack ? 1 : 0;
@@ -106,6 +110,8 @@ namespace MainCore.UI.Models.Input
                 { AccountSettingEnums.HammerReservePercent, hammerReservePercent },
                 { AccountSettingEnums.OnlineHoursMask, onlineHoursMask },
                 { AccountSettingEnums.MinHeroHealthPercent, minHeroHealthPercent },
+                { AccountSettingEnums.TrainOfflineCoverMaxMinutes, trainOfflineCoverMaxMinutes },
+                { AccountSettingEnums.HeroResourceReserve, heroResourceReserve },
                 { AccountSettingEnums.RaidListSendGapMinSeconds, raidSendGapMin },
                 { AccountSettingEnums.RaidListSendGapMaxSeconds, raidSendGapMax },
                 { AccountSettingEnums.EnableCombatCheckOnRaidList, enableCombatCheckOnRaidList },
@@ -197,6 +203,10 @@ namespace MainCore.UI.Models.Input
         public AmountInputViewModel CombatSafetyMarginPercent { get; } = new();
 
         public AmountInputViewModel MinHeroHealthPercent { get; } = new();
+
+        // 2026-10-30: training queue horizon (see QueueHorizonRules): the longest offline cover, and the hero reserve.
+        public AmountInputViewModel TrainOfflineCoverMaxMinutes { get; } = new();
+        public AmountInputViewModel HeroResourceReserve { get; } = new();
 
         public AmountInputViewModel HammerVillageId { get; } = new();
         public AmountInputViewModel HammerReservePercent { get; } = new();

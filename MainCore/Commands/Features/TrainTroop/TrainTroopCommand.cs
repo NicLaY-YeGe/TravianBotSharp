@@ -6,7 +6,10 @@ namespace MainCore.Commands.Features.TrainTroop
     public static partial class TrainTroopCommand
     {
         // 2026-10-27: trains ONE troop of the building (the caller loops over the troops that are due).
-        public sealed record Command(VillageId VillageId, BuildingEnums Building, TroopPlan Plan) : IVillageCommand;
+        // 2026-10-30: Amount > 0 = the caller (queue horizon) decided the number of units; it is capped to what the
+        // page allows and never refused for "low resource" (the caller already made up what it could). 0 = the
+        // old behaviour: a random amount from the plan's min-max.
+        public sealed record Command(VillageId VillageId, BuildingEnums Building, TroopPlan Plan, int Amount = 0) : IVillageCommand;
 
         private static async ValueTask<Result> HandleAsync(
             Command command,
@@ -15,7 +18,7 @@ namespace MainCore.Commands.Features.TrainTroop
             ILogger logger,
             CancellationToken cancellationToken)
         {
-            var (villageId, _, plan) = command;
+            var (villageId, _, plan, explicitAmount) = command;
             var troop = plan.Troop;
             var maxAmount = TrainTroopParser.GetMaxAmount(browser.Html, troop);
             if (maxAmount == 0)
@@ -23,8 +26,8 @@ namespace MainCore.Commands.Features.TrainTroop
                 return MissingResource.Error(troop);
             }
 
-            var amount = TrainTroopPlanner.PickAmount(plan, Random.Shared);
-            if (amount > maxAmount)
+            var amount = explicitAmount > 0 ? Math.Min(explicitAmount, maxAmount) : TrainTroopPlanner.PickAmount(plan, Random.Shared);
+            if (explicitAmount <= 0 && amount > maxAmount)
             {
                 var trainWhenLowResource = context.BooleanByName(villageId, VillageSettingEnums.TrainWhenLowResource);
                 if (!trainWhenLowResource)
@@ -69,6 +72,16 @@ namespace MainCore.Commands.Features.TrainTroop
             {BuildingEnums.GreatBarracks, (VillageSettingEnums.GreatBarrackRepeatTimeMin,VillageSettingEnums.GreatBarrackRepeatTimeMax ) },
             {BuildingEnums.GreatStable, (VillageSettingEnums.GreatStableRepeatTimeMin,VillageSettingEnums.GreatStableRepeatTimeMax ) },
             {BuildingEnums.Workshop, (VillageSettingEnums.WorkshopRepeatTimeMin,VillageSettingEnums.WorkshopRepeatTimeMax ) },
+        };
+
+        // 2026-10-30: per-building queue horizon in minutes: (at least, fill up to); 0/0 = off for that building.
+        public static Dictionary<BuildingEnums, (VillageSettingEnums, VillageSettingEnums)> HorizonSettings { get; } = new()
+        {
+            {BuildingEnums.Barracks, (VillageSettingEnums.BarrackHorizonMin,VillageSettingEnums.BarrackHorizonTarget ) },
+            {BuildingEnums.Stable, (VillageSettingEnums.StableHorizonMin,VillageSettingEnums.StableHorizonTarget ) },
+            {BuildingEnums.GreatBarracks, (VillageSettingEnums.GreatBarrackHorizonMin,VillageSettingEnums.GreatBarrackHorizonTarget ) },
+            {BuildingEnums.GreatStable, (VillageSettingEnums.GreatStableHorizonMin,VillageSettingEnums.GreatStableHorizonTarget ) },
+            {BuildingEnums.Workshop, (VillageSettingEnums.WorkshopHorizonMin,VillageSettingEnums.WorkshopHorizonTarget ) },
         };
 
         private static async ValueTask<Result> TrainTroop(

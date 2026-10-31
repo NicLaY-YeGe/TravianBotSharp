@@ -46,6 +46,25 @@ namespace MainCore.UI.Models.Validators
                 .GreaterThanOrEqualTo(0)
                 .WithMessage("Minimum greatstable next visit ({PropertyValue}) should be positive number (0 = use the general time)");
 
+            // 2026-10-30: queue horizon per building (min = "at least", max = "fill up to"; 0/0 = off).
+            RuleFor(x => x).Custom((input, context) =>
+            {
+                var horizons = new (string Name, RangeInputViewModel Horizon)[]
+                {
+                    ("barracks", input.BarrackHorizon),
+                    ("stable", input.StableHorizon),
+                    ("workshop", input.WorkshopHorizon),
+                    ("great barracks", input.GreatBarrackHorizon),
+                    ("great stable", input.GreatStableHorizon),
+                };
+                foreach (var (name, horizon) in horizons)
+                {
+                    var (min, target) = horizon.Get();
+                    if (min < 0 || target < 0 || min > target)
+                        context.AddFailure($"{name} queue horizon: 'at least' ({min}) should be 0 or more and not above 'fill up to' ({target})");
+                }
+            });
+
             // 2026-10-27: per-troop rows (amount and interval).
             RuleFor(x => x).Custom((input, context) =>
             {
