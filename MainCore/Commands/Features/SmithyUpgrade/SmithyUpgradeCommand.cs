@@ -39,7 +39,7 @@ namespace MainCore.Commands.Features.SmithyUpgrade
             var node = SmithyParser.GetImproveButton(browser.Html, troopSlot, tribe);
             if (node is null) return Stop.Error.WithError($"Cannot find the Improve button for troop slot {troopSlot}.");
 
-            var (_, isFailed, element, errors) = await browser.GetElement(By.XPath(node.XPath), cancellationToken);
+            var (_, isFailed, element, errors) = await browser.GetElement(By.XPath(node.StableXPath()), cancellationToken);
             if (isFailed) return Stop.Error.WithErrors(errors);
 
             var result = await browser.Click(element, cancellationToken);

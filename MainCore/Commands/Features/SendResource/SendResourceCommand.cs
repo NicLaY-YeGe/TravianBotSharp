@@ -65,7 +65,7 @@ namespace MainCore.Commands.Features.SendResource
                         if (!requireInteractable || (element.Displayed && element.Enabled)) return element;
                     }
                 }
-                catch (StaleElementReferenceException)
+                catch (BrowserException)
                 {
                     // page re-rendered between lookup and check - just look again
                 }

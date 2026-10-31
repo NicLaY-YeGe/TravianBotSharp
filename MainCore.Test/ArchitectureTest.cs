@@ -52,8 +52,21 @@ namespace MainCore.Test
                 .AreAssignableTo(typeof(Immediate.Handlers.Shared.IHandler<,>))
                 .As("other handler");
 
+            // 2026-10-20: tasks and feature commands are orchestrators - they read settings/jobs
+            // from the database AND call other command handlers (that is what a flow is for;
+            // ~20 tasks such as RaidListTask/DodgeTroopTask/ApplyBuildTemplateTask and feature
+            // commands such as UseHeroResourceCommand/GetBuildPlanCommand/HandleResourceCommand/
+            // GetCrannyProtectionCommand/TrainCheapestTroopCommand do exactly this). The rule is
+            // kept for the small building-block commands (Update/Navigate/Misc/UI), where mixing
+            // database access with calling other handlers is the real smell.
+            var orchestrators = Classes().That()
+                .ResideInNamespaceMatching(@"^MainCore\.(Tasks|Commands\.Features)(\..*)?$")
+                .As("tasks and feature commands");
+
             var rule = MethodMembers().That()
                 .Are(Handler)
+                .And()
+                .AreNotDeclaredIn(orchestrators)
                 .And()
                 .DependOnAny(typeof(AppDbContext))
                 .Should()
