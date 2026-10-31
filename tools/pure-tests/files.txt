@@ -73,3 +73,6 @@ MainCore.Test/Commands/Features/Scheduling/OnlineHoursRulesTest.cs
 MainCore.Test/Commands/Features/Scheduling/QueueHorizonRulesTest.cs
 MainCore.Test/Commands/Features/TrainTroop/TrainResourceRulesTest.cs
 MainCore.Test/Parsers/DurationTextTest.cs
+MainCore/Parsers/MapSqlParser.cs
+MainCore/Parsers/MapScanCsv.cs
+MainCore.Test/Parsers/MapScanCsvTest.cs

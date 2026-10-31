@@ -44,6 +44,12 @@ namespace MainCore.UI.ViewModels.Tabs
         [ObservableAsProperty]
         private bool _canSearch;
 
+        // 2026-10-31: the structured rows of the LAST finished search, kept for "Export CSV"
+        // (Results above only holds the formatted text lines). Replaced as a whole, never edited in place.
+        private List<(double Distance, MapVillage Village)> _lastRows = [];
+        private int _lastCenterX;
+        private int _lastCenterY;
+
         public MapAnalysisViewModel(IDialogService dialogService, ICustomServiceScopeFactory serviceScopeFactory)
         {
             _dialogService = dialogService;
@@ -76,6 +82,7 @@ namespace MainCore.UI.ViewModels.Tabs
         private async Task<List<string>> Search()
         {
             StatusText = "Aranıyor...";
+            _lastRows = [];
 
             if (!int.TryParse(TargetX, out var targetX) || !int.TryParse(TargetY, out var targetY))
             {
@@ -129,19 +136,56 @@ namespace MainCore.UI.ViewModels.Tabs
 
             // Travian's own in-game "distance" is the plain Euclidean distance between the
             // two coordinates - no special hex/grid adjustment.
-            return villages
+            var found = villages
                 .Select(v => (Distance: Math.Sqrt(Math.Pow(v.X - targetX, 2) + Math.Pow(v.Y - targetY, 2)), Village: v))
                 .OrderBy(r => r.Distance)
                 .Take(maxResults)
+                .ToList();
+
+            _lastCenterX = targetX;
+            _lastCenterY = targetY;
+            _lastRows = found;
+
+            return found
                 .Select(r => FormatRow(r.Distance, r.Village))
                 .ToList();
+        }
+
+        // 2026-10-31: writes the last search to Exports/MapScan_<x>_<y>_<time>.csv next to the program
+        // (UTF-8 with BOM, ';' separated, coordinate as one "x|y" column - see MapScanCsv).
+        [ReactiveCommand]
+        private async Task ExportCsv()
+        {
+            var rows = _lastRows;
+            if (rows.Count == 0)
+            {
+                await _dialogService.MessageBox.Handle(new MessageBoxData("Warning", "Önce bir arama yapın, dışa aktarılacak sonuç yok."));
+                return;
+            }
+
+            string path;
+            try
+            {
+                var dir = Path.Combine(AppContext.BaseDirectory, "Exports");
+                Directory.CreateDirectory(dir);
+                path = Path.Combine(dir, $"MapScan_{_lastCenterX}_{_lastCenterY}_{DateTime.Now:yyyyMMdd_HHmmss}.csv");
+                await File.WriteAllTextAsync(path, MapScanCsv.Build(rows), new System.Text.UTF8Encoding(true));
+            }
+            catch (Exception ex)
+            {
+                await _dialogService.MessageBox.Handle(new MessageBoxData("Error", $"CSV kaydedilemedi: {ex.Message}"));
+                return;
+            }
+
+            StatusText = $"{rows.Count} satır kaydedildi.";
+            await _dialogService.MessageBox.Handle(new MessageBoxData("Export", $"CSV kaydedildi:{Environment.NewLine}{path}"));
         }
 
         private static string FormatRow(double distance, MapVillage v)
         {
             var allianceText = string.IsNullOrEmpty(v.AllianceTag) ? "no alliance" : v.AllianceTag;
             var capitalText = v.IsCapital ? ", capital" : "";
-            var tribeText = Enum.IsDefined(typeof(TribeEnums), v.Tid) ? ((TribeEnums)v.Tid).ToString() : $"Tribe {v.Tid}";
+            var tribeText = MapScanCsv.TribeText(v.Tid);
 
             return $"{distance:0.00} | ({v.X}|{v.Y}) {v.VillageName} - {v.PlayerName} ({tribeText}) [{allianceText}] - Pop {v.Population}{capitalText}";
         }
