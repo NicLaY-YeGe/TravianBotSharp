@@ -1,4 +1,5 @@
 using MainCore.Commands.Features.Scheduling;
+using MainCore.Entities;
 
 namespace MainCore.Test.Commands.Features.Scheduling
 {
