@@ -141,5 +141,46 @@ namespace MainCore.Test.Commands.Features.Scheduling
                 (value >= 300 && value <= 600).ShouldBeTrue();
             }
         }
+
+        // 2026-11-02: PlanNextVisit (starved villages are no longer visited every 60 s).
+        [Fact]
+        public void PlanNextVisit_StarvedShortQueue_WaitsForTheRetryTime()
+        {
+            // queue 2 min < "at least" 5 min: the regular time is the 60 s floor, but the village cannot pay.
+            var plan = QueueHorizonRules.PlanNextVisit(Now, 180 * 60, 2 * 60, 5 * 60, null, starved: true, retrySeconds: 420);
+            plan.At.ShouldBe(Now.AddSeconds(420));
+        }
+
+        [Fact]
+        public void PlanNextVisit_StarvedLongQueue_KeepsTheRegularTime()
+        {
+            // queue 60 min, "at least" 5 min: regular = 55 min. A missed target must not bring the visit forward.
+            var plan = QueueHorizonRules.PlanNextVisit(Now, 180 * 60, 60 * 60, 5 * 60, null, starved: true, retrySeconds: 420);
+            plan.At.ShouldBe(Now.AddSeconds(55 * 60));
+        }
+
+        [Fact]
+        public void PlanNextVisit_StarvedBeforeOffline_StaysAtTheLeadPoint()
+        {
+            // offline in 20 min -> lead point at 10 min; the retry (25 min) would skip it.
+            var offline = Now.AddMinutes(20);
+            var plan = QueueHorizonRules.PlanNextVisit(Now, 180 * 60, 2 * 60, 5 * 60, offline, starved: true, retrySeconds: 25 * 60);
+            plan.At.ShouldBe(Now.AddMinutes(10));
+        }
+
+        [Fact]
+        public void PlanNextVisit_NotStarvedTargetMissed_UsesTheEarlierOfRegularAndRetry()
+        {
+            // cap-limited visit with a long queue: the old rule (retry sooner than the regular time).
+            var plan = QueueHorizonRules.PlanNextVisit(Now, 180 * 60, 60 * 60, 5 * 60, null, starved: false, retrySeconds: 420);
+            plan.At.ShouldBe(Now.AddSeconds(420));
+        }
+
+        [Fact]
+        public void PlanNextVisit_TargetReached_IsTheRegularTime()
+        {
+            var plan = QueueHorizonRules.PlanNextVisit(Now, 180 * 60, 180 * 60, 5 * 60, null, starved: true, retrySeconds: 420);
+            plan.At.ShouldBe(Now.AddSeconds(175 * 60));
+        }
     }
 }

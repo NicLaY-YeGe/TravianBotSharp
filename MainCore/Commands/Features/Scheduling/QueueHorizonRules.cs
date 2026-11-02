@@ -91,5 +91,42 @@ namespace MainCore.Commands.Features.Scheduling
         {
             return random.Next(StarvedRetryMinSeconds, StarvedRetryMaxSeconds + 1);
         }
+
+        // 2026-11-02 (live log 2026-11-02 00:00-10:46): a village that cannot pay kept its queue below "at least", so
+        // NextVisit answered "now" and the 60 s floor made 309 visits in 6 h (1 Phalanx each, 616 empty Supply runs).
+        // The plan for the next visit, with the reason (logged):
+        //   - starved (the village could not pay what was asked: a MissingResource, or the page allowed fewer units
+        //     than wanted): never earlier than the starved retry time, and never earlier than the regular NextVisit,
+        //     so a long queue is not visited sooner just because the target was missed. Still pulled to the lead
+        //     point in front of an offline stretch (the long fill is the one visit that must not be lost);
+        //   - target missed for another reason (per-visit cap): the old rule, the earlier of the regular time and the
+        //     retry time;
+        //   - otherwise the regular time.
+        public readonly record struct VisitPlan(DateTime At, string Reason);
+
+        public static VisitPlan PlanNextVisit(DateTime now, int fillToSeconds, int queueSeconds, int minSeconds, DateTime? nextOfflineStart, bool starved, int retrySeconds)
+        {
+            var regular = NextVisit(now, queueSeconds, minSeconds, nextOfflineStart);
+            var targetMissed = NeedSeconds(fillToSeconds, queueSeconds) > 0;
+            var retryAt = now.AddSeconds(Math.Max(MinVisitGapSeconds, retrySeconds));
+
+            if (starved && targetMissed)
+            {
+                var at = retryAt > regular ? retryAt : regular;
+
+                if (nextOfflineStart is { } offline)
+                {
+                    var lead = offline.AddSeconds(-PreOfflineLeadSeconds);
+                    var floor = now.AddSeconds(MinVisitGapSeconds);
+                    if (at > lead && lead > floor) return new VisitPlan(lead, "the village cannot pay yet; visit before the offline hours");
+                }
+
+                return new VisitPlan(at, at == regular ? "queue reaches the 'at least' mark" : "the village cannot pay yet, looking again later");
+            }
+
+            if (targetMissed && retryAt < regular) return new VisitPlan(retryAt, "target not reached this visit (per-visit cap), topping up soon");
+
+            return new VisitPlan(regular, "queue reaches the 'at least' mark");
+        }
     }
 }

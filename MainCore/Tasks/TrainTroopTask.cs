@@ -208,7 +208,7 @@ namespace MainCore.Tasks
             var floor = DateTime.Now.AddSeconds(5);
             task.ExecuteAt = next < floor ? floor : next;
             logger.Information(
-                "Train troop in {VillageId}: next visit at {Time:HH:mm:ss} (each building waits for its own interval, queue end plus a small buffer at the earliest).",
+                "Train troop in {VillageId}: task next runs at {Time:HH:mm:ss} (the earliest of the buildings' own visit times).",
                 task.VillageId, task.ExecuteAt);
 
             return Result.Ok();
@@ -271,6 +271,8 @@ namespace MainCore.Tasks
             var fillTo = QueueHorizonRules.FillToSeconds(now, horizon, offlineStart, onlineStart, offlineCapSeconds);
             var queueNow = queueSeconds;
             var trainedAny = false;
+            // 2026-11-02: the village could not pay what the horizon asked for (see QueueHorizonRules.PlanNextVisit).
+            var starved = false;
 
             logger.Information(
                 "Train troop in {VillageId}: {Building} queue horizon - queue holds {Queue} min, fill up to {FillTo} min (at least {Min} min, target {Target} min).",
@@ -315,11 +317,18 @@ namespace MainCore.Tasks
                     if (result.IsFailed) return result;
                 }
 
+                // What the page lets us train right now (TrainTroopCommand caps the amount to this): fewer than
+                // wanted = the village cannot pay the rest; the queue estimate below uses the capped number.
+                var pageMax = TrainTroopParser.GetMaxAmount(browser.Html, plan.Troop);
+                var unitsToTrain = pageMax > 0 ? Math.Min(units, pageMax) : units;
+                if (pageMax < units) starved = true;
+
                 var trainResult = await trainTroopCommand.HandleAsync(new(task.VillageId, building, plan, units), cancellationToken);
                 if (trainResult.IsFailed)
                 {
                     if (trainResult.HasError<MissingResource>())
                     {
+                        starved = true;
                         logger.Information("Train troop in {VillageId}: not enough resources for {Troop} in {Building} (wanted {Units}).", task.VillageId, plan.Troop, building, units);
                         continue;
                     }
@@ -328,17 +337,18 @@ namespace MainCore.Tasks
 
                 trainedAny = true;
                 var after = await QueueWait.ReadSecondsAfterActionAsync(browser, cancellationToken);
-                queueNow = after ?? queueNow + units * Math.Max(0, unitSeconds);
+                queueNow = after ?? queueNow + unitsToTrain * Math.Max(0, unitSeconds);
             }
 
-            // Next visit: when the queue has "at least" minutes left. A target that could not be reached (resources,
-            // per-visit cap) is looked at again sooner, so the queue is filled as soon as the village can pay.
-            var next = QueueHorizonRules.NextVisit(DateTime.Now, queueNow, horizon.MinSeconds, offlineStart);
-            if (QueueHorizonRules.NeedSeconds(fillTo, queueNow) > 0)
-            {
-                var retry = DateTime.Now.AddSeconds(QueueHorizonRules.StarvedRetrySeconds(Random.Shared));
-                if (retry < next) next = retry;
-            }
+            // Next visit: when the queue has "at least" minutes left. A village that could not pay is not visited
+            // again before the starved retry time (5-10 min); a target missed for another reason (per-visit cap)
+            // is looked at again soon. See QueueHorizonRules.PlanNextVisit.
+            var visit = QueueHorizonRules.PlanNextVisit(
+                DateTime.Now, fillTo, queueNow, horizon.MinSeconds, offlineStart, starved, QueueHorizonRules.StarvedRetrySeconds(Random.Shared));
+            var next = visit.At;
+            logger.Information(
+                "Train troop in {VillageId}: {Building} next visit at {Time:HH:mm:ss} ({Reason}; queue holds {Queue} min).",
+                task.VillageId, building, next, visit.Reason, queueNow / 60);
 
             TrainTroopSchedule.Set(task.VillageId, building, next);
             nextTimes.Add(next);

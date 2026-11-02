@@ -76,3 +76,5 @@ MainCore.Test/Parsers/DurationTextTest.cs
 MainCore/Parsers/MapSqlParser.cs
 MainCore/Parsers/MapScanCsv.cs
 MainCore.Test/Parsers/MapScanCsvTest.cs
+MainCore/Commands/Features/Scheduling/SupplyBackoff.cs
+MainCore.Test/Commands/Features/Scheduling/SupplyBackoffTest.cs

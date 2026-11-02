@@ -1,3 +1,4 @@
+using MainCore.Commands.Features.Scheduling;
 using MainCore.Commands.Features.SendResource;
 using MainCore.Tasks.Base;
 
@@ -95,6 +96,9 @@ namespace MainCore.Tasks
 
             foreach (var sourceVillageId in sources)
             {
+                // 2026-11-02: this source just said it has nothing spare for this village - do not ask again yet.
+                if (SupplyBackoff.IsBlocked(sourceVillageId, villageId, DateTime.Now)) continue;
+
                 var task = new Task(accountId, sourceVillageId, villageId);
                 if (!taskManager.IsExist<Task>(accountId, sourceVillageId))
                 {
@@ -219,7 +223,9 @@ namespace MainCore.Tasks
 
             if (amounts.Count == 0 || amounts.Values.Sum() == 0)
             {
-                logger.Information("{VillageId} has nothing spare to send {Target} right now (reserve protected).", task.VillageId, task.TargetVillageId);
+                var backoffUntil = DateTime.Now.AddSeconds(SupplyBackoff.Seconds(Random.Shared));
+                SupplyBackoff.Block(task.VillageId, task.TargetVillageId, backoffUntil);
+                logger.Information("{VillageId} has nothing spare to send {Target} right now (reserve protected), not asked again before {Time:HH:mm:ss}.", task.VillageId, task.TargetVillageId, backoffUntil);
                 return Result.Ok();
             }
 
