@@ -182,5 +182,36 @@ namespace MainCore.Test.Commands.Features.Scheduling
             var plan = QueueHorizonRules.PlanNextVisit(Now, 180 * 60, 180 * 60, 5 * 60, null, starved: true, retrySeconds: 420);
             plan.At.ShouldBe(Now.AddSeconds(175 * 60));
         }
+
+        [Fact]
+        public void HoldUntilAnyTroopDue_AllWaiting_HoldsUntilTheEarliest()
+        {
+            var next = Now.AddMinutes(5);
+            var times = new List<DateTime> { Now.AddMinutes(40), Now.AddMinutes(25) };
+            QueueHorizonRules.HoldUntilAnyTroopDue(next, times, Now).ShouldBe(Now.AddMinutes(25));
+        }
+
+        [Fact]
+        public void HoldUntilAnyTroopDue_OneTroopDue_KeepsThePlannedVisit()
+        {
+            var next = Now.AddMinutes(5);
+            var times = new List<DateTime> { DateTime.MinValue, Now.AddMinutes(25) };
+            QueueHorizonRules.HoldUntilAnyTroopDue(next, times, Now).ShouldBe(next);
+        }
+
+        [Fact]
+        public void HoldUntilAnyTroopDue_PlannedVisitLater_KeepsIt()
+        {
+            var next = Now.AddMinutes(50);
+            var times = new List<DateTime> { Now.AddMinutes(25) };
+            QueueHorizonRules.HoldUntilAnyTroopDue(next, times, Now).ShouldBe(next);
+        }
+
+        [Fact]
+        public void HoldUntilAnyTroopDue_NoTroops_KeepsThePlannedVisit()
+        {
+            var next = Now.AddMinutes(5);
+            QueueHorizonRules.HoldUntilAnyTroopDue(next, new List<DateTime>(), Now).ShouldBe(next);
+        }
     }
 }

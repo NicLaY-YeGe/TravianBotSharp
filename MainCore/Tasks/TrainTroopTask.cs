@@ -285,6 +285,15 @@ namespace MainCore.Tasks
                 var need = QueueHorizonRules.NeedSeconds(fillTo, queueNow);
                 if (need <= 0) break;
 
+                // 2026-11-02: the troop's own "not again before" interval also holds inside the horizon flow, so
+                // Phalanx and Swordsman are trained at different visits (a troop whose interval is 0/0 has no limit here).
+                var troopNotBefore = TrainTroopSchedule.GetNotBefore(task.VillageId, building, plan.Troop);
+                if (troopNotBefore > DateTime.Now)
+                {
+                    logger.Information("Train troop in {VillageId}: {Troop} is not due before {Time:HH:mm:ss}, skipped this visit.", task.VillageId, plan.Troop, troopNotBefore);
+                    continue;
+                }
+
                 // After a batch the page is no longer a clean training form: open it again for the next troop.
                 if (trainedAny)
                 {
@@ -336,6 +345,11 @@ namespace MainCore.Tasks
                 }
 
                 trainedAny = true;
+                if (plan.RepeatMin > 0 || plan.RepeatMax > 0)
+                {
+                    var troopNext = DateTime.Now.AddSeconds(GetIntervalSeconds(settingService, task.VillageId, building, plan));
+                    TrainTroopSchedule.Set(task.VillageId, building, troopNext, plan.Troop);
+                }
                 var after = await QueueWait.ReadSecondsAfterActionAsync(browser, cancellationToken);
                 queueNow = after ?? queueNow + unitsToTrain * Math.Max(0, unitSeconds);
             }
@@ -345,7 +359,9 @@ namespace MainCore.Tasks
             // is looked at again soon. See QueueHorizonRules.PlanNextVisit.
             var visit = QueueHorizonRules.PlanNextVisit(
                 DateTime.Now, fillTo, queueNow, horizon.MinSeconds, offlineStart, starved, QueueHorizonRules.StarvedRetrySeconds(Random.Shared));
-            var next = visit.At;
+            // Every troop still waits for its own interval: no point in coming back before the first one is due.
+            var next = QueueHorizonRules.HoldUntilAnyTroopDue(
+                visit.At, plans.Select(x => TrainTroopSchedule.GetNotBefore(task.VillageId, building, x.Troop)).ToList(), DateTime.Now);
             logger.Information(
                 "Train troop in {VillageId}: {Building} next visit at {Time:HH:mm:ss} ({Reason}; queue holds {Queue} min).",
                 task.VillageId, building, next, visit.Reason, queueNow / 60);

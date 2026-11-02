@@ -87,6 +87,17 @@ namespace MainCore.Commands.Features.Scheduling
             return planned < floor ? floor : planned;
         }
 
+        // 2026-11-02: every troop has its own "not again before" time. When ALL of them are still waiting, a visit
+        // before the earliest one is useless: hold the visit until then. As soon as one troop is due (or none has a
+        // limit) the planned visit stands.
+        public static DateTime HoldUntilAnyTroopDue(DateTime next, IReadOnlyCollection<DateTime> troopNotBefore, DateTime now)
+        {
+            if (troopNotBefore.Count == 0) return next;
+            var earliest = troopNotBefore.Min();
+            if (earliest <= now) return next;
+            return earliest > next ? earliest : next;
+        }
+
         public static int StarvedRetrySeconds(Random random)
         {
             return random.Next(StarvedRetryMinSeconds, StarvedRetryMaxSeconds + 1);
