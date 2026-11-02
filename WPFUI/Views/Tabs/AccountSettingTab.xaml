@@ -65,6 +65,8 @@
                         <CheckBox x:Name="EnableAutoLoadVillage" Content="Enable auto load village's building" />
                         <CheckBox x:Name="EnableAutoStartAdventure" Content="Enable auto start adventure" />
                         <uc:AmountInputUc x:Name="MinHeroHealthPercent" Text="Don't send hero below this health % (0 = no restriction)" Unit="%" />
+                        <uc:AmountInputUc x:Name="TrainOfflineCoverMaxMinutes" Text="Troop training: before the offline hours, fill the queue to last until the bot works again, for at most (0 = off)" Unit="mins" />
+                        <uc:AmountInputUc x:Name="HeroResourceReserve" Text="Troop training never takes the hero's inventory below this amount of EACH resource" Unit="units" />
                         <CheckBox x:Name="EnableClaimDailyQuestReward" Content="Automatically collect the Daily Quests rewards" />
                         <CheckBox x:Name="EnableAutoHeroRevive" Content="Automatically revive a dead hero (own bag, then sibling villages, then NPC trade with gold)" />
                         <uc:RangeInputUc x:Name="RaidSendGap" Text="Raid List: wait between two consecutive sends (any rows)" Unit="seconds" />
@@ -75,6 +77,7 @@
                         <uc:AmountInputUc x:Name="CombatSafetyMarginPercent" Text="Required attack advantage over the target's estimated defense before sending" Unit="%" />
 
                         <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Incoming attack while asleep / offline" VerticalAlignment="Center" FontWeight="Bold" Margin="0,8,0,0" />
+                        <CheckBox x:Name="EnableAttackCheck" Content="Attack check: every 4-6 minutes (random) reload the village overview to find incoming attacks, even when the village auto refresh is off" />
                         <CheckBox x:Name="EnableAttackWake" Content="When an incoming attack was detected and lands during sleep / an offline hour, wake up before the defensive actions (dodge, train + donate) and go back after the impact" />
                         <uc:RangeInputUc x:Name="AttackWakeBefore" Text="Wake up this long before the first defensive action" Unit="minutes" />
                         <uc:RangeInputUc x:Name="AttackWakeAfter" Text="Stay awake this long after the impact" Unit="minutes" />

@@ -30,7 +30,7 @@ namespace MainCore.Commands.Features.DodgeTroop
                 return Result.Ok();
             }
 
-            var (_, isFailed, element, errors) = await browser.GetElement(By.XPath(node.XPath), cancellationToken);
+            var (_, isFailed, element, errors) = await browser.GetElement(By.XPath(node.StableXPath()), cancellationToken);
             if (isFailed) return Result.Fail(errors);
 
             var result = await browser.Click(element, cancellationToken);

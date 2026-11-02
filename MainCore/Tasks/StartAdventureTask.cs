@@ -31,6 +31,7 @@ namespace MainCore.Tasks
             ExploreAdventureCommand.Handler exploreAdventureCommand,
             NextExecuteStartAdventureTaskCommand.Handler nextExecuteStartAdventureTaskCommand,
             ISettingService settingService,
+            ILogger logger,
             CancellationToken cancellationToken)
         {
             Result result;
@@ -40,19 +41,41 @@ namespace MainCore.Tasks
             var minHeroHealthPercent = settingService.ByName(task.AccountId, AccountSettingEnums.MinHeroHealthPercent);
             if (minHeroHealthPercent > 0)
             {
-                var (_, isHealthCheckFailed, healthPercent, healthErrors) = await checkHeroHealthCommand.HandleAsync(new(), cancellationToken);
+                // Shared, short-lived reading (HeroHealthReader): Oasis scout asks the same question.
+                var (_, isHealthCheckFailed, healthPercent, healthErrors) = await HeroHealthReader.GetAsync(task.AccountId, checkHeroHealthCommand, cancellationToken);
                 if (isHealthCheckFailed) return Result.Fail(healthErrors);
 
-                if (healthPercent < minHeroHealthPercent)
+                if (HeroHealthGate.IsBelowMinimum(healthPercent, minHeroHealthPercent))
                 {
-                    return Skip.Error.WithError($"Hero health {healthPercent}% is below the configured minimum {minHeroHealthPercent}%. Not sending hero on adventure.");
+                    // 2026-10-25, real bug (live log 12:07, never ran again): this used to return
+                    // Skip.Error with ExecuteAt unchanged, and TimerManager REMOVES a task that ends
+                    // that way - so one low reading ended adventures for good (until the next login /
+                    // Restart), even after the hero was healthy again. Now the task is moved to a
+                    // later time and kept; it simply looks again then.
+                    task.ExecuteAt = DateTime.Now.AddMinutes(HeroHealthGate.RecheckMinutes);
+                    logger.Information(
+                        "Start adventure: hero health {HealthPercent}% is below the configured minimum {MinPercent}% - no adventure now, looking again at {Time:HH:mm}.",
+                        healthPercent, minHeroHealthPercent, task.ExecuteAt);
+                    return Result.Ok();
                 }
             }
 
             result = await toAdventurePageCommand.HandleAsync(new(), cancellationToken);
             if (result.IsFailed) return result;
             result = await exploreAdventureCommand.HandleAsync(new(), cancellationToken);
-            if (result.IsFailed) return result;
+            if (result.IsFailed)
+            {
+                // 2026-10-25 (live log 14:17 and 16:56): "No adventure available" is a Skip with
+                // ExecuteAt unchanged, which TimerManager answers by REMOVING the task - adventures
+                // then never came back. Keep the task and look again later (CLAUDE.md rule 16).
+                if (result.HasError<Skip>())
+                {
+                    task.ExecuteAt = DateTime.Now.AddMinutes(Random.Shared.Next(20, 31));
+                    logger.Information("Start adventure: nothing to start now, looking again at {Time:HH:mm}.", task.ExecuteAt);
+                    return Result.Ok();
+                }
+                return result;
+            }
 
             await nextExecuteStartAdventureTaskCommand.HandleAsync(new(task), cancellationToken);
             return Result.Ok();
