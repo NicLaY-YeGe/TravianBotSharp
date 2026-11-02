@@ -5,7 +5,8 @@
     {
         public sealed record Command(VillageId VillageId) : IVillageCommand;
 
-        private static async ValueTask HandleAsync(
+        // Returns false when no cropland can be upgraded any more (all at max level / none found).
+        private static async ValueTask<bool> HandleAsync(
             Command command,
             GetLayoutBuildingsCommand.Handler getLayoutBuildingsQuery,
             AddJobCommand.Handler addJobCommand,
@@ -17,9 +18,10 @@
             var buildings = await getLayoutBuildingsQuery.HandleAsync(new(villageId, true), cancellationToken);
 
             var cropland = buildings
-                .Where(x => x.Type == BuildingEnums.Cropland)
+                .Where(x => x.Type == BuildingEnums.Cropland && x.Level < BuildingEnums.Cropland.GetMaxLevel())
                 .OrderBy(x => x.Level)
-                .First();
+                .FirstOrDefault();
+            if (cropland is null) return false;
 
             var cropLandPlan = new NormalBuildPlan()
             {
@@ -29,6 +31,7 @@
             };
             await addJobCommand.HandleAsync(new(villageId, cropLandPlan.ToJob(), true), cancellationToken);
             rxQueue.Enqueue(new JobsModified(villageId));
+            return true;
         }
     }
 }

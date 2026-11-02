@@ -279,5 +279,92 @@
         // Recruitment) and the 60s deadline are fixed by explicit user choice, not
         // per-village-configurable. See DefendDonateTask.
         DefendDonateEnable,
+
+        // 2026-10-23: also dodge incoming RAIDS (Rally Point class "inRaid", "X raids Y"). Off by
+        // default: raids are frequent and low-risk, attacks are always dodged. Defend (train +
+        // donate) reacts to both attacks and raids. Appended last so existing numbering is unchanged.
+        DodgeRaidEnable,
+
+        // 2026-10-26: troop training. ConstructionFirst = while a build plan waits for resources the
+        // village trains no troops (default 0 = troops first, the old behaviour). <Building>RepeatTime
+        // Min/Max (minutes) = the EARLIEST the building is visited again after a batch, even if its
+        // queue ends sooner; 0/0 = use TrainTroopRepeatTimeMin/Max.
+        ConstructionFirst,
+        BarrackRepeatTimeMin,
+        BarrackRepeatTimeMax,
+        StableRepeatTimeMin,
+        StableRepeatTimeMax,
+        GreatBarrackRepeatTimeMin,
+        GreatBarrackRepeatTimeMax,
+        GreatStableRepeatTimeMin,
+        GreatStableRepeatTimeMax,
+        WorkshopRepeatTimeMin,
+        WorkshopRepeatTimeMax,
+
+        // 2026-10-27, user decision: every troop has its own amount (min-max) and its own "not again
+        // before" interval in minutes (0/0 = no own interval: the building's old interval, then the general
+        // TrainTroopRepeatTime). Slot N = the Nth troop of the building's list for the village tribe
+        // (Infantry = Barracks, Cavalry = Stable, Siege = Workshop; see TrainTroopSlots). A slot is
+        // active when its AmountMax > 0. The old per-building single-troop settings (BarrackTroop...)
+        // still work for the Great Barracks/Great Stable and as a fallback for configs saved before this.
+        TrainInfantry1AmountMin,
+        TrainInfantry1AmountMax,
+        TrainInfantry1RepeatMin,
+        TrainInfantry1RepeatMax,
+        TrainInfantry2AmountMin,
+        TrainInfantry2AmountMax,
+        TrainInfantry2RepeatMin,
+        TrainInfantry2RepeatMax,
+        TrainInfantry3AmountMin,
+        TrainInfantry3AmountMax,
+        TrainInfantry3RepeatMin,
+        TrainInfantry3RepeatMax,
+        TrainInfantry4AmountMin,
+        TrainInfantry4AmountMax,
+        TrainInfantry4RepeatMin,
+        TrainInfantry4RepeatMax,
+        TrainCavalry1AmountMin,
+        TrainCavalry1AmountMax,
+        TrainCavalry1RepeatMin,
+        TrainCavalry1RepeatMax,
+        TrainCavalry2AmountMin,
+        TrainCavalry2AmountMax,
+        TrainCavalry2RepeatMin,
+        TrainCavalry2RepeatMax,
+        TrainCavalry3AmountMin,
+        TrainCavalry3AmountMax,
+        TrainCavalry3RepeatMin,
+        TrainCavalry3RepeatMax,
+        TrainCavalry4AmountMin,
+        TrainCavalry4AmountMax,
+        TrainCavalry4RepeatMin,
+        TrainCavalry4RepeatMax,
+        TrainSiege1AmountMin,
+        TrainSiege1AmountMax,
+        TrainSiege1RepeatMin,
+        TrainSiege1RepeatMax,
+        TrainSiege2AmountMin,
+        TrainSiege2AmountMax,
+        TrainSiege2RepeatMin,
+        TrainSiege2RepeatMax,
+
+        // 2026-10-30, user decision: keep every training building's queue filled AHEAD of time (see
+        // QueueHorizonRules). <Building>HorizonMin = "at least" (minutes the queue should still hold when the
+        // bot comes back), <Building>HorizonTarget = "fill up to" (minutes of work after a visit); 0 = off for
+        // that building (the old queue-end behaviour). TrainUseNpc / TrainUseHeroResource: when a batch costs
+        // more than the village holds, make up the difference by an NPC trade (gold) and then from the hero's
+        // inventory (never below the account's HeroResourceReserve). Appended last on purpose (numbering).
+        BarrackHorizonMin,
+        BarrackHorizonTarget,
+        StableHorizonMin,
+        StableHorizonTarget,
+        GreatBarrackHorizonMin,
+        GreatBarrackHorizonTarget,
+        GreatStableHorizonMin,
+        GreatStableHorizonTarget,
+        WorkshopHorizonMin,
+        WorkshopHorizonTarget,
+        TrainUseNpc,
+        TrainUseHeroResource,
     }
 }
