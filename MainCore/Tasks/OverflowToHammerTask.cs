@@ -82,15 +82,11 @@ namespace MainCore.Tasks
             return Math.Max(0, current - thresholdAmount);
         }
 
-        // Rounds to the nearest 100 with a small random jitter (+/-3%) first, so shipment
-        // amounts don't look like they came out of exact machine math every single time.
+        // 2026-10-25, user request: shipments are multiples of one merchant's load (750), rounded
+        // DOWN (this is a surplus send - never more than asked). Was: nearest 100 with +/-3% jitter.
         private static long RoundHumanLike(double raw)
         {
-            if (raw <= 0) return 0;
-            var jitter = 1 + ((Random.Shared.NextDouble() * 0.06) - 0.03);
-            var jittered = raw * jitter;
-            var rounded = Math.Round(jittered / 100.0) * 100;
-            return (long)Math.Max(0, rounded);
+            return MerchantAmountRules.RoundDown(raw);
         }
 
         // Splits totalToSend across "resources" proportional to each one's weight (how much
@@ -148,7 +144,12 @@ namespace MainCore.Tasks
                     logger.Warning("No marketplace in {VillageId}, cannot send overflow to hammer.", task.VillageId);
                     return Skip.Error.WithErrors(pageResult.Errors);
                 }
-                return Stop.Error.WithErrors(pageResult.Errors);
+                if (pageResult.HasError<Cancel>()) return pageResult;
+                // Secondary task: a page problem (e.g. "Found 0 tabs", live log 17:29) must not Stop/pause
+                // the account (CLAUDE.md rule 4). Skip, and try again in a few minutes.
+                task.ExecuteAt = DateTime.Now.AddMinutes(Random.Shared.Next(3, 6));
+                logger.Warning("Overflow to hammer in {VillageId}: could not open the send page, retrying at {Time:HH:mm}.", task.VillageId, task.ExecuteAt);
+                return Result.Ok();
             }
 
             var freeMerchants = SendResourceParser.GetFreeMerchants(browser.Html);
@@ -178,7 +179,18 @@ namespace MainCore.Tasks
             }
 
             var amounts = DistributeProportionally(overflowing, weights, maxPerResource, totalToSend);
-            if (amounts.Values.Sum() <= 0) return Skip.Error;
+            if (amounts.Values.Sum() <= 0)
+            {
+                // 2026-10-25 (live log): this was a silent Skip.Error, and UpdateStorageCommand re-adds the
+                // task after every storage update, so a village whose surplus (or the hammer's free room)
+                // is below one 750 merchant load visited the Marketplace every ~80 s for nothing.
+                // Say why, and move the task out so the re-add finds it already queued.
+                task.ExecuteAt = DateTime.Now.AddMinutes(Random.Shared.Next(20, 31));
+                logger.Information(
+                    "Overflow to hammer in {VillageId}: nothing worth sending (surplus or the hammer's free room is below one merchant load), next look at {Time:HH:mm}.",
+                    task.VillageId, task.ExecuteAt);
+                return Result.Ok();
+            }
 
             var sendResult = await sendResourceCommand.HandleAsync(new(task.VillageId, hammerVillageId.Value, amounts), cancellationToken);
             // SendResourceCommand already classifies its failures (Skip for form problems, Cancel for

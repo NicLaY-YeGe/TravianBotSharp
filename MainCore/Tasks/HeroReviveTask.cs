@@ -123,6 +123,11 @@ namespace MainCore.Tasks
                 return Result.Fail(healthResult.Errors);
             }
 
+            // 2026-10-25: this page was just loaded anyway - hand the reading to the shared hero
+            // health gate so StartAdventureTask / OasisScoutTask see a revived (or hurt) hero right
+            // away instead of waiting for their own recheck.
+            HeroHealthGate.Record(task.AccountId.Value, healthResult.Value, DateTime.Now);
+
             if (!HeroParser.IsHeroDead(browser.Html))
             {
                 // Hero is alive - nothing to do this cycle.
