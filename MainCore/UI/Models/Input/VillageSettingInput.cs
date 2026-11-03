@@ -170,6 +170,10 @@ namespace MainCore.UI.Models.Input
         public AmountInputViewModel OasisScoutMinTroops { get; } = new();
         public AmountInputViewModel OasisScoutMaxTroops { get; } = new();
         public AmountInputViewModel OasisScoutHeroPowerThreshold { get; } = new();
+        public AmountInputViewModel OasisScoutAnimalTroopSlot { get; } = new();
+        public AmountInputViewModel OasisScoutAnimalMinTroops { get; } = new();
+        public AmountInputViewModel OasisScoutAnimalMaxTroops { get; } = new();
+        public AmountInputViewModel OasisScoutAnimalMaxPower { get; } = new();
 
         [Reactive]
         private bool _trapEnable;
@@ -312,6 +316,10 @@ namespace MainCore.UI.Models.Input
             OasisScoutMinTroops.Set(settings.GetValueOrDefault(VillageSettingEnums.OasisScoutMinTroops));
             OasisScoutMaxTroops.Set(settings.GetValueOrDefault(VillageSettingEnums.OasisScoutMaxTroops));
             OasisScoutHeroPowerThreshold.Set(settings.GetValueOrDefault(VillageSettingEnums.OasisScoutHeroPowerThreshold));
+            OasisScoutAnimalTroopSlot.Set(settings.GetValueOrDefault(VillageSettingEnums.OasisScoutAnimalTroopSlot));
+            OasisScoutAnimalMinTroops.Set(settings.GetValueOrDefault(VillageSettingEnums.OasisScoutAnimalMinTroops));
+            OasisScoutAnimalMaxTroops.Set(settings.GetValueOrDefault(VillageSettingEnums.OasisScoutAnimalMaxTroops));
+            OasisScoutAnimalMaxPower.Set(settings.GetValueOrDefault(VillageSettingEnums.OasisScoutAnimalMaxPower));
 
             TrapEnable = settings.GetValueOrDefault(VillageSettingEnums.TrapEnable) == 1;
             TrapAmount.Set(
@@ -422,6 +430,10 @@ namespace MainCore.UI.Models.Input
             var oasisScoutMinTroops = OasisScoutMinTroops.Get();
             var oasisScoutMaxTroops = OasisScoutMaxTroops.Get();
             var oasisScoutHeroPowerThreshold = OasisScoutHeroPowerThreshold.Get();
+            var oasisScoutAnimalTroopSlot = OasisScoutAnimalTroopSlot.Get();
+            var oasisScoutAnimalMinTroops = OasisScoutAnimalMinTroops.Get();
+            var oasisScoutAnimalMaxTroops = OasisScoutAnimalMaxTroops.Get();
+            var oasisScoutAnimalMaxPower = OasisScoutAnimalMaxPower.Get();
 
             var trapEnable = TrapEnable ? 1 : 0;
             var (trapAmountMin, trapAmountMax) = TrapAmount.Get();
@@ -546,6 +558,10 @@ namespace MainCore.UI.Models.Input
                 { VillageSettingEnums.OasisScoutMinTroops, oasisScoutMinTroops },
                 { VillageSettingEnums.OasisScoutMaxTroops, oasisScoutMaxTroops },
                 { VillageSettingEnums.OasisScoutHeroPowerThreshold, oasisScoutHeroPowerThreshold },
+                { VillageSettingEnums.OasisScoutAnimalTroopSlot, oasisScoutAnimalTroopSlot },
+                { VillageSettingEnums.OasisScoutAnimalMinTroops, oasisScoutAnimalMinTroops },
+                { VillageSettingEnums.OasisScoutAnimalMaxTroops, oasisScoutAnimalMaxTroops },
+                { VillageSettingEnums.OasisScoutAnimalMaxPower, oasisScoutAnimalMaxPower },
 
                 { VillageSettingEnums.TrapEnable, trapEnable },
                 { VillageSettingEnums.TrapAmountMin, trapAmountMin },

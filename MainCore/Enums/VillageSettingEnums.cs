@@ -366,5 +366,13 @@
         WorkshopHorizonTarget,
         TrainUseNpc,
         TrainUseHeroResource,
+
+        // 2026-11-02, user decision: oases WITH animals can also be attacked by plain troops, not only by the hero.
+        // Own slot/amount (slot 0 = off) and an optional ceiling for the estimated animal power (0 = no ceiling).
+        // Appended last on purpose (numbering).
+        OasisScoutAnimalTroopSlot,
+        OasisScoutAnimalMinTroops,
+        OasisScoutAnimalMaxTroops,
+        OasisScoutAnimalMaxPower,
     }
 }

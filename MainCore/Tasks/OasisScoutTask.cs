@@ -101,6 +101,13 @@ namespace MainCore.Tasks
             var maxTroops = settingService.ByName(villageId, VillageSettingEnums.OasisScoutMaxTroops);
             var powerThresholdPercent = settingService.ByName(villageId, VillageSettingEnums.OasisScoutHeroPowerThreshold);
 
+            // 2026-11-02: troops for oases WITH animals (own slot/amount; slot 0 = off). Used when the hero cannot be sent.
+            var animalTroopSlot = settingService.ByName(villageId, VillageSettingEnums.OasisScoutAnimalTroopSlot);
+            var animalMinTroops = settingService.ByName(villageId, VillageSettingEnums.OasisScoutAnimalMinTroops);
+            var animalMaxTroops = settingService.ByName(villageId, VillageSettingEnums.OasisScoutAnimalMaxTroops);
+            var animalMaxPower = settingService.ByName(villageId, VillageSettingEnums.OasisScoutAnimalMaxPower);
+            var animalTroopsConfigured = animalTroopSlot > 0 && animalMaxTroops > 0;
+
             var reportResult = await toSurroundingReportPageCommand.HandleAsync(new(), cancellationToken);
             if (reportResult.IsFailed) return reportResult;
 
@@ -124,6 +131,7 @@ namespace MainCore.Tasks
             // hero is away (sent now, or reported unavailable) the animal oases of this run are skipped without any page visit;
             // empty oases are unaffected (they use troops).
             var heroAway = false;
+            var heroPowerUnreadable = false;
 
             foreach (var (x, y, distance) in coordinates)
             {
@@ -178,60 +186,110 @@ namespace MainCore.Tasks
                 }
                 else
                 {
-                    if (heroAway)
+                    var animalPower = AnimalPower.TotalPower(animals);
+
+                    // 1) The hero first, as before: alone, only while he is at home and the animals are within the threshold.
+                    if (!heroAway && !heroPowerUnreadable)
                     {
-                        logger.Information("Oasis scout: ({X}|{Y}) has animals, but the hero is already away this run - skipping.", x, y);
+                        if (heroPower is null)
+                        {
+                            var powerResult = await getHeroAttackPowerCommand.HandleAsync(new(), cancellationToken);
+                            if (powerResult.IsFailed)
+                            {
+                                if (!animalTroopsConfigured)
+                                {
+                                    logger.Warning(
+                                        "Oasis scout: could not read hero attack power - skipping remaining animal oases this run.");
+                                    break;
+                                }
+
+                                heroPowerUnreadable = true;
+                                logger.Warning(
+                                    "Oasis scout: could not read hero attack power - no hero sends this run, animal oases get troops only.");
+                            }
+                            else
+                            {
+                                heroPower = powerResult.Value;
+                            }
+                        }
+
+                        if (heroPower is not null)
+                        {
+                            var threshold = heroPower.Value * powerThresholdPercent / 100.0;
+
+                            if (animalPower > threshold)
+                            {
+                                logger.Information(
+                                    "Oasis scout: ({X}|{Y}) estimated animal power {AnimalPower} exceeds threshold {Threshold:F0} (hero power {HeroPower}, {Percent}%) - too risky for the hero.",
+                                    x, y, animalPower, threshold, heroPower, powerThresholdPercent);
+                            }
+                            else
+                            {
+                                var heroResult = await SendToOasis(
+                                    villageId, x, y, new Dictionary<int, long>(), true,
+                                    toSendTroopsPageCommand, sendTroopsCommand, browser, cancellationToken);
+
+                                if (heroResult.IsFailed)
+                                {
+                                    var reason = DescribeFailure(heroResult);
+                                    if (reason.Contains(HeroUnavailableText, StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        // Routine (hero out on an oasis, an adventure or another movement): remember it for the rest of the run.
+                                        heroAway = true;
+                                        logger.Information("Oasis scout: the hero is not at home ({X}|{Y}) - {Error}", x, y, reason);
+                                    }
+                                    else
+                                    {
+                                        logger.Warning("Oasis scout: sending hero to ({X}|{Y}) failed - {Error}", x, y, reason);
+                                    }
+                                }
+                                else
+                                {
+                                    heroAway = true;
+                                    logger.Information(
+                                        "Oasis scout: sent hero alone to ({X}|{Y}) - estimated animal power {AnimalPower} within threshold {Threshold:F0}.",
+                                        x, y, animalPower, threshold);
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+
+                    // 2) Troops (2026-11-02): the hero is away, too weak for these animals, or could not be sent.
+                    if (!animalTroopsConfigured)
+                    {
+                        if (heroAway) logger.Information("Oasis scout: ({X}|{Y}) has animals, but the hero is already away this run - skipping.", x, y);
                         continue;
                     }
 
-                    if (heroPower is null)
-                    {
-                        var powerResult = await getHeroAttackPowerCommand.HandleAsync(new(), cancellationToken);
-                        if (powerResult.IsFailed)
-                        {
-                            logger.Warning(
-                                "Oasis scout: could not read hero attack power - skipping remaining animal oases this run.");
-                            break;
-                        }
-                        heroPower = powerResult.Value;
-                    }
-
-                    var animalPower = AnimalPower.TotalPower(animals);
-                    var threshold = heroPower.Value * powerThresholdPercent / 100.0;
-
-                    if (animalPower > threshold)
+                    if (animalMaxPower > 0 && animalPower > animalMaxPower)
                     {
                         logger.Information(
-                            "Oasis scout: ({X}|{Y}) estimated animal power {AnimalPower} exceeds threshold {Threshold:F0} (hero power {HeroPower}, {Percent}%) - too risky, skipping hero.",
-                            x, y, animalPower, threshold, heroPower, powerThresholdPercent);
+                            "Oasis scout: ({X}|{Y}) estimated animal power {AnimalPower} is above the troop limit {Limit} - skipping.",
+                            x, y, animalPower, animalMaxPower);
                         continue;
                     }
 
-                    var sendResult = await SendToOasis(
-                        villageId, x, y, new Dictionary<int, long>(), true,
+                    var animalAmount = animalMinTroops >= animalMaxTroops
+                        ? Math.Max(0, animalMinTroops)
+                        : Random.Shared.Next(Math.Max(0, animalMinTroops), animalMaxTroops + 1);
+                    if (animalAmount <= 0) continue;
+
+                    var troopResult = await SendToOasis(
+                        villageId, x, y, new Dictionary<int, long> { [animalTroopSlot] = animalAmount }, false,
                         toSendTroopsPageCommand, sendTroopsCommand, browser, cancellationToken);
 
-                    if (sendResult.IsFailed)
+                    if (troopResult.IsFailed)
                     {
-                        var reason = DescribeFailure(sendResult);
-                        if (reason.Contains(HeroUnavailableText, StringComparison.OrdinalIgnoreCase))
-                        {
-                            // Routine (hero out on an oasis, an adventure or another movement): remember it for the rest of the run.
-                            heroAway = true;
-                            logger.Information("Oasis scout: the hero is not at home ({X}|{Y}) - {Error}", x, y, reason);
-                        }
-                        else
-                        {
-                            logger.Warning("Oasis scout: sending hero to ({X}|{Y}) failed - {Error}", x, y, reason);
-                        }
+                        logger.Warning(
+                            "Oasis scout: sending {Amount} troops (slot {Slot}) to oasis with animals ({X}|{Y}) failed - {Error}",
+                            animalAmount, animalTroopSlot, x, y, DescribeFailure(troopResult));
                         continue;
                     }
 
-                    heroAway = true;
-
                     logger.Information(
-                        "Oasis scout: sent hero alone to ({X}|{Y}) - estimated animal power {AnimalPower} within threshold {Threshold:F0}.",
-                        x, y, animalPower, threshold);
+                        "Oasis scout: sent {Amount} troops (slot {Slot}) to oasis with animals ({X}|{Y}) - estimated animal power {AnimalPower}, {Distance} fields away.",
+                        animalAmount, animalTroopSlot, x, y, animalPower, distance);
                 }
             }
 

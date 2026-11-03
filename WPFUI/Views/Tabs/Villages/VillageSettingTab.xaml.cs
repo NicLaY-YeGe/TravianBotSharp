@@ -119,6 +119,10 @@ namespace WPFUI.Views.Tabs.Villages
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.OasisScoutMinTroops, v => v.OasisScoutMinTroops.ViewModel).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.OasisScoutMaxTroops, v => v.OasisScoutMaxTroops.ViewModel).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.OasisScoutHeroPowerThreshold, v => v.OasisScoutHeroPowerThreshold.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.OasisScoutAnimalTroopSlot, v => v.OasisScoutAnimalTroopSlot.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.OasisScoutAnimalMinTroops, v => v.OasisScoutAnimalMinTroops.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.OasisScoutAnimalMaxTroops, v => v.OasisScoutAnimalMaxTroops.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.OasisScoutAnimalMaxPower, v => v.OasisScoutAnimalMaxPower.ViewModel).DisposeWith(d);
 
                 this.Bind(ViewModel, vm => vm.VillageSettingInput.AutoClaimQuestEnable, v => v.AutoClaimQuestEnable.IsChecked).DisposeWith(d);
             });

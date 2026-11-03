@@ -64,6 +64,11 @@
                         <uc:AmountInputUc x:Name="OasisScoutMinTroops" Text="Min troops" Unit="" />
                         <uc:AmountInputUc x:Name="OasisScoutMaxTroops" Text="Max troops" Unit="" />
                         <uc:AmountInputUc x:Name="OasisScoutHeroPowerThreshold" Text="Hero safety threshold" Unit="% of hero power" />
+                        <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Oases with animals: troops when the hero is away or too weak (slot 0 = off)" Margin="0,6,0,0" />
+                        <uc:AmountInputUc x:Name="OasisScoutAnimalTroopSlot" Text="Troop slot for animal oases (1-10)" Unit="" />
+                        <uc:AmountInputUc x:Name="OasisScoutAnimalMinTroops" Text="Min troops" Unit="" />
+                        <uc:AmountInputUc x:Name="OasisScoutAnimalMaxTroops" Text="Max troops" Unit="" />
+                        <uc:AmountInputUc x:Name="OasisScoutAnimalMaxPower" Text="Skip animals above (estimated power, 0 = no limit)" Unit="" />
                     </StackPanel>
                 </Border>
                 <Border Style="{DynamicResource Box}">

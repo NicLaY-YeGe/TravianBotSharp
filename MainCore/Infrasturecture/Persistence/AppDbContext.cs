@@ -257,6 +257,10 @@ namespace MainCore.Infrasturecture.Persistence
             {VillageSettingEnums.WorkshopHorizonTarget, 0 },
             {VillageSettingEnums.TrainUseNpc, 0 },
             {VillageSettingEnums.TrainUseHeroResource, 0 },
+            {VillageSettingEnums.OasisScoutAnimalTroopSlot, 0 },
+            {VillageSettingEnums.OasisScoutAnimalMinTroops, 3 },
+            {VillageSettingEnums.OasisScoutAnimalMaxTroops, 8 },
+            {VillageSettingEnums.OasisScoutAnimalMaxPower, 0 },
 
             {VillageSettingEnums.SmithyUpgradeEnable, 0 },
             {VillageSettingEnums.SmithyUpgradeTroopSlot, 1 },
