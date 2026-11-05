@@ -1,3 +1,5 @@
+using HtmlAgilityPack;
+
 namespace MainCore.Test.Parsers
 {
     public class AdventureParser : BaseParser
