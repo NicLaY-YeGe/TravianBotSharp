@@ -24,7 +24,51 @@ namespace MainCore.Tasks
             }
         }
 
+        // 2026-11-04 (live log 10:03-10:18): the hero's home village had lost its Rally Point, the game greyed the Explore
+        // button out, and the old flow waited 180 s for a Continue button that never came - four times (Retry), then the
+        // account was PAUSED, which also switched off Attack check / Defend. Start adventure is a secondary task
+        // (CLAUDE.md rule 4): the whole run now has a hard time budget and any failure other than a user pause or a dead
+        // browser becomes "look again later" (rule 16: ExecuteAt is moved first).
+        private const int BudgetSeconds = 90;
+        private const int BlockedMinMinutes = 45;
+        private const int BlockedMaxMinutes = 60;
+        private const int FailedMinMinutes = 15;
+        private const int FailedMaxMinutes = 25;
+
         private static async ValueTask<Result> HandleAsync(
+            Task task,
+            IChromeBrowser browser,
+            CheckHeroHealthCommand.Handler checkHeroHealthCommand,
+            ToAdventurePageCommand.Handler toAdventurePageCommand,
+            ExploreAdventureCommand.Handler exploreAdventureCommand,
+            NextExecuteStartAdventureTaskCommand.Handler nextExecuteStartAdventureTaskCommand,
+            ISettingService settingService,
+            ILogger logger,
+            CancellationToken cancellationToken)
+        {
+            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            deadline.CancelAfter(TimeSpan.FromSeconds(BudgetSeconds));
+
+            var result = await RunAsync(
+                task, checkHeroHealthCommand, toAdventurePageCommand, exploreAdventureCommand,
+                nextExecuteStartAdventureTaskCommand, settingService, logger, deadline.Token);
+            if (result.IsSuccess) return result;
+
+            // A user pause stays a pause; a dead browser / driver is the behaviors' business.
+            if (cancellationToken.IsCancellationRequested) return result;
+            if (result.HasError<BrowserClosed>() || result.HasError<Stop>()) return result;
+
+            var timedOut = deadline.IsCancellationRequested;
+            if (timedOut) await PageDump.SaveAsync(browser, logger, "adventure-timeout");
+
+            var reasons = string.Join(" | ", result.Reasons.Select(x => x.Message).Where(x => !string.IsNullOrWhiteSpace(x)));
+            if (timedOut) reasons = $"no answer within {BudgetSeconds}s" + (reasons.Length > 0 ? $" ({reasons})" : "");
+            task.ExecuteAt = DateTime.Now.AddMinutes(Random.Shared.Next(FailedMinMinutes, FailedMaxMinutes + 1));
+            logger.Warning("Start adventure: could not start an adventure ({Reasons}) - looking again at {Time:HH:mm}.", reasons, task.ExecuteAt);
+            return Result.Ok();
+        }
+
+        private static async ValueTask<Result> RunAsync(
             Task task,
             CheckHeroHealthCommand.Handler checkHeroHealthCommand,
             ToAdventurePageCommand.Handler toAdventurePageCommand,
@@ -70,8 +114,20 @@ namespace MainCore.Tasks
                 // then never came back. Keep the task and look again later (CLAUDE.md rule 16).
                 if (result.HasError<Skip>())
                 {
-                    task.ExecuteAt = DateTime.Now.AddMinutes(Random.Shared.Next(20, 31));
-                    logger.Information("Start adventure: nothing to start now, looking again at {Time:HH:mm}.", task.ExecuteAt);
+                    // "No adventure available" is the normal case; any other Skip is a reason the game gives
+                    // (greyed Explore button, no Rally Point in the hero's home village ...): say it, wait longer.
+                    var reason = string.Join(" | ", result.Reasons.Select(x => x.Message));
+                    var noAdventure = result.Reasons.Any(x => x.Message.StartsWith("No adventure available", StringComparison.Ordinal));
+                    if (noAdventure)
+                    {
+                        task.ExecuteAt = DateTime.Now.AddMinutes(Random.Shared.Next(20, 31));
+                        logger.Information("Start adventure: nothing to start now, looking again at {Time:HH:mm}.", task.ExecuteAt);
+                    }
+                    else
+                    {
+                        task.ExecuteAt = DateTime.Now.AddMinutes(Random.Shared.Next(BlockedMinMinutes, BlockedMaxMinutes + 1));
+                        logger.Warning("Start adventure: cannot start now ({Reason}) - looking again at {Time:HH:mm}.", reason, task.ExecuteAt);
+                    }
                     return Result.Ok();
                 }
                 return result;

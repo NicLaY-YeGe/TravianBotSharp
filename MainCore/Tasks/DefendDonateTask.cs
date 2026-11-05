@@ -79,6 +79,12 @@ namespace MainCore.Tasks
         // Amount passed for a resource whose value could not be read (the donation command caps it at the page maximum).
         private const long AskForAllAmount = 1_000_000_000;
 
+        // 2026-11-04: no Rally Point in the village (razed by an earlier attack) = no impact time to read. Defend still
+        // trains and donates, once, under this fixed budget, and the village counts as handled for this long so the
+        // "newly flagged" re-queue does not start it again and again.
+        private const int NoRallyPointBudgetSeconds = 120;
+        private const int NoRallyPointHandledMinutes = 20;
+
         // Seconds kept free before impact when Dodge is off.
         private const int ReserveBeforeImpactSeconds = 15;
 
@@ -136,8 +142,20 @@ namespace MainCore.Tasks
             {
                 if (overviewResult.HasError<MissingBuilding>())
                 {
-                    logger.Warning("No rally point in {VillageId}, cannot read the incoming attack.", task.VillageId);
-                    return Skip.Error.WithErrors(overviewResult.Errors);
+                    // 2026-11-04 (live log + screenshots): 37539 lost its Rally Point to catapults. The old code skipped here,
+                    // so a village that was being razed got no training and no donation at all. The impact time cannot be
+                    // read without it, but both steps do not need it: run them once, under a fixed budget.
+                    logger.Warning(
+                        "No rally point in {VillageId}, cannot read the incoming attack - defending anyway (one pass, fixed budget {Budget}s).",
+                        task.VillageId, NoRallyPointBudgetSeconds);
+                    var started = DateTime.Now;
+                    DefendAttackMemory.MarkHandled(task.VillageId.Value, started.AddMinutes(NoRallyPointHandledMinutes), started);
+                    AttackWakeWindow.ReleaseReservation(task.AccountId, task.VillageId);
+
+                    var noRallyResult = await RunWithBudgetAsync(
+                        task, context, browser, trainCheapestTroopCommand, donateAllianceBonusCommand,
+                        NoRallyPointBudgetSeconds, logger, cancellationToken);
+                    return noRallyResult;
                 }
                 return overviewResult;
             }
@@ -181,22 +199,9 @@ namespace MainCore.Tasks
                 "Incoming {Kind} on {VillageId} lands in {Seconds}s - defending now (pass {Pass}, budget {Budget}s).",
                 first.Kind.ToString().ToLowerInvariant(), task.VillageId, attackSeconds.Value, task.Pass, budgetSeconds);
 
-            using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            budget.CancelAfter(TimeSpan.FromSeconds(budgetSeconds));
-
-            Result result;
-            try
-            {
-                result = await RunAsync(
-                    task, context, browser,
-                    trainCheapestTroopCommand, donateAllianceBonusCommand,
-                    logger, budget.Token, cancellationToken);
-            }
-            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-            {
-                logger.Warning("Defend ran out of its {Budget}s budget in {VillageId}, stopping so Dodge is not blocked.", budgetSeconds, task.VillageId);
-                result = Skip.Error;
-            }
+            var result = await RunWithBudgetAsync(
+                task, context, browser, trainCheapestTroopCommand, donateAllianceBonusCommand,
+                budgetSeconds, logger, cancellationToken);
 
             // A user pause must surface untouched.
             if (cancellationToken.IsCancellationRequested) return result;
@@ -216,6 +221,73 @@ namespace MainCore.Tasks
             }
 
             return result;
+        }
+
+        // The sequence (train, read the stock, donate) under a hard time budget. Running out of it is a plain Skip;
+        // a user pause still surfaces as Cancel.
+        private static async ValueTask<Result> RunWithBudgetAsync(
+            Task task,
+            AppDbContext context,
+            IChromeBrowser browser,
+            TrainCheapestTroopCommand.Handler trainCheapestTroopCommand,
+            DonateAllianceBonusCommand.Handler donateAllianceBonusCommand,
+            int budgetSeconds,
+            ILogger logger,
+            CancellationToken cancellationToken)
+        {
+            using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            budget.CancelAfter(TimeSpan.FromSeconds(budgetSeconds));
+
+            try
+            {
+                return await RunAsync(
+                    task, context, browser,
+                    trainCheapestTroopCommand, donateAllianceBonusCommand,
+                    logger, budget.Token, cancellationToken);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                logger.Warning("Defend ran out of its {Budget}s budget in {VillageId}, stopping so Dodge is not blocked.", budgetSeconds, task.VillageId);
+                return Skip.Error;
+            }
+        }
+
+        // 2026-11-04: Wood read -1 on EVERY defend (9+ live defends, 5 page dumps) although #l1 is in the saved page and has
+        // the same markup as the other three resources, whose numbers parse fine. The four values used to be read with four
+        // separate browser.Html calls, each re-reading the live DOM; wood is always the first, taken right after the training
+        // POST while the page is still being replaced, the other three a moment later. Wait (max 5 s) until all four resource
+        // nodes can be read and take every value from that one snapshot.
+        private const int ResourceBarWaitMs = 5000;
+
+        private static async ValueTask<HtmlDocument> ReadResourceBarAsync(IChromeBrowser browser, CancellationToken token)
+        {
+            var deadline = DateTime.UtcNow.AddMilliseconds(ResourceBarWaitMs);
+            HtmlDocument? last = null;
+            while (true)
+            {
+                try
+                {
+                    var html = browser.Html;
+                    last = html;
+                    if (StorageParser.GetWood(html) >= 0
+                        && StorageParser.GetClay(html) >= 0
+                        && StorageParser.GetIron(html) >= 0
+                        && StorageParser.GetCrop(html) >= 0)
+                    {
+                        return html;
+                    }
+                }
+                catch (BrowserException)
+                {
+                    // a navigation is in flight: try again below
+                }
+
+                if (DateTime.UtcNow >= deadline) break;
+                try { await System.Threading.Tasks.Task.Delay(250, token); }
+                catch (OperationCanceledException) { break; }
+            }
+
+            return last ?? browser.Html;
         }
 
         private static async ValueTask<Result> RunAsync(
@@ -259,12 +331,13 @@ namespace MainCore.Tasks
             // returns -1 when it cannot read a value. An unreadable value is therefore asked for as
             // "all" (AskForAllAmount): the donation command caps every resource at the alliance page's own
             // maximum, which is the real stock, so nothing can be over-donated.
+            var resourceHtml = await ReadResourceBarAsync(browser, token);
             var rawStock = new[]
             {
-                StorageParser.GetWood(browser.Html),
-                StorageParser.GetClay(browser.Html),
-                StorageParser.GetIron(browser.Html),
-                StorageParser.GetCrop(browser.Html),
+                StorageParser.GetWood(resourceHtml),
+                StorageParser.GetClay(resourceHtml),
+                StorageParser.GetIron(resourceHtml),
+                StorageParser.GetCrop(resourceHtml),
             };
             var unreadable = rawStock.Count(x => x < 0);
             if (unreadable > 0)
@@ -274,7 +347,7 @@ namespace MainCore.Tasks
                 var resourceIds = new[] { "l1", "l2", "l3", "l4" };
                 var nodeInfo = string.Join("; ", Enumerable.Range(0, 4).Where(i => rawStock[i] < 0).Select(i =>
                 {
-                    var node = browser.Html.GetElementbyId(resourceIds[i]);
+                    var node = resourceHtml.GetElementbyId(resourceIds[i]);
                     return node is null
                         ? $"#{resourceIds[i]} missing"
                         : $"#{resourceIds[i]} text='{node.InnerText.Trim()}' class='{node.GetAttributeValue("class", "")}'";

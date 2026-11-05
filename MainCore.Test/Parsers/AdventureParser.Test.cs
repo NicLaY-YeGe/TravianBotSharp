@@ -60,6 +60,51 @@ namespace MainCore.Test.Parsers
         }
 
         [Fact]
+        public void IsExploreDisabled_NormalPage_False()
+        {
+            _html.Load(AdventuresPage);
+            var button = MainCore.Parsers.AdventureParser.GetAdventureButton(_html);
+            button.ShouldNotBeNull();
+            MainCore.Parsers.AdventureParser.IsExploreDisabled(button).ShouldBeFalse();
+        }
+
+        [Fact]
+        public void IsExploreDisabled_GreyedOutByClass_True()
+        {
+            // 2026-11-04: the game greys the button out with a CSS class only (no disabled attribute).
+            var doc = new HtmlDocument();
+            doc.LoadHtml("<table id=\"heroAdventure\"><tbody><tr><td><button class=\"textButtonV2 disabled\">Explore</button></td></tr></tbody></table>");
+            var button = MainCore.Parsers.AdventureParser.GetAdventureButton(doc);
+            button.ShouldNotBeNull();
+            MainCore.Parsers.AdventureParser.IsExploreDisabled(button).ShouldBeTrue();
+        }
+
+        [Fact]
+        public void IsExploreDisabled_DisabledAttribute_True()
+        {
+            var doc = new HtmlDocument();
+            doc.LoadHtml("<table id=\"heroAdventure\"><tbody><tr><td><button disabled>Explore</button></td></tr></tbody></table>");
+            var button = MainCore.Parsers.AdventureParser.GetAdventureButton(doc);
+            button.ShouldNotBeNull();
+            MainCore.Parsers.AdventureParser.IsExploreDisabled(button).ShouldBeTrue();
+        }
+
+        [Fact]
+        public void GetBlockedMessage_FindsTheRallyPointText()
+        {
+            var doc = new HtmlDocument();
+            doc.LoadHtml("<div><div class=\"x\">The hero's home village needs a rally point in order to send the hero</div></div>");
+            MainCore.Parsers.AdventureParser.GetBlockedMessage(doc).ShouldNotBeNull().ShouldContain("rally point");
+        }
+
+        [Fact]
+        public void GetBlockedMessage_NormalPage_Null()
+        {
+            _html.Load(AdventuresPage);
+            MainCore.Parsers.AdventureParser.GetBlockedMessage(_html).ShouldBeNull();
+        }
+
+        [Fact]
         public void GetAdventureInfo()
         {
             _html.Load(AdventuresPage);
