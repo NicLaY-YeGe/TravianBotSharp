@@ -1,4 +1,6 @@
 using MainCore.Commands.Features.UpgradeBuilding;
+using MainCore.Enums;
+using MainCore.Models;
 
 namespace MainCore.Test.Commands.Features.UpgradeBuilding
 {
