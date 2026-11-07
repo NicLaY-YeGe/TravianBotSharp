@@ -1,5 +1,6 @@
 using MainCore.Commands.Features.RaidReport;
 using MainCore.Entities;
+using MainCore.Parsers;
 
 namespace MainCore.Test.Commands.Features.RaidReporting
 {

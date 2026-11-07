@@ -12,6 +12,9 @@
 
     <RunAnalyzersDuringBuild>False</RunAnalyzersDuringBuild>
   </PropertyGroup>
+       <PropertyGroup>
+       <PlaywrightPlatform>win</PlaywrightPlatform>
+     </PropertyGroup>
   <!--<PropertyGroup>
     <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
     <GeneratedFolder>Generated</GeneratedFolder>
@@ -37,6 +40,7 @@
     <PackageReference Include="Injectio" Version="5.1.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.10" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.10" />
+    <PackageReference Include="Microsoft.Playwright" Version="1.60.0" />
     <PackageReference Include="Polly" Version="8.6.4" />
     <PackageReference Include="ReactiveUI" Version="22.2.1" />
     <PackageReference Include="ReactiveUI.SourceGenerators" Version="2.5.1">
@@ -44,8 +48,6 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="Riok.Mapperly" Version="4.3.0" />
-    <PackageReference Include="Selenium.Support" Version="4.38.0" />
-    <PackageReference Include="Selenium.WebDriver" Version="4.38.0" />
     <PackageReference Include="Serilog" Version="4.3.0" />
     <PackageReference Include="Serilog.Expressions" Version="5.0.0" />
     <PackageReference Include="Serilog.Extensions.Hosting" Version="9.0.0" />
@@ -69,7 +71,6 @@
     <Using Include="Immediate.Handlers.Shared" />
     <Using Include="Injectio.Attributes" />
     <Using Include="Microsoft.EntityFrameworkCore" />
-    <Using Include="OpenQA.Selenium" />
     <Using Include="ReactiveUI" />
     <Using Include="ReactiveUI.SourceGenerators" />
     <Using Include="Splat" />

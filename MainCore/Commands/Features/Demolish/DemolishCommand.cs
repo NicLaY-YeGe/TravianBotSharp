@@ -1,4 +1,3 @@
-using OpenQA.Selenium.Support.UI;
 
 namespace MainCore.Commands.Features.Demolish
 {
@@ -27,7 +26,7 @@ namespace MainCore.Commands.Features.Demolish
             var selectNode = DemolishParser.GetSelect(browser.Html);
             if (selectNode is null) return Stop.Error.WithError("Cannot find the demolish dropdown.");
 
-            var (_, selectFailed, selectElement, selectErrors) = await browser.GetElement(By.XPath(selectNode.XPath), cancellationToken);
+            var (_, selectFailed, selectElement, selectErrors) = await browser.GetElement(By.XPath(selectNode.StableXPath()), cancellationToken);
             if (selectFailed) return Stop.Error.WithErrors(selectErrors);
 
             var select = new SelectElement(selectElement);
@@ -36,7 +35,7 @@ namespace MainCore.Commands.Features.Demolish
             var buttonNode = DemolishParser.GetDemolishButton(browser.Html);
             if (buttonNode is null) return Stop.Error.WithError("Cannot find the demolish button.");
 
-            var (_, buttonFailed, buttonElement, buttonErrors) = await browser.GetElement(By.XPath(buttonNode.XPath), cancellationToken);
+            var (_, buttonFailed, buttonElement, buttonErrors) = await browser.GetElement(By.XPath(buttonNode.StableXPath()), cancellationToken);
             if (buttonFailed) return Stop.Error.WithErrors(buttonErrors);
 
             var result = await browser.Click(buttonElement, cancellationToken);
