@@ -146,7 +146,9 @@ namespace MainCore.Infrasturecture.Persistence
 
         public static readonly ImmutableDictionary<VillageSettingEnums, int> VillageDefaultSettings = new Dictionary<VillageSettingEnums, int>
         {
-            {VillageSettingEnums.UseHeroResourceForBuilding, 0 },
+            // 2026-11-07 (user request): a newly founded village builds with the hero's inventory by default. Only rows that
+            // are MISSING are filled (FillVillageSettings), so every existing village keeps the value it already has.
+            {VillageSettingEnums.UseHeroResourceForBuilding, 1 },
             {VillageSettingEnums.ApplyRomanQueueLogicWhenBuilding, 0 },
             {VillageSettingEnums.UseSpecialUpgrade, 0 },
             {VillageSettingEnums.CompleteImmediately, 0 },
