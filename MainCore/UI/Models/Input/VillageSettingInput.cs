@@ -25,18 +25,36 @@ namespace MainCore.UI.Models.Input
         [Reactive]
         private bool _trainWhenLowResource;
 
-        public TroopSelectorViewModel BarrackTroop { get; } = new();
-        public TroopSelectorViewModel StableTroop { get; } = new();
         public TroopSelectorViewModel GreatBarrackTroop { get; } = new();
         public TroopSelectorViewModel GreatStableTroop { get; } = new();
-        public TroopSelectorViewModel WorkshopTroop { get; } = new();
 
+        // Hidden fallback (no UI row any more): the interval of a troop whose own interval is 0/0.
         public RangeInputViewModel TrainTroopRepeatTime { get; } = new();
-        public RangeInputViewModel BarrackAmount { get; } = new();
-        public RangeInputViewModel StableAmount { get; } = new();
+
+        // 2026-10-27: per-troop amount and interval (rows depend on the tribe).
+        public TroopSlotsViewModel InfantrySlots { get; } = new(BuildingEnums.Barracks);
+        public TroopSlotsViewModel CavalrySlots { get; } = new(BuildingEnums.Stable);
+        public TroopSlotsViewModel SiegeSlots { get; } = new(BuildingEnums.Workshop);
         public RangeInputViewModel GreatBarrackAmount { get; } = new();
         public RangeInputViewModel GreatStableAmount { get; } = new();
-        public RangeInputViewModel WorkshopAmount { get; } = new();
+        public RangeInputViewModel GreatBarrackRepeatTime { get; } = new();
+        public RangeInputViewModel GreatStableRepeatTime { get; } = new();
+
+        // 2026-10-30: queue horizon per training building (Min = "at least", Max = "fill up to", minutes; 0/0 = off).
+        public RangeInputViewModel BarrackHorizon { get; } = new();
+        public RangeInputViewModel StableHorizon { get; } = new();
+        public RangeInputViewModel WorkshopHorizon { get; } = new();
+        public RangeInputViewModel GreatBarrackHorizon { get; } = new();
+        public RangeInputViewModel GreatStableHorizon { get; } = new();
+
+        [Reactive]
+        private bool _trainUseNpc;
+
+        [Reactive]
+        private bool _trainUseHeroResource;
+
+        [Reactive]
+        private bool _constructionFirst;
 
         [Reactive]
         private bool _autoNPCEnable;
@@ -78,6 +96,9 @@ namespace MainCore.UI.Models.Input
 
         [Reactive]
         private bool _defendDonateEnable;
+
+        [Reactive]
+        private bool _dodgeRaidEnable;
 
         [Reactive]
         private bool _autoSettleEnable;
@@ -149,6 +170,11 @@ namespace MainCore.UI.Models.Input
         public AmountInputViewModel OasisScoutMinTroops { get; } = new();
         public AmountInputViewModel OasisScoutMaxTroops { get; } = new();
         public AmountInputViewModel OasisScoutHeroPowerThreshold { get; } = new();
+        public AmountInputViewModel OasisScoutAnimalTroopSlot { get; } = new();
+        public AmountInputViewModel OasisScoutAnimalMinTroops { get; } = new();
+        public AmountInputViewModel OasisScoutAnimalMaxTroops { get; } = new();
+        public AmountInputViewModel OasisScoutAnimalMaxPower { get; } = new();
+        public AmountInputViewModel ConstructionReservePercent { get; } = new();
 
         [Reactive]
         private bool _trapEnable;
@@ -180,16 +206,6 @@ namespace MainCore.UI.Models.Input
             TrainTroopRepeatTime.Set(
                 settings.GetValueOrDefault(VillageSettingEnums.TrainTroopRepeatTimeMin),
                 settings.GetValueOrDefault(VillageSettingEnums.TrainTroopRepeatTimeMax));
-            var barrackTroop = (TroopEnums)settings.GetValueOrDefault(VillageSettingEnums.BarrackTroop);
-            BarrackTroop.Set(barrackTroop, BuildingEnums.Barracks, tribe);
-            BarrackAmount.Set(
-                settings.GetValueOrDefault(VillageSettingEnums.BarrackAmountMin),
-                settings.GetValueOrDefault(VillageSettingEnums.BarrackAmountMax));
-            var stableTroop = (TroopEnums)settings.GetValueOrDefault(VillageSettingEnums.StableTroop);
-            StableTroop.Set(stableTroop, BuildingEnums.Stable, tribe);
-            StableAmount.Set(
-                settings.GetValueOrDefault(VillageSettingEnums.StableAmountMin),
-                settings.GetValueOrDefault(VillageSettingEnums.StableAmountMax));
             var greatBarrackTroop = (TroopEnums)settings.GetValueOrDefault(VillageSettingEnums.GreatBarrackTroop);
             GreatBarrackTroop.Set(greatBarrackTroop, BuildingEnums.GreatBarracks, tribe);
             GreatBarrackAmount.Set(
@@ -200,11 +216,35 @@ namespace MainCore.UI.Models.Input
             GreatStableAmount.Set(
                 settings.GetValueOrDefault(VillageSettingEnums.GreatStableAmountMin),
                 settings.GetValueOrDefault(VillageSettingEnums.GreatStableAmountMax));
-            var workshopTroop = (TroopEnums)settings.GetValueOrDefault(VillageSettingEnums.WorkshopTroop);
-            WorkshopTroop.Set(workshopTroop, BuildingEnums.Workshop, tribe);
-            WorkshopAmount.Set(
-                settings.GetValueOrDefault(VillageSettingEnums.WorkshopAmountMin),
-                settings.GetValueOrDefault(VillageSettingEnums.WorkshopAmountMax));
+            InfantrySlots.Set(settings, tribe);
+            CavalrySlots.Set(settings, tribe);
+            SiegeSlots.Set(settings, tribe);
+
+            ConstructionFirst = settings.GetValueOrDefault(VillageSettingEnums.ConstructionFirst) == 1;
+            GreatBarrackRepeatTime.Set(
+                settings.GetValueOrDefault(VillageSettingEnums.GreatBarrackRepeatTimeMin),
+                settings.GetValueOrDefault(VillageSettingEnums.GreatBarrackRepeatTimeMax));
+            GreatStableRepeatTime.Set(
+                settings.GetValueOrDefault(VillageSettingEnums.GreatStableRepeatTimeMin),
+                settings.GetValueOrDefault(VillageSettingEnums.GreatStableRepeatTimeMax));
+
+            BarrackHorizon.Set(
+                settings.GetValueOrDefault(VillageSettingEnums.BarrackHorizonMin),
+                settings.GetValueOrDefault(VillageSettingEnums.BarrackHorizonTarget));
+            StableHorizon.Set(
+                settings.GetValueOrDefault(VillageSettingEnums.StableHorizonMin),
+                settings.GetValueOrDefault(VillageSettingEnums.StableHorizonTarget));
+            WorkshopHorizon.Set(
+                settings.GetValueOrDefault(VillageSettingEnums.WorkshopHorizonMin),
+                settings.GetValueOrDefault(VillageSettingEnums.WorkshopHorizonTarget));
+            GreatBarrackHorizon.Set(
+                settings.GetValueOrDefault(VillageSettingEnums.GreatBarrackHorizonMin),
+                settings.GetValueOrDefault(VillageSettingEnums.GreatBarrackHorizonTarget));
+            GreatStableHorizon.Set(
+                settings.GetValueOrDefault(VillageSettingEnums.GreatStableHorizonMin),
+                settings.GetValueOrDefault(VillageSettingEnums.GreatStableHorizonTarget));
+            TrainUseNpc = settings.GetValueOrDefault(VillageSettingEnums.TrainUseNpc) == 1;
+            TrainUseHeroResource = settings.GetValueOrDefault(VillageSettingEnums.TrainUseHeroResource) == 1;
 
             AutoNPCEnable = settings.GetValueOrDefault(VillageSettingEnums.AutoNPCEnable) == 1;
             AutoNPCOverflow = settings.GetValueOrDefault(VillageSettingEnums.AutoNPCOverflow) == 1;
@@ -233,6 +273,7 @@ namespace MainCore.UI.Models.Input
             DodgeRecallSecondsAfterSend.Set(settings.GetValueOrDefault(VillageSettingEnums.DodgeRecallSecondsAfterSend));
 
             DefendDonateEnable = settings.GetValueOrDefault(VillageSettingEnums.DefendDonateEnable) == 1;
+            DodgeRaidEnable = settings.GetValueOrDefault(VillageSettingEnums.DodgeRaidEnable) == 1;
 
             AutoSettleEnable = settings.GetValueOrDefault(VillageSettingEnums.AutoSettleEnable) == 1;
             // Unset row (village never explicitly saved this) defaults to checked/enabled -
@@ -276,6 +317,11 @@ namespace MainCore.UI.Models.Input
             OasisScoutMinTroops.Set(settings.GetValueOrDefault(VillageSettingEnums.OasisScoutMinTroops));
             OasisScoutMaxTroops.Set(settings.GetValueOrDefault(VillageSettingEnums.OasisScoutMaxTroops));
             OasisScoutHeroPowerThreshold.Set(settings.GetValueOrDefault(VillageSettingEnums.OasisScoutHeroPowerThreshold));
+            OasisScoutAnimalTroopSlot.Set(settings.GetValueOrDefault(VillageSettingEnums.OasisScoutAnimalTroopSlot));
+            OasisScoutAnimalMinTroops.Set(settings.GetValueOrDefault(VillageSettingEnums.OasisScoutAnimalMinTroops));
+            OasisScoutAnimalMaxTroops.Set(settings.GetValueOrDefault(VillageSettingEnums.OasisScoutAnimalMaxTroops));
+            OasisScoutAnimalMaxPower.Set(settings.GetValueOrDefault(VillageSettingEnums.OasisScoutAnimalMaxPower));
+            ConstructionReservePercent.Set(settings.GetValueOrDefault(VillageSettingEnums.ConstructionReservePercent));
 
             TrapEnable = settings.GetValueOrDefault(VillageSettingEnums.TrapEnable) == 1;
             TrapAmount.Set(
@@ -307,16 +353,22 @@ namespace MainCore.UI.Models.Input
             var trainTroopEnable = TrainTroopEnable ? 1 : 0;
             var trainWhenLowResource = TrainWhenLowResource ? 1 : 0;
             var (trainTroopRepeatTimeMin, trainTroopRepeatTimeMax) = TrainTroopRepeatTime.Get();
-            var barrackTroop = (int)BarrackTroop.Get();
-            var (barrackAmountMin, barrackAmountMax) = BarrackAmount.Get();
-            var stableTroop = (int)StableTroop.Get();
-            var (stableAmountMin, stableAmountMax) = StableAmount.Get();
             var greatBarrackTroop = (int)GreatBarrackTroop.Get();
             var (greatBarrackAmountMin, greatBarrackAmountMax) = GreatBarrackAmount.Get();
             var greatStableTroop = (int)GreatStableTroop.Get();
             var (greatStableAmountMin, greatStableAmountMax) = GreatStableAmount.Get();
-            var workshopTroop = (int)WorkshopTroop.Get();
-            var (workshopAmountMin, workshopAmountMax) = WorkshopAmount.Get();
+
+            var constructionFirst = ConstructionFirst ? 1 : 0;
+            var (greatBarrackRepeatMin, greatBarrackRepeatMax) = GreatBarrackRepeatTime.Get();
+            var (greatStableRepeatMin, greatStableRepeatMax) = GreatStableRepeatTime.Get();
+
+            var (barrackHorizonMin, barrackHorizonTarget) = BarrackHorizon.Get();
+            var (stableHorizonMin, stableHorizonTarget) = StableHorizon.Get();
+            var (workshopHorizonMin, workshopHorizonTarget) = WorkshopHorizon.Get();
+            var (greatBarrackHorizonMin, greatBarrackHorizonTarget) = GreatBarrackHorizon.Get();
+            var (greatStableHorizonMin, greatStableHorizonTarget) = GreatStableHorizon.Get();
+            var trainUseNpc = TrainUseNpc ? 1 : 0;
+            var trainUseHeroResource = TrainUseHeroResource ? 1 : 0;
 
             var autoNPCEnable = AutoNPCEnable ? 1 : 0;
             var autoNPCOverflow = AutoNPCOverflow ? 1 : 0;
@@ -341,6 +393,7 @@ namespace MainCore.UI.Models.Input
             var dodgeRecallSecondsAfterSend = DodgeRecallSecondsAfterSend.Get();
 
             var defendDonateEnable = DefendDonateEnable ? 1 : 0;
+            var dodgeRaidEnable = DodgeRaidEnable ? 1 : 0;
 
             var autoSettleEnable = AutoSettleEnable ? 1 : 0;
             var autoApplyBuildTemplateEnable = AutoApplyBuildTemplateEnable ? 1 : 0;
@@ -379,6 +432,11 @@ namespace MainCore.UI.Models.Input
             var oasisScoutMinTroops = OasisScoutMinTroops.Get();
             var oasisScoutMaxTroops = OasisScoutMaxTroops.Get();
             var oasisScoutHeroPowerThreshold = OasisScoutHeroPowerThreshold.Get();
+            var oasisScoutAnimalTroopSlot = OasisScoutAnimalTroopSlot.Get();
+            var oasisScoutAnimalMinTroops = OasisScoutAnimalMinTroops.Get();
+            var oasisScoutAnimalMaxTroops = OasisScoutAnimalMaxTroops.Get();
+            var oasisScoutAnimalMaxPower = OasisScoutAnimalMaxPower.Get();
+            var constructionReservePercent = Math.Clamp(ConstructionReservePercent.Get(), 0, 100);
 
             var trapEnable = TrapEnable ? 1 : 0;
             var (trapAmountMin, trapAmountMax) = TrapAmount.Get();
@@ -402,21 +460,21 @@ namespace MainCore.UI.Models.Input
                 { VillageSettingEnums.TrainWhenLowResource, trainWhenLowResource },
                 { VillageSettingEnums.TrainTroopRepeatTimeMin, trainTroopRepeatTimeMin },
                 { VillageSettingEnums.TrainTroopRepeatTimeMax, trainTroopRepeatTimeMax },
-                { VillageSettingEnums.BarrackTroop, barrackTroop },
-                { VillageSettingEnums.BarrackAmountMin, barrackAmountMin },
-                { VillageSettingEnums.BarrackAmountMax, barrackAmountMax },
-                { VillageSettingEnums.StableTroop, stableTroop },
-                { VillageSettingEnums.StableAmountMin, stableAmountMin },
-                { VillageSettingEnums.StableAmountMax, stableAmountMax },
+                { VillageSettingEnums.BarrackTroop, 0 },
+                { VillageSettingEnums.BarrackAmountMin, 0 },
+                { VillageSettingEnums.BarrackAmountMax, 0 },
+                { VillageSettingEnums.StableTroop, 0 },
+                { VillageSettingEnums.StableAmountMin, 0 },
+                { VillageSettingEnums.StableAmountMax, 0 },
                 { VillageSettingEnums.GreatBarrackTroop, greatBarrackTroop },
                 { VillageSettingEnums.GreatBarrackAmountMin, greatBarrackAmountMin },
                 { VillageSettingEnums.GreatBarrackAmountMax, greatBarrackAmountMax },
                 { VillageSettingEnums.GreatStableTroop, greatStableTroop },
                 { VillageSettingEnums.GreatStableAmountMin, greatStableAmountMin },
                 { VillageSettingEnums.GreatStableAmountMax, greatStableAmountMax },
-                { VillageSettingEnums.WorkshopTroop, workshopTroop },
-                { VillageSettingEnums.WorkshopAmountMin, workshopAmountMin },
-                { VillageSettingEnums.WorkshopAmountMax, workshopAmountMax },
+                { VillageSettingEnums.WorkshopTroop, 0 },
+                { VillageSettingEnums.WorkshopAmountMin, 0 },
+                { VillageSettingEnums.WorkshopAmountMax, 0 },
                 { VillageSettingEnums.AutoNPCEnable, autoNPCEnable },
                 { VillageSettingEnums.AutoNPCOverflow, autoNPCOverflow },
                 { VillageSettingEnums.AutoNPCReverse, autoNPCReverse },
@@ -442,6 +500,30 @@ namespace MainCore.UI.Models.Input
                 { VillageSettingEnums.DodgeRecallSecondsAfterSend, dodgeRecallSecondsAfterSend },
 
                 { VillageSettingEnums.DefendDonateEnable, defendDonateEnable },
+                { VillageSettingEnums.DodgeRaidEnable, dodgeRaidEnable },
+                { VillageSettingEnums.ConstructionFirst, constructionFirst },
+                { VillageSettingEnums.BarrackRepeatTimeMin, 0 },
+                { VillageSettingEnums.BarrackRepeatTimeMax, 0 },
+                { VillageSettingEnums.StableRepeatTimeMin, 0 },
+                { VillageSettingEnums.StableRepeatTimeMax, 0 },
+                { VillageSettingEnums.GreatBarrackRepeatTimeMin, greatBarrackRepeatMin },
+                { VillageSettingEnums.GreatBarrackRepeatTimeMax, greatBarrackRepeatMax },
+                { VillageSettingEnums.GreatStableRepeatTimeMin, greatStableRepeatMin },
+                { VillageSettingEnums.GreatStableRepeatTimeMax, greatStableRepeatMax },
+                { VillageSettingEnums.WorkshopRepeatTimeMin, 0 },
+                { VillageSettingEnums.WorkshopRepeatTimeMax, 0 },
+                { VillageSettingEnums.BarrackHorizonMin, barrackHorizonMin },
+                { VillageSettingEnums.BarrackHorizonTarget, barrackHorizonTarget },
+                { VillageSettingEnums.StableHorizonMin, stableHorizonMin },
+                { VillageSettingEnums.StableHorizonTarget, stableHorizonTarget },
+                { VillageSettingEnums.GreatBarrackHorizonMin, greatBarrackHorizonMin },
+                { VillageSettingEnums.GreatBarrackHorizonTarget, greatBarrackHorizonTarget },
+                { VillageSettingEnums.GreatStableHorizonMin, greatStableHorizonMin },
+                { VillageSettingEnums.GreatStableHorizonTarget, greatStableHorizonTarget },
+                { VillageSettingEnums.WorkshopHorizonMin, workshopHorizonMin },
+                { VillageSettingEnums.WorkshopHorizonTarget, workshopHorizonTarget },
+                { VillageSettingEnums.TrainUseNpc, trainUseNpc },
+                { VillageSettingEnums.TrainUseHeroResource, trainUseHeroResource },
 
                 { VillageSettingEnums.AutoSettleEnable, autoSettleEnable },
                 { VillageSettingEnums.AutoApplyBuildTemplateEnable, autoApplyBuildTemplateEnable },
@@ -479,6 +561,11 @@ namespace MainCore.UI.Models.Input
                 { VillageSettingEnums.OasisScoutMinTroops, oasisScoutMinTroops },
                 { VillageSettingEnums.OasisScoutMaxTroops, oasisScoutMaxTroops },
                 { VillageSettingEnums.OasisScoutHeroPowerThreshold, oasisScoutHeroPowerThreshold },
+                { VillageSettingEnums.OasisScoutAnimalTroopSlot, oasisScoutAnimalTroopSlot },
+                { VillageSettingEnums.OasisScoutAnimalMinTroops, oasisScoutAnimalMinTroops },
+                { VillageSettingEnums.OasisScoutAnimalMaxTroops, oasisScoutAnimalMaxTroops },
+                { VillageSettingEnums.OasisScoutAnimalMaxPower, oasisScoutAnimalMaxPower },
+                { VillageSettingEnums.ConstructionReservePercent, constructionReservePercent },
 
                 { VillageSettingEnums.TrapEnable, trapEnable },
                 { VillageSettingEnums.TrapAmountMin, trapAmountMin },
@@ -494,6 +581,11 @@ namespace MainCore.UI.Models.Input
                 { VillageSettingEnums.CropScanGapMinSeconds, cropScanGapMinSeconds },
                 { VillageSettingEnums.CropScanGapMaxSeconds, cropScanGapMaxSeconds },
             };
+
+            // The old single-troop settings of these buildings are superseded by the per-troop rows (0 = off).
+            InfantrySlots.WriteTo(settings);
+            CavalrySlots.WriteTo(settings);
+            SiegeSlots.WriteTo(settings);
             return settings;
         }
 
@@ -503,11 +595,11 @@ namespace MainCore.UI.Models.Input
                 .Select(x => x.Tribe)
                 .Subscribe((tribe) =>
                 {
-                    BarrackTroop.ChangeTribe(BuildingEnums.Barracks, tribe);
-                    StableTroop.ChangeTribe(BuildingEnums.Stable, tribe);
                     GreatBarrackTroop.ChangeTribe(BuildingEnums.GreatBarracks, tribe);
                     GreatStableTroop.ChangeTribe(BuildingEnums.GreatStable, tribe);
-                    WorkshopTroop.ChangeTribe(BuildingEnums.Workshop, tribe);
+                    InfantrySlots.ChangeTribe(tribe);
+                    CavalrySlots.ChangeTribe(tribe);
+                    SiegeSlots.ChangeTribe(tribe);
                     DodgeTroopSlots.ChangeTribe(tribe);
                 });
         }
