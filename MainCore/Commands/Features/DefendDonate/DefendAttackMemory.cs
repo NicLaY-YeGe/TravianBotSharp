@@ -26,5 +26,8 @@ namespace MainCore.Commands.Features.DefendDonate
             => HandledUntil.TryGetValue(villageId, out var until) && until > now;
 
         public static void Clear() => HandledUntil.Clear();
+
+        // A village that left the account (conquered/destroyed) takes its memory with it.
+        public static void Clear(int villageId) => HandledUntil.TryRemove(villageId, out _);
     }
 }
