@@ -39,7 +39,13 @@ namespace MainCore.Commands.Features.SyncAttack
             // Null = the old behaviour (every wait may take up to 3 minutes). Time-critical callers
             // (DodgeTroopTask) pass the seconds left before impact; when it runs out the send is
             // abandoned with Skip, a diagnostic dump is written, and the queue is not held up.
-            int? TimeoutSeconds = null) : IVillageCommand;
+            int? TimeoutSeconds = null,
+            // 2026-11-08: catapult target (value of CatapultTargetEnums, 0 = leave the game's
+            // "Random"). Chosen on the CONFIRMATION screen, right before the final click, and
+            // only when the page has the drop-down and offers the value: it is absent for a
+            // movement without catapults and for a raid (catapults do not fire in a raid), and
+            // the offered list depends on the Rally Point level. Never a reason to fail the send.
+            int CatapultTarget = 0) : IVillageCommand;
 
         private static async ValueTask<Result<DateTime?>> HandleAsync(
             Command command,
@@ -98,7 +104,7 @@ namespace MainCore.Commands.Features.SyncAttack
             ILogger logger,
             CancellationToken cancellationToken)
         {
-            var (villageId, x, y, eventType, troopAmounts, confirm, includeHero, _) = command;
+            var (villageId, x, y, eventType, troopAmounts, confirm, includeHero, _, catapultTarget) = command;
 
             foreach (var (slot, amount) in troopAmounts)
             {
@@ -185,6 +191,12 @@ namespace MainCore.Commands.Features.SyncAttack
                 return arrivalTime;
             }
 
+            if (catapultTarget > 0)
+            {
+                var targetResult = await SelectCatapultTarget(browser, villageId, catapultTarget, logger, cancellationToken);
+                if (targetResult.IsFailed) return Result.Fail(targetResult.Errors);
+            }
+
             var confirmResult = await ClickConfirm(browser, cancellationToken);
             if (confirmResult.IsFailed) return Result.Fail(confirmResult.Errors);
 
@@ -262,6 +274,30 @@ namespace MainCore.Commands.Features.SyncAttack
             if (isFailed) return Result.Fail(errors);
 
             return await browser.Click(element, cancellationToken);
+        }
+
+        private static async Task<Result> SelectCatapultTarget(IChromeBrowser browser, VillageId villageId, int target, ILogger logger, CancellationToken cancellationToken)
+        {
+            if (RallyPointSendTroopsParser.GetCatapultTargetSelect(browser.Html) is null)
+            {
+                logger.Warning("Village {VillageId}: a catapult target ({Target}) is set but the confirmation screen has no target drop-down (no catapults in this movement, or a raid - catapults do not fire in a raid). Sending without it.", villageId, (CatapultTargetEnums)target);
+                return Result.Ok();
+            }
+
+            if (!RallyPointSendTroopsParser.HasCatapultTargetOption(browser.Html, target))
+            {
+                // The game lists only what the Rally Point level allows (level 10 for almost everything).
+                logger.Warning("Village {VillageId}: the game does not offer {Target} as a catapult target here (Rally Point level too low?). Sending with the game's default (Random).", villageId, (CatapultTargetEnums)target);
+                return Result.Ok();
+            }
+
+            var (_, isFailed, element, errors) = await browser.GetElement(
+                By.CssSelector($"select[name=\"{RallyPointSendTroopsParser.CatapultTargetSelectName}\"]"), cancellationToken);
+            if (isFailed) return Result.Fail(errors);
+
+            new SelectElement(element).SelectByValue($"{target}");
+            logger.Information("Village {VillageId}: catapult target set to {Target}.", villageId, (CatapultTargetEnums)target);
+            return Result.Ok();
         }
 
         private static async Task<Result> ClickConfirm(IChromeBrowser browser, CancellationToken cancellationToken)
