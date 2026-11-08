@@ -16,10 +16,39 @@ namespace MainCore.Tasks
             protected override string TaskName => "Upgrade building";
         }
 
+        // 2026-11-07 (user decision): a building was just started - let the village's troop training look at what is left
+        // 10-20 s from now instead of at its own (possibly hours away) time. Only moves the task earlier, never forces a
+        // batch (intervals, busy queue, horizon and construction reserve still decide). See TrainKickRules.
+        private static void KickTrainTroop(Task task, AppDbContext context, ITaskManager taskManager, ILogger logger)
+        {
+            try
+            {
+                if (!context.BooleanByName(task.VillageId, VillageSettingEnums.TrainTroopEnable)) return;
+
+                var current = taskManager.GetTaskList(task.AccountId)
+                    .OfType<TrainTroopTask.Task>()
+                    .FirstOrDefault(x => x.VillageId == task.VillageId);
+
+                var kick = TrainKickRules.KickTime(DateTime.Now, current?.ExecuteAt, Random.Shared);
+                if (kick is null) return;
+
+                var kickTask = new TrainTroopTask.Task(task.AccountId, task.VillageId) { ExecuteAt = kick.Value };
+                taskManager.AddOrUpdate<TrainTroopTask.Task>(kickTask);
+                logger.Information("Upgrade building in {VillageId}: a building was started, troop training looks at the rest at {Time:HH:mm:ss}.", task.VillageId, kick.Value);
+            }
+            catch (Exception ex)
+            {
+                // A helper must never fail the build task.
+                logger.Warning("Upgrade building in {VillageId}: could not bring the troop training forward ({Reason}).", task.VillageId, ex.Message);
+            }
+        }
+
         private static async ValueTask<Result> HandleAsync(
             Task task,
             ILogger logger,
             IChromeBrowser browser,
+            AppDbContext context,
+            ITaskManager taskManager,
             GetBuildPlanCommand.Handler getBuildPlanCommand,
             ToBuildPageCommand.Handler toBuildPageCommand,
             HandleResourceCommand.Handler handleResourceCommand,
@@ -51,12 +80,25 @@ namespace MainCore.Tasks
                         task.ExecuteAt = nextExecuteErrors.Select(x => x.NextExecute).Min();
                     }
 
+                    // 2026-11-07 (construction reserve): a full build queue keeps the plan's cost known and notes
+                    // when the slot frees; any other reason (no jobs, ...) means nothing is waiting for resources.
+                    var queueFull = nextExecuteErrors.Where(x => x.PrerequisiteLevel == 0).ToList();
+                    if (queueFull.Count > 0)
+                    {
+                        ConstructionNeed.SetSlotBusyUntil(task.VillageId, queueFull.Min(x => x.NextExecute));
+                    }
+                    else
+                    {
+                        ConstructionNeed.Clear(task.VillageId);
+                    }
+
                     // Nothing (buildable) is waiting for resources: troops may use them again.
                     ConstructionHold.Clear(task.VillageId);
                     return Skip.Error.WithErrors(errors);
                 }
 
                 logger.Information("Build {Type} to level {Level} at location {Location}", plan.Type, plan.Level, plan.Location);
+                ConstructionNeed.ClearSlotBusy(task.VillageId);
 
                 result = await toBuildPageCommand.HandleAsync(new(task.VillageId, plan), cancellationToken);
                 if (result.IsFailed) return result;
@@ -146,6 +188,10 @@ namespace MainCore.Tasks
 
                 logger.Information("Upgrade for {Type} at location {Location} completed successfully.", plan.Type, plan.Location);
                 ConstructionHold.Clear(task.VillageId);
+                KickTrainTroop(task, context, taskManager, logger);
+
+                // The cost of the plan just built stays as the best estimate for the next one (the build queue is busy
+                // now); HandleResourceCommand replaces it as soon as the next plan is read, the no-jobs path clears it.
 
                 result = await updateBuildingCommand.HandleAsync(new(task.VillageId), cancellationToken);
                 if (result.IsFailed) return result;

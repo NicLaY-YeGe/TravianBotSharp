@@ -263,6 +263,7 @@ namespace MainCore.Infrasturecture.Persistence
             {VillageSettingEnums.OasisScoutAnimalMinTroops, 3 },
             {VillageSettingEnums.OasisScoutAnimalMaxTroops, 8 },
             {VillageSettingEnums.OasisScoutAnimalMaxPower, 0 },
+            {VillageSettingEnums.ConstructionReservePercent, 0 },
 
             {VillageSettingEnums.SmithyUpgradeEnable, 0 },
             {VillageSettingEnums.SmithyUpgradeTroopSlot, 1 },

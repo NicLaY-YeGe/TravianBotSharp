@@ -92,6 +92,9 @@ namespace MainCore.Tasks
                 }
             }
 
+            // 2026-11-07: construction reserve (null = off). Training only spends the stock above this floor.
+            var reserveFloor = GetReserveFloor(task, context, settingService, logger);
+
             Result result;
             var buildings = await getTrainTroopBuildingQuery.HandleAsync(new(task.VillageId), cancellationToken);
             var settings = new Dictionary<VillageSettingEnums, int>();
@@ -113,7 +116,7 @@ namespace MainCore.Tasks
                     if (plans.Count == 0) continue;
 
                     var horizonResult = await TrainWithHorizon(
-                        task, building, plans, horizon, nextTimes, settings,
+                        task, building, plans, horizon, nextTimes, settings, reserveFloor,
                         context, browser, settingService, logger,
                         toTrainTroopPageCommand, trainTroopCommand, toNpcResourcePageCommand, npcExchangeToTargetCommand, useHeroResourceCommand,
                         cancellationToken);
@@ -175,7 +178,24 @@ namespace MainCore.Tasks
                     firstTroop = false;
 
                     var intervalSeconds = GetIntervalSeconds(settingService, task.VillageId, building, plan);
-                    result = await trainTroopCommand.HandleAsync(new(task.VillageId, building, plan), cancellationToken);
+
+                    // 2026-11-07: construction reserve - train only what the stock above the floor pays for.
+                    var reserveAmount = 0;
+                    if (reserveFloor is not null)
+                    {
+                        var wanted = TrainTroopPlanner.PickAmount(plan, Random.Shared);
+                        var allowed = ReserveUnits(browser, context, task.VillageId, plan.Troop, wanted, reserveFloor, logger);
+                        if (allowed <= 0 || (allowed < wanted && !context.BooleanByName(task.VillageId, VillageSettingEnums.TrainWhenLowResource)))
+                        {
+                            var reservedNext = DateTime.Now.AddSeconds(QueueDeferRules.NextBuildingSeconds(false, null, intervalSeconds, Random.Shared));
+                            TrainTroopSchedule.Set(task.VillageId, building, reservedNext, plan.Troop);
+                            nextTimes.Add(reservedNext);
+                            continue;
+                        }
+                        reserveAmount = allowed;
+                    }
+
+                    result = await trainTroopCommand.HandleAsync(new(task.VillageId, building, plan, reserveAmount), cancellationToken);
                     if (result.IsFailed)
                     {
                         if (result.HasError<MissingResource>())
@@ -228,6 +248,7 @@ namespace MainCore.Tasks
             QueueHorizon horizon,
             List<DateTime> nextTimes,
             Dictionary<VillageSettingEnums, int> settings,
+            long[]? reserveFloor,
             AppDbContext context,
             IChromeBrowser browser,
             ISettingService settingService,
@@ -314,8 +335,8 @@ namespace MainCore.Tasks
                 }
                 if (units <= 0) continue;
 
-                var (makeUpResult, navigated) = await MakeUpResources(
-                    task, plan, units, context, browser, settingService, logger,
+                var (makeUpResult, navigated, allowedUnits) = await MakeUpResources(
+                    task, plan, units, reserveFloor, context, browser, settingService, logger,
                     toNpcResourcePageCommand, npcExchangeToTargetCommand, useHeroResourceCommand, cancellationToken);
                 if (makeUpResult.IsFailed) return makeUpResult;
 
@@ -324,6 +345,17 @@ namespace MainCore.Tasks
                 {
                     result = await toTrainTroopPageCommand.HandleAsync(new(task.VillageId, building), cancellationToken);
                     if (result.IsFailed) return result;
+                }
+
+                // 2026-11-07: the construction reserve (or what the hero can add on top of it) allows fewer units.
+                if (allowedUnits < units)
+                {
+                    starved = true;
+                    logger.Information(
+                        "Train troop in {VillageId}: {Troop} limited to {Allowed} of {Units} unit(s) by the construction reserve.",
+                        task.VillageId, plan.Troop, allowedUnits, units);
+                    units = allowedUnits;
+                    if (units <= 0) continue;
                 }
 
                 // What the page lets us train right now (TrainTroopCommand caps the amount to this): fewer than
@@ -373,12 +405,18 @@ namespace MainCore.Tasks
 
         // A batch that costs more than the village holds: first an NPC trade (when it can cover the deficit by
         // redistributing the village's own total), then the hero's inventory (above the reserve). Returns whether
-        // the browser left the training page (the caller then opens it again). A failure here is never fatal: the
-        // caller trains what the village can pay.
-        private static async ValueTask<(Result Result, bool Navigated)> MakeUpResources(
+        // the browser left the training page (the caller then opens it again) and how many units the caller may
+        // train. A failure here is never fatal: the caller trains what the village can pay.
+        //
+        // 2026-11-07 (construction reserve): with a floor the village's own stock counts only ABOVE the floor. An NPC
+        // trade would redistribute the very stock the floor protects, so it is skipped; the hero's inventory is still
+        // used for the part above the spendable stock. The returned unit count is then what that adds up to (0 = the
+        // reserve leaves nothing). Without a floor the count is always `units` (the old behaviour).
+        private static async ValueTask<(Result Result, bool Navigated, int Units)> MakeUpResources(
             Task task,
             TroopPlan plan,
             int units,
+            long[]? floor,
             AppDbContext context,
             IChromeBrowser browser,
             ISettingService settingService,
@@ -388,26 +426,29 @@ namespace MainCore.Tasks
             UseHeroResourceCommand.Handler useHeroResourceCommand,
             CancellationToken cancellationToken)
         {
-            var useNpc = context.BooleanByName(task.VillageId, VillageSettingEnums.TrainUseNpc);
+            var useNpc = context.BooleanByName(task.VillageId, VillageSettingEnums.TrainUseNpc) && floor is null;
             var useHero = context.BooleanByName(task.VillageId, VillageSettingEnums.TrainUseHeroResource);
-            if (!useNpc && !useHero) return (Result.Ok(), false);
+            if (floor is null && !useNpc && !useHero) return (Result.Ok(), false, units);
 
             var html = browser.Html;
-            if (TrainTroopParser.GetMaxAmount(html, plan.Troop) >= units) return (Result.Ok(), false);
+            if (floor is null && TrainTroopParser.GetMaxAmount(html, plan.Troop) >= units) return (Result.Ok(), false, units);
 
             var (wood, clay, iron, crop) = TrainTroopParser.GetUnitCost(html, plan.Troop);
             long[] unitCost = [wood, clay, iron, crop];
             if (!TrainResourceRules.HasCost(unitCost))
             {
                 logger.Warning("Train troop in {VillageId}: the unit cost of {Troop} could not be read, no resources are made up.", task.VillageId, plan.Troop);
-                return (Result.Ok(), false);
+                return (Result.Ok(), false, units);
             }
 
             var stock = ReadStock(html, context, task.VillageId);
+            // What training may spend from the village: all of it, or only the part above the construction floor.
+            var spendable = floor is null ? stock : ConstructionReserveRules.Spendable(stock, floor);
+            var allowed = floor is null ? units : TrainResourceRules.UnitsThatFit(units, unitCost, spendable, new long[4]);
             var needed = TrainResourceRules.Needed(unitCost, units);
 
             // Enough in the village: the page's own limit is something else (population, queue) - nothing to trade.
-            if (!TrainResourceRules.AnyMissing(TrainResourceRules.Missing(needed, stock))) return (Result.Ok(), false);
+            if (!TrainResourceRules.AnyMissing(TrainResourceRules.Missing(needed, spendable))) return (Result.Ok(), false, allowed);
 
             var navigated = false;
 
@@ -418,15 +459,15 @@ namespace MainCore.Tasks
                 {
                     navigated = true;
                     var pageResult = await toNpcResourcePageCommand.HandleAsync(new(task.VillageId), cancellationToken);
-                    if (pageResult.HasError<Cancel>()) return (pageResult, true);
+                    if (pageResult.HasError<Cancel>()) return (pageResult, true, units);
                     if (pageResult.IsSuccess)
                     {
                         var npcResult = await npcExchangeToTargetCommand.HandleAsync(new(task.VillageId, target), cancellationToken);
-                        if (npcResult.HasError<Cancel>()) return (npcResult, true);
+                        if (npcResult.HasError<Cancel>()) return (npcResult, true, units);
                         if (npcResult.IsSuccess)
                         {
                             logger.Information("Train troop in {VillageId}: NPC trade for {Units} x {Troop} done (wood/clay/iron/crop {Target}).", task.VillageId, units, plan.Troop, string.Join("/", target));
-                            return (Result.Ok(), true);
+                            return (Result.Ok(), true, units);
                         }
                         logger.Warning("Train troop in {VillageId}: the NPC trade failed ({Reason}).", task.VillageId, string.Join("; ", npcResult.Reasons.Select(x => x.Message)));
                     }
@@ -445,13 +486,14 @@ namespace MainCore.Tasks
                 long[] heroStock = [StockOf(HeroItemEnums.Wood), StockOf(HeroItemEnums.Clay), StockOf(HeroItemEnums.Iron), StockOf(HeroItemEnums.Crop)];
                 var available = TrainResourceRules.HeroAvailable(heroStock, reserve);
 
-                var fit = TrainResourceRules.UnitsThatFit(units, unitCost, stock, available);
-                var give = TrainResourceRules.Missing(TrainResourceRules.Needed(unitCost, fit), stock);
+                var fit = TrainResourceRules.UnitsThatFit(units, unitCost, spendable, available);
+                var give = TrainResourceRules.Missing(TrainResourceRules.Needed(unitCost, fit), spendable);
+                if (floor is not null) allowed = fit;
                 if (fit > 0 && TrainResourceRules.AnyMissing(give))
                 {
                     navigated = true;
                     var heroResult = await useHeroResourceCommand.HandleAsync(new(task.AccountId, task.VillageId, give), cancellationToken);
-                    if (heroResult.HasError<Cancel>()) return (heroResult, true);
+                    if (heroResult.HasError<Cancel>()) return (heroResult, true, units);
                     if (heroResult.IsSuccess)
                     {
                         logger.Information("Train troop in {VillageId}: took {Give} (wood/clay/iron/crop) from the hero's inventory for {Units} x {Troop}.", task.VillageId, string.Join("/", give), fit, plan.Troop);
@@ -459,6 +501,8 @@ namespace MainCore.Tasks
                     else
                     {
                         logger.Warning("Train troop in {VillageId}: the hero's inventory could not be used ({Reason}).", task.VillageId, string.Join("; ", heroResult.Reasons.Select(x => x.Message)));
+                        // The hero's share did not arrive: only the village's own spendable stock is certain.
+                        if (floor is not null) allowed = TrainResourceRules.UnitsThatFit(units, unitCost, spendable, new long[4]);
                     }
                 }
                 else if (fit <= 0)
@@ -467,7 +511,50 @@ namespace MainCore.Tasks
                 }
             }
 
-            return (Result.Ok(), navigated);
+            return (Result.Ok(), navigated, allowed);
+        }
+
+        // 2026-11-07: the construction reserve floor (wood / clay / iron / crop) or null when the setting is off or the
+        // storage capacity is not known yet. Read once per visit.
+        private static long[]? GetReserveFloor(Task task, AppDbContext context, ISettingService settingService, ILogger logger)
+        {
+            var percent = settingService.ByName(task.VillageId, VillageSettingEnums.ConstructionReservePercent);
+            if (percent <= 0) return null;
+
+            var storage = context.Storages.FirstOrDefault(x => x.VillageId == task.VillageId.Value);
+            if (storage is null || storage.Warehouse <= 0 || storage.Granary <= 0) return null;
+
+            var cost = ConstructionNeed.GetCost(task.VillageId);
+            var busyFor = ConstructionNeed.GetSlotBusyFor(task.VillageId);
+            var floor = ConstructionReserveRules.Floor(storage.Warehouse, storage.Granary, percent, cost, busyFor);
+            logger.Information(
+                "Train troop in {VillageId}: construction reserve {Percent}% - training keeps wood/clay/iron/crop at or above {Floor} (next building cost {Cost}, build queue busy for {Busy} min).",
+                task.VillageId, percent, string.Join("/", floor), cost is null ? "unknown" : string.Join("/", cost.Take(4)), busyFor is null ? 0 : (int)busyFor.Value.TotalMinutes);
+            return floor;
+        }
+
+        // How many of `wanted` units the stock above the floor pays for (plain, non-horizon flow). Reads the unit
+        // cost and the stock off the training page; an unreadable cost leaves the amount alone.
+        private static int ReserveUnits(IChromeBrowser browser, AppDbContext context, VillageId villageId, TroopEnums troop, int wanted, long[] floor, ILogger logger)
+        {
+            var html = browser.Html;
+            var (wood, clay, iron, crop) = TrainTroopParser.GetUnitCost(html, troop);
+            long[] unitCost = [wood, clay, iron, crop];
+            if (!TrainResourceRules.HasCost(unitCost))
+            {
+                logger.Warning("Train troop in {VillageId}: the unit cost of {Troop} could not be read, the construction reserve is not applied.", villageId, troop);
+                return wanted;
+            }
+
+            var stock = ReadStock(html, context, villageId);
+            var allowed = ConstructionReserveRules.UnitsAllowed(wanted, unitCost, stock, floor);
+            if (allowed < wanted)
+            {
+                logger.Information(
+                    "Train troop in {VillageId}: {Troop} limited to {Allowed} of {Wanted} unit(s) by the construction reserve (stock {Stock}).",
+                    villageId, troop, allowed, wanted, string.Join("/", stock));
+            }
+            return allowed;
         }
 
         // Wood / Clay / Iron / Crop of the village: the page's header values; a value the page could not give

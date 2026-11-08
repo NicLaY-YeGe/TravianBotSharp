@@ -374,5 +374,11 @@
         OasisScoutAnimalMinTroops,
         OasisScoutAnimalMaxTroops,
         OasisScoutAnimalMaxPower,
+
+        // 2026-11-07, user decision: troop training keeps a reserve for construction. Percent of the storage
+        // capacity (Warehouse for wood/clay/iron, Granary for crop) that training may not touch; the floor is
+        // never below the cost of the next building either (ConstructionReserveRules). 0 = off (default).
+        // Appended last on purpose (numbering).
+        ConstructionReservePercent,
     }
 }

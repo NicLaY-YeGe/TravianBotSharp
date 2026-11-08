@@ -67,11 +67,15 @@ MainCore/Services/Browser/TransientStreak.cs
 MainCore.Test/Services/TransientStreakTest.cs
 MainCore/Commands/Features/Scheduling/OnlineHoursRules.cs
 MainCore/Commands/Features/Scheduling/QueueHorizonRules.cs
+MainCore/Commands/Features/Scheduling/TrainKickRules.cs
 MainCore/Commands/Features/TrainTroop/TrainResourceRules.cs
+MainCore/Commands/Features/TrainTroop/ConstructionReserveRules.cs
 MainCore/Parsers/DurationText.cs
 MainCore.Test/Commands/Features/Scheduling/OnlineHoursRulesTest.cs
 MainCore.Test/Commands/Features/Scheduling/QueueHorizonRulesTest.cs
+MainCore.Test/Commands/Features/Scheduling/TrainKickRulesTest.cs
 MainCore.Test/Commands/Features/TrainTroop/TrainResourceRulesTest.cs
+MainCore.Test/Commands/Features/TrainTroop/ConstructionReserveRulesTest.cs
 MainCore.Test/Parsers/DurationTextTest.cs
 MainCore/Parsers/MapSqlParser.cs
 MainCore/Parsers/MapScanCsv.cs

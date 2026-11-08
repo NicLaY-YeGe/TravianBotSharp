@@ -174,6 +174,7 @@ namespace MainCore.UI.Models.Input
         public AmountInputViewModel OasisScoutAnimalMinTroops { get; } = new();
         public AmountInputViewModel OasisScoutAnimalMaxTroops { get; } = new();
         public AmountInputViewModel OasisScoutAnimalMaxPower { get; } = new();
+        public AmountInputViewModel ConstructionReservePercent { get; } = new();
 
         [Reactive]
         private bool _trapEnable;
@@ -320,6 +321,7 @@ namespace MainCore.UI.Models.Input
             OasisScoutAnimalMinTroops.Set(settings.GetValueOrDefault(VillageSettingEnums.OasisScoutAnimalMinTroops));
             OasisScoutAnimalMaxTroops.Set(settings.GetValueOrDefault(VillageSettingEnums.OasisScoutAnimalMaxTroops));
             OasisScoutAnimalMaxPower.Set(settings.GetValueOrDefault(VillageSettingEnums.OasisScoutAnimalMaxPower));
+            ConstructionReservePercent.Set(settings.GetValueOrDefault(VillageSettingEnums.ConstructionReservePercent));
 
             TrapEnable = settings.GetValueOrDefault(VillageSettingEnums.TrapEnable) == 1;
             TrapAmount.Set(
@@ -434,6 +436,7 @@ namespace MainCore.UI.Models.Input
             var oasisScoutAnimalMinTroops = OasisScoutAnimalMinTroops.Get();
             var oasisScoutAnimalMaxTroops = OasisScoutAnimalMaxTroops.Get();
             var oasisScoutAnimalMaxPower = OasisScoutAnimalMaxPower.Get();
+            var constructionReservePercent = Math.Clamp(ConstructionReservePercent.Get(), 0, 100);
 
             var trapEnable = TrapEnable ? 1 : 0;
             var (trapAmountMin, trapAmountMax) = TrapAmount.Get();
@@ -562,6 +565,7 @@ namespace MainCore.UI.Models.Input
                 { VillageSettingEnums.OasisScoutAnimalMinTroops, oasisScoutAnimalMinTroops },
                 { VillageSettingEnums.OasisScoutAnimalMaxTroops, oasisScoutAnimalMaxTroops },
                 { VillageSettingEnums.OasisScoutAnimalMaxPower, oasisScoutAnimalMaxPower },
+                { VillageSettingEnums.ConstructionReservePercent, constructionReservePercent },
 
                 { VillageSettingEnums.TrapEnable, trapEnable },
                 { VillageSettingEnums.TrapAmountMin, trapAmountMin },
