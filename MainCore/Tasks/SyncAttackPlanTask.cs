@@ -116,7 +116,7 @@ namespace MainCore.Tasks
             {
                 if (!sendTimes.TryGetValue(order.VillageId, out var sendAt)) continue;
 
-                var sendTask = new SendTroopsAtTimeTask.Task(task.AccountId, order.VillageId, plan.TargetX, plan.TargetY, plan.EventType, order.TroopAmounts, order.IncludeHero, wakeFrom, wakeUntil)
+                var sendTask = new SendTroopsAtTimeTask.Task(task.AccountId, order.VillageId, plan.TargetX, plan.TargetY, plan.EventType, order.TroopAmounts, order.IncludeHero, wakeFrom, wakeUntil, plan.CatapultTarget)
                 {
                     ExecuteAt = sendAt,
                 };

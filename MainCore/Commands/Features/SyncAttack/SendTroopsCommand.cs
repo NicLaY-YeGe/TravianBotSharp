@@ -280,7 +280,8 @@ namespace MainCore.Commands.Features.SyncAttack
         {
             if (RallyPointSendTroopsParser.GetCatapultTargetSelect(browser.Html) is null)
             {
-                logger.Warning("Village {VillageId}: a catapult target ({Target}) is set but the confirmation screen has no target drop-down (no catapults in this movement, or a raid - catapults do not fire in a raid). Sending without it.", villageId, (CatapultTargetEnums)target);
+                // Normal for a village of a Sync Attack that sends no catapults, or a raid/reinforcement.
+                logger.Information("Village {VillageId}: catapult target {Target} is set but the confirmation screen has no target drop-down (no catapults in this movement, or not an attack). Sending without it.", villageId, (CatapultTargetEnums)target);
                 return Result.Ok();
             }
 
