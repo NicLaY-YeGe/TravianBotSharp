@@ -31,6 +31,9 @@ namespace MainCore.Services
                     await browser.Shutdown();
                 }
             }
+
+            // one shared Playwright driver process serves every account's browser
+            await PlaywrightHost.DisposeAsync();
         }
 
         public void LoadExtension()
