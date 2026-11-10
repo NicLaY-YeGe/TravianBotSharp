@@ -34,7 +34,18 @@ namespace MainCore.Commands.Features.SyncAttack
             // the other 10 troop slots. Defaults to false so every existing call site
             // (DodgeTroopTask, SyncAttackPlanTask, SendTroopsAtTimeTask) keeps
             // compiling/behaving unchanged without passing it explicitly.
-            bool IncludeHero = false) : IVillageCommand;
+            bool IncludeHero = false,
+            // 2026-10-22: optional hard time limit for the WHOLE send (fill + submit + confirm).
+            // Null = the old behaviour (every wait may take up to 3 minutes). Time-critical callers
+            // (DodgeTroopTask) pass the seconds left before impact; when it runs out the send is
+            // abandoned with Skip, a diagnostic dump is written, and the queue is not held up.
+            int? TimeoutSeconds = null,
+            // 2026-11-08: catapult target (value of CatapultTargetEnums, 0 = leave the game's
+            // "Random"). Chosen on the CONFIRMATION screen, right before the final click, and
+            // only when the page has the drop-down and offers the value: it is absent for a
+            // movement without catapults and for a raid (catapults do not fire in a raid), and
+            // the offered list depends on the Rally Point level. Never a reason to fail the send.
+            int CatapultTarget = 0) : IVillageCommand;
 
         private static async ValueTask<Result<DateTime?>> HandleAsync(
             Command command,
@@ -43,7 +54,57 @@ namespace MainCore.Commands.Features.SyncAttack
             ILogger logger,
             CancellationToken cancellationToken)
         {
-            var (villageId, x, y, eventType, troopAmounts, confirm, includeHero) = command;
+            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            if (command.TimeoutSeconds is > 0) deadline.CancelAfter(TimeSpan.FromSeconds(command.TimeoutSeconds.Value));
+
+            var result = await SendAsync(command, browser, toRallyPointOverviewCommand, logger, deadline.Token);
+            if (result.IsSuccess) return result;
+
+            // A user pause is not a failure to diagnose.
+            if (cancellationToken.IsCancellationRequested) return result;
+
+            var timedOutHere = deadline.IsCancellationRequested;
+            var timedOutWaiting = result.Errors.Any(e => e.Message.StartsWith("Timed out after", StringComparison.Ordinal));
+            if (!timedOutHere && !timedOutWaiting) return result;
+
+            await DumpFailureAsync(browser, logger, command.X, command.Y);
+
+            if (timedOutHere)
+            {
+                return Skip.Error.WithError(
+                    $"Village {command.VillageId}: send to ({command.X}|{command.Y}) did not finish within {command.TimeoutSeconds}s, abandoned.");
+            }
+
+            return result;
+        }
+
+        // 2026-10-22: the 2026-10-21 17:49 Dodge send and several oasis sends sat in GetElement for
+        // up to 180 s with nothing to show why. Keep the evidence: screenshot + page HTML.
+        private static async Task DumpFailureAsync(IChromeBrowser browser, ILogger logger, int x, int y)
+        {
+            try
+            {
+                var screenshot = await browser.Screenshot();
+                var dir = Path.Combine(AppContext.BaseDirectory, "Screenshots");
+                Directory.CreateDirectory(dir);
+                var htmlFile = Path.Combine(dir, $"{DateTime.Now:yyyy-MM-dd_HH-mm-ss}-sendtroops-{x}_{y}.html");
+                await File.WriteAllTextAsync(htmlFile, browser.Html.DocumentNode.OuterHtml);
+                logger.Warning("Send to ({X}|{Y}) stalled. Page saved to {Html}, screenshot {Screenshot}, url {Url}.", x, y, htmlFile, screenshot, browser.CurrentUrl);
+            }
+            catch (Exception ex)
+            {
+                logger.Warning("Send to ({X}|{Y}) stalled and the page could not be saved: {Message}", x, y, ex.Message);
+            }
+        }
+
+        private static async ValueTask<Result<DateTime?>> SendAsync(
+            Command command,
+            IChromeBrowser browser,
+            ToRallyPointOverviewCommand.Handler toRallyPointOverviewCommand,
+            ILogger logger,
+            CancellationToken cancellationToken)
+        {
+            var (villageId, x, y, eventType, troopAmounts, confirm, includeHero, _, catapultTarget) = command;
 
             foreach (var (slot, amount) in troopAmounts)
             {
@@ -130,6 +191,12 @@ namespace MainCore.Commands.Features.SyncAttack
                 return arrivalTime;
             }
 
+            if (catapultTarget > 0)
+            {
+                var targetResult = await SelectCatapultTarget(browser, villageId, catapultTarget, logger, cancellationToken);
+                if (targetResult.IsFailed) return Result.Fail(targetResult.Errors);
+            }
+
             var confirmResult = await ClickConfirm(browser, cancellationToken);
             if (confirmResult.IsFailed) return Result.Fail(confirmResult.Errors);
 
@@ -160,7 +227,8 @@ namespace MainCore.Commands.Features.SyncAttack
             var node = RallyPointSendTroopsParser.GetTroopInput(browser.Html, troopSlot);
             if (node is null) return Retry.Error.WithError($"Cannot find troop slot {troopSlot} input.");
 
-            var (_, isFailed, element, errors) = await browser.GetElement(By.XPath(node.XPath), cancellationToken);
+            // By name, not by position: the raw positional XPath is what stalled live sends (2026-10-21).
+            var (_, isFailed, element, errors) = await browser.GetElement(By.CssSelector($"input[name=\"troop[t{troopSlot}]\"]"), cancellationToken);
             if (isFailed) return Result.Fail(errors);
 
             return await browser.Input(element, $"{amount}", cancellationToken);
@@ -171,7 +239,7 @@ namespace MainCore.Commands.Features.SyncAttack
             var xNode = RallyPointSendTroopsParser.GetXInput(browser.Html);
             if (xNode is null) return Retry.Error.WithError("Cannot find X coordinate input.");
 
-            var (_, xFailed, xElement, xErrors) = await browser.GetElement(By.XPath(xNode.XPath), cancellationToken);
+            var (_, xFailed, xElement, xErrors) = await browser.GetElement(By.XPath(xNode.StableXPath()), cancellationToken);
             if (xFailed) return Result.Fail(xErrors);
 
             var result = await browser.Input(xElement, $"{x}", cancellationToken);
@@ -180,7 +248,7 @@ namespace MainCore.Commands.Features.SyncAttack
             var yNode = RallyPointSendTroopsParser.GetYInput(browser.Html);
             if (yNode is null) return Retry.Error.WithError("Cannot find Y coordinate input.");
 
-            var (_, yFailed, yElement, yErrors) = await browser.GetElement(By.XPath(yNode.XPath), cancellationToken);
+            var (_, yFailed, yElement, yErrors) = await browser.GetElement(By.XPath(yNode.StableXPath()), cancellationToken);
             if (yFailed) return Result.Fail(yErrors);
 
             return await browser.Input(yElement, $"{y}", cancellationToken);
@@ -191,7 +259,7 @@ namespace MainCore.Commands.Features.SyncAttack
             var node = RallyPointSendTroopsParser.GetEventTypeRadio(browser.Html, eventType);
             if (node is null) return Retry.Error.WithError($"Cannot find movement type option {eventType}.");
 
-            var (_, isFailed, element, errors) = await browser.GetElement(By.XPath(node.XPath), cancellationToken);
+            var (_, isFailed, element, errors) = await browser.GetElement(By.CssSelector($"input[name=\"eventType\"][value=\"{eventType}\"]"), cancellationToken);
             if (isFailed) return Result.Fail(errors);
 
             return await browser.Click(element, cancellationToken);
@@ -202,10 +270,35 @@ namespace MainCore.Commands.Features.SyncAttack
             var node = RallyPointSendTroopsParser.GetSendButton(browser.Html);
             if (node is null) return Retry.Error.WithError("Cannot find the send button.");
 
-            var (_, isFailed, element, errors) = await browser.GetElement(By.XPath(node.XPath), cancellationToken);
+            var (_, isFailed, element, errors) = await browser.GetElement(By.XPath(node.StableXPath()), cancellationToken);
             if (isFailed) return Result.Fail(errors);
 
             return await browser.Click(element, cancellationToken);
+        }
+
+        private static async Task<Result> SelectCatapultTarget(IChromeBrowser browser, VillageId villageId, int target, ILogger logger, CancellationToken cancellationToken)
+        {
+            if (RallyPointSendTroopsParser.GetCatapultTargetSelect(browser.Html) is null)
+            {
+                // Normal for a village of a Sync Attack that sends no catapults, or a raid/reinforcement.
+                logger.Information("Village {VillageId}: catapult target {Target} is set but the confirmation screen has no target drop-down (no catapults in this movement, or not an attack). Sending without it.", villageId, (CatapultTargetEnums)target);
+                return Result.Ok();
+            }
+
+            if (!RallyPointSendTroopsParser.HasCatapultTargetOption(browser.Html, target))
+            {
+                // The game lists only what the Rally Point level allows (level 10 for almost everything).
+                logger.Warning("Village {VillageId}: the game does not offer {Target} as a catapult target here (Rally Point level too low?). Sending with the game's default (Random).", villageId, (CatapultTargetEnums)target);
+                return Result.Ok();
+            }
+
+            var (_, isFailed, element, errors) = await browser.GetElement(
+                By.CssSelector($"select[name=\"{RallyPointSendTroopsParser.CatapultTargetSelectName}\"]"), cancellationToken);
+            if (isFailed) return Result.Fail(errors);
+
+            new SelectElement(element).SelectByValue($"{target}");
+            logger.Information("Village {VillageId}: catapult target set to {Target}.", villageId, (CatapultTargetEnums)target);
+            return Result.Ok();
         }
 
         private static async Task<Result> ClickConfirm(IChromeBrowser browser, CancellationToken cancellationToken)
@@ -213,7 +306,7 @@ namespace MainCore.Commands.Features.SyncAttack
             var node = RallyPointSendTroopsParser.GetConfirmButton(browser.Html);
             if (node is null) return Retry.Error.WithError("Cannot find the confirm button.");
 
-            var (_, isFailed, element, errors) = await browser.GetElement(By.XPath(node.XPath), cancellationToken);
+            var (_, isFailed, element, errors) = await browser.GetElement(By.XPath(node.StableXPath()), cancellationToken);
             if (isFailed) return Result.Fail(errors);
 
             return await browser.Click(element, cancellationToken);

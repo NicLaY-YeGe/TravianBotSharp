@@ -77,6 +77,10 @@ namespace MainCore.Services
                     var npcTaskHandler = scope.GetHandler<NpcTask.Task>();
                     return await npcTaskHandler.HandleAsync(npcTask, cancellationToken);
 
+                case BuyCropTask.Task buyCropTask:
+                    var buyCropTaskHandler = scope.GetHandler<BuyCropTask.Task>();
+                    return await buyCropTaskHandler.HandleAsync(buyCropTask, cancellationToken);
+
                 case SendCropTask.Task sendCropTask:
                     var sendCropTaskHandler = scope.GetHandler<SendCropTask.Task>();
                     return await sendCropTaskHandler.HandleAsync(sendCropTask, cancellationToken);
@@ -223,6 +227,12 @@ namespace MainCore.Services
                 case ScoutAutoAttackTask.Task scoutAutoAttackTask:
                     var scoutAutoAttackTaskHandler = scope.GetHandler<ScoutAutoAttackTask.Task>();
                     return await scoutAutoAttackTaskHandler.HandleAsync(scoutAutoAttackTask, cancellationToken);
+
+                // 2026-10-25: AttackCheckTask (periodic village-list look that starts Dodge/Defend).
+                // Bootstrapped in RxQueue.AccountInitHandler too - both places, see CLAUDE.md rule 1.
+                case AttackCheckTask.Task attackCheckTask:
+                    var attackCheckTaskHandler = scope.GetHandler<AttackCheckTask.Task>();
+                    return await attackCheckTaskHandler.HandleAsync(attackCheckTask, cancellationToken);
 
                 default:
                     throw new NotImplementedException($"Task {task.GetType().Name} is not implemented");

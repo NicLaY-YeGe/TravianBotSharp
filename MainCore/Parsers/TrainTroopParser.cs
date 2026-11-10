@@ -76,6 +76,25 @@
             return (values[0], values[1], values[2], values[3]);
         }
 
+        // Training time of ONE unit in seconds, read from the troop block's clock line
+        // (`div.inlineIcon.duration > span.value`, "0:05:47"; real Barracks capture 2026-10-30, the icon class
+        // differs between pages - clock / bonus-time - so only the two classes are matched). 0 = not found.
+        public static int GetUnitSeconds(HtmlDocument doc, TroopEnums troop)
+        {
+            var node = GetNode(doc, troop);
+            if (node is null) return 0;
+
+            var duration = node.Descendants("div")
+                .FirstOrDefault(x => x.HasClass("inlineIcon") && x.HasClass("duration"));
+            if (duration is null) return 0;
+
+            var value = duration.Descendants("span")
+                .FirstOrDefault(x => x.HasClass("value"));
+            if (value is null) return 0;
+
+            return DurationText.ParseClockSeconds(value.InnerText);
+        }
+
         private static HtmlNode? GetNode(HtmlDocument doc, TroopEnums troop)
         {
             var nodes = doc.DocumentNode.Descendants("div")

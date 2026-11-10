@@ -104,7 +104,7 @@ namespace MainCore.Tasks
                 var amounts = wave.IsMainWave ? plan.MainWaveTroopAmounts : plan.RepeatWaveTroopAmounts;
                 var includeHero = wave.IsMainWave && plan.MainWaveIncludeHero;
 
-                var sendTask = new SendTroopsAtTimeTask.Task(task.AccountId, task.VillageId, plan.TargetX, plan.TargetY, plan.EventType, amounts, includeHero)
+                var sendTask = new SendTroopsAtTimeTask.Task(task.AccountId, task.VillageId, plan.TargetX, plan.TargetY, plan.EventType, amounts, includeHero, catapultTarget: plan.CatapultTarget)
                 {
                     ExecuteAt = wave.SendAt,
                 };
