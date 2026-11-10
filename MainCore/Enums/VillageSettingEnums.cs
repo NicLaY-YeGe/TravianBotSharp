@@ -380,5 +380,14 @@
         // never below the cost of the next building either (ConstructionReserveRules). 0 = off (default).
         // Appended last on purpose (numbering).
         ConstructionReservePercent,
+
+        // 2026-11-10, user decision: buy crop on the Marketplace "Buy" tab when the granary runs low (BuyCropTask).
+        // Independent of the NPC exchange. Trigger = crop (plus crop already on its way) below BuyCropGranaryPercent of
+        // the Granary; it buys until BuyCropTargetPercent; offers further away than BuyCropMaxMinutes are ignored
+        // (0 = no limit). Appended last on purpose (numbering).
+        BuyCropEnable,
+        BuyCropGranaryPercent,
+        BuyCropTargetPercent,
+        BuyCropMaxMinutes,
     }
 }

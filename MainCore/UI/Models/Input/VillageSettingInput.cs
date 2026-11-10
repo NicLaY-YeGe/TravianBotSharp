@@ -177,6 +177,13 @@ namespace MainCore.UI.Models.Input
         public AmountInputViewModel ConstructionReservePercent { get; } = new();
 
         [Reactive]
+        private bool _buyCropEnable;
+
+        public AmountInputViewModel BuyCropGranaryPercent { get; } = new();
+        public AmountInputViewModel BuyCropTargetPercent { get; } = new();
+        public AmountInputViewModel BuyCropMaxMinutes { get; } = new();
+
+        [Reactive]
         private bool _trapEnable;
 
         public RangeInputViewModel TrapAmount { get; } = new();
@@ -323,6 +330,11 @@ namespace MainCore.UI.Models.Input
             OasisScoutAnimalMaxPower.Set(settings.GetValueOrDefault(VillageSettingEnums.OasisScoutAnimalMaxPower));
             ConstructionReservePercent.Set(settings.GetValueOrDefault(VillageSettingEnums.ConstructionReservePercent));
 
+            BuyCropEnable = settings.GetValueOrDefault(VillageSettingEnums.BuyCropEnable) == 1;
+            BuyCropGranaryPercent.Set(settings.GetValueOrDefault(VillageSettingEnums.BuyCropGranaryPercent));
+            BuyCropTargetPercent.Set(settings.GetValueOrDefault(VillageSettingEnums.BuyCropTargetPercent));
+            BuyCropMaxMinutes.Set(settings.GetValueOrDefault(VillageSettingEnums.BuyCropMaxMinutes));
+
             TrapEnable = settings.GetValueOrDefault(VillageSettingEnums.TrapEnable) == 1;
             TrapAmount.Set(
                 settings.GetValueOrDefault(VillageSettingEnums.TrapAmountMin),
@@ -437,6 +449,12 @@ namespace MainCore.UI.Models.Input
             var oasisScoutAnimalMaxTroops = OasisScoutAnimalMaxTroops.Get();
             var oasisScoutAnimalMaxPower = OasisScoutAnimalMaxPower.Get();
             var constructionReservePercent = Math.Clamp(ConstructionReservePercent.Get(), 0, 100);
+
+            var buyCropEnable = BuyCropEnable ? 1 : 0;
+            var buyCropGranaryPercent = Math.Clamp(BuyCropGranaryPercent.Get(), 0, 100);
+            // the target can never sit below the trigger, otherwise a purchase would not even leave the trigger zone
+            var buyCropTargetPercent = Math.Clamp(Math.Max(BuyCropTargetPercent.Get(), buyCropGranaryPercent), 0, 100);
+            var buyCropMaxMinutes = Math.Max(BuyCropMaxMinutes.Get(), 0);
 
             var trapEnable = TrapEnable ? 1 : 0;
             var (trapAmountMin, trapAmountMax) = TrapAmount.Get();
@@ -566,6 +584,10 @@ namespace MainCore.UI.Models.Input
                 { VillageSettingEnums.OasisScoutAnimalMaxTroops, oasisScoutAnimalMaxTroops },
                 { VillageSettingEnums.OasisScoutAnimalMaxPower, oasisScoutAnimalMaxPower },
                 { VillageSettingEnums.ConstructionReservePercent, constructionReservePercent },
+                { VillageSettingEnums.BuyCropEnable, buyCropEnable },
+                { VillageSettingEnums.BuyCropGranaryPercent, buyCropGranaryPercent },
+                { VillageSettingEnums.BuyCropTargetPercent, buyCropTargetPercent },
+                { VillageSettingEnums.BuyCropMaxMinutes, buyCropMaxMinutes },
 
                 { VillageSettingEnums.TrapEnable, trapEnable },
                 { VillageSettingEnums.TrapAmountMin, trapAmountMin },

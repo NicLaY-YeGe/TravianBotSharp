@@ -77,6 +77,10 @@ namespace MainCore.Services
                     var npcTaskHandler = scope.GetHandler<NpcTask.Task>();
                     return await npcTaskHandler.HandleAsync(npcTask, cancellationToken);
 
+                case BuyCropTask.Task buyCropTask:
+                    var buyCropTaskHandler = scope.GetHandler<BuyCropTask.Task>();
+                    return await buyCropTaskHandler.HandleAsync(buyCropTask, cancellationToken);
+
                 case SendCropTask.Task sendCropTask:
                     var sendCropTaskHandler = scope.GetHandler<SendCropTask.Task>();
                     return await sendCropTaskHandler.HandleAsync(sendCropTask, cancellationToken);

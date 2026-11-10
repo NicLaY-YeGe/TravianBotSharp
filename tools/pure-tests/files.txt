@@ -80,3 +80,10 @@ MainCore.Test/Parsers/DurationTextTest.cs
 MainCore/Parsers/MapSqlParser.cs
 MainCore/Parsers/MapScanCsv.cs
 MainCore.Test/Parsers/MapScanCsvTest.cs
+MainCore/Parsers/MarketplaceOffer.cs
+MainCore/Parsers/MarketplaceBuyParser.cs
+MainCore/Commands/Features/BuyCrop/BuyCropRules.cs
+MainCore/Commands/Features/BuyCrop/BuyCropMemory.cs
+MainCore.Test/Parsers/MarketplaceBuyParserTest.cs
+MainCore.Test/Commands/Features/BuyCrop/BuyCropRulesTest.cs
+MainCore.Test/Commands/Features/BuyCrop/BuyCropMemoryTest.cs

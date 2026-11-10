@@ -125,6 +125,11 @@ namespace WPFUI.Views.Tabs.Villages
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.OasisScoutAnimalMaxPower, v => v.OasisScoutAnimalMaxPower.ViewModel).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.ConstructionReservePercent, v => v.ConstructionReservePercent.ViewModel).DisposeWith(d);
 
+                this.Bind(ViewModel, vm => vm.VillageSettingInput.BuyCropEnable, v => v.BuyCropEnable.IsChecked).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.BuyCropGranaryPercent, v => v.BuyCropGranaryPercent.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.BuyCropTargetPercent, v => v.BuyCropTargetPercent.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.BuyCropMaxMinutes, v => v.BuyCropMaxMinutes.ViewModel).DisposeWith(d);
+
                 this.Bind(ViewModel, vm => vm.VillageSettingInput.AutoClaimQuestEnable, v => v.AutoClaimQuestEnable.IsChecked).DisposeWith(d);
             });
         }

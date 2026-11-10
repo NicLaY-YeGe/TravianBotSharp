@@ -84,6 +84,17 @@
 
                 <Border Style="{DynamicResource Box}">
                     <StackPanel>
+                        <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Buy crop on the Marketplace" VerticalAlignment="Center" FontWeight="Bold" />
+                        <CheckBox x:Name="BuyCropEnable" Content="Enable buying crop (independent of the NPC exchange)" />
+                        <uc:AmountInputUc x:Name="BuyCropGranaryPercent" Text="Buy when crop is BELOW" Unit="% of granary" />
+                        <uc:AmountInputUc x:Name="BuyCropTargetPercent" Text="Buy until about" Unit="% of granary" />
+                        <uc:AmountInputUc x:Name="BuyCropMaxMinutes" Text="Ignore offers further away than (0 = no limit)" Unit="mins" />
+                        <TextBlock TextWrapping="Wrap" FontStyle="Italic" Opacity="0.7" Text="Accepts offers that give crop at 1:1 or better and are paid in wood, clay or iron (the construction reserve is ignored). Shortest trip first; with a negative crop balance an offer that would arrive after the crop runs out is only taken when no other offer can. Up to 3 offers per run; crop already on its way counts as stock." />
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{DynamicResource Box}">
+                    <StackPanel>
                         <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Auto send crop between villages" VerticalAlignment="Center" FontWeight="Bold" />
                         <CheckBox x:Name="AutoSendCropEnable" Content="Receive crop from other villages when this village's granary drops below %" />
                         <uc:AmountInputUc x:Name="AutoSendCropGranaryPercent" Text="Granary" Unit="%" />
