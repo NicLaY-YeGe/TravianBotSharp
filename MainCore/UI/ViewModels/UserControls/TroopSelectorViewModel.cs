@@ -36,7 +36,7 @@ namespace MainCore.UI.ViewModels.UserControls
             SelectedItem = Items.FirstOrDefault(x => x.Troop == selectedTroop) ?? Items[0];
         }
 
-        private static List<TroopEnums> GetTroops(BuildingEnums building, TribeEnums tribe)
+        public static List<TroopEnums> GetTroops(BuildingEnums building, TribeEnums tribe)
         {
             return building switch
             {

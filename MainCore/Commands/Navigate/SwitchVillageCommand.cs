@@ -18,7 +18,7 @@
 
             if (VillagePanelParser.IsActive(villageNode)) return Result.Ok();
 
-            var (_, isFailed, element, errors) = await browser.GetElement(By.XPath(villageNode.XPath), cancellationToken);
+            var (_, isFailed, element, errors) = await browser.GetElement(By.XPath(villageNode.StableXPath()), cancellationToken);
             if (isFailed) return Result.Fail(errors);
             Result result;
             result = await browser.Click(element, cancellationToken);
