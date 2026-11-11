@@ -49,6 +49,9 @@ namespace MainCore.Tasks
     // all") and sends a Telegram notification (if NotifyOnPause is enabled) - see
     // PauseWholeListAndNotify below. Only the raid list feature is paused, not the whole bot.
     //
+    // 2026-11-11 UPDATE: the shortage paragraph above is superseded - a shortage now defers only the row that found it
+    // (8-14 min) and the whole list is paused only after 6 shortages in a row for that row; see RaidListShortageRules.
+    //
     // 2026-09-20 UPDATE 2: the "no village at these coordinates" case above no longer deletes the
     // row nor stops the bot - it marks the row IsDeadTarget (inactive) and carries on; see the
     // dead-target check in HandleAsync.
@@ -230,7 +233,7 @@ namespace MainCore.Tasks
                 if (available < amount)
                 {
                     var reason = $"village {task.VillageId} doesn't have enough troops in slot {slot} (needs {amount}, has {available})";
-                    await PauseWholeListAndNotify(task, context, taskManager, telegramNotifier, logger, reason, cancellationToken);
+                    await DeferRowOrPauseList(task, entry, context, taskManager, telegramNotifier, logger, reason, cancellationToken);
                     return Skip.Error;
                 }
             }
@@ -242,7 +245,7 @@ namespace MainCore.Tasks
                 if (heroAvailable < 1)
                 {
                     var reason = $"hero requested for village {task.VillageId} but not available";
-                    await PauseWholeListAndNotify(task, context, taskManager, telegramNotifier, logger, reason, cancellationToken);
+                    await DeferRowOrPauseList(task, entry, context, taskManager, telegramNotifier, logger, reason, cancellationToken);
                     return Skip.Error;
                 }
             }
@@ -281,6 +284,8 @@ namespace MainCore.Tasks
 
                 return Result.Fail(sendResult.Errors);
             }
+
+            RaidListShortageRules.Reset(task.EntryId.Value);
 
             var nextExecuteAt = RescheduleNext(task, entry, context);
             var gateAdvancedTo = AdvanceGlobalSendGate(context, task.AccountId);
@@ -378,6 +383,37 @@ namespace MainCore.Tasks
 
         private static DateTime FromGateSeconds(int seconds) => DateTimeOffset.FromUnixTimeSeconds(GateEpoch.ToUnixTimeSeconds() + seconds).LocalDateTime;
 
+        // 2026-11-11: a shortage of troops (or of the hero) defers only THIS row by a few minutes; only a shortage that
+        // keeps coming back (RaidListShortageRules.MaxConsecutiveBeforePause times in a row for the row) pauses the whole
+        // list and sends the Telegram message. The row stays in the queue because ExecuteAt is changed (the persisted
+        // NextExecuteAt follows, so a restart keeps the wait).
+        private static async System.Threading.Tasks.Task DeferRowOrPauseList(
+            Task task,
+            RaidListEntry entry,
+            AppDbContext context,
+            ITaskManager taskManager,
+            ITelegramNotifier telegramNotifier,
+            ILogger logger,
+            string reason,
+            CancellationToken cancellationToken)
+        {
+            var streak = RaidListShortageRules.RecordShortage(task.EntryId.Value);
+            if (RaidListShortageRules.ShouldPauseList(streak))
+            {
+                await PauseWholeListAndNotify(task, context, taskManager, telegramNotifier, logger, $"{reason} - still short after {streak} tries in a row", cancellationToken);
+                return;
+            }
+
+            var next = RaidListShortageRules.NextTry(DateTime.Now, Random.Shared);
+            entry.NextExecuteAt = next;
+            context.SaveChanges();
+            task.ExecuteAt = next;
+
+            logger.Information(
+                "Raid list: {Reason} - this row ({X}|{Y}) waits until {Next:HH:mm:ss} (try {Streak} of {Max}; the whole list is paused only if it stays short).",
+                reason, entry.TargetX, entry.TargetY, next, streak, RaidListShortageRules.MaxConsecutiveBeforePause);
+        }
+
         // 2026-08-25, user request: running out of troops for a raid isn't itself a ban risk (it
         // was previously just a silent per-row skip+reschedule - see the class-level comment,
         // now stale on this point), but the user wants to be alerted rather than have the bot
@@ -405,6 +441,7 @@ namespace MainCore.Tasks
             foreach (var entry in entries)
             {
                 entry.IsActive = false;
+                RaidListShortageRules.Reset(entry.Id);
 
                 var queuedTask = taskManager.GetTaskList(task.AccountId)
                     .OfType<Task>()

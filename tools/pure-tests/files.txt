@@ -87,3 +87,5 @@ MainCore/Commands/Features/BuyCrop/BuyCropMemory.cs
 MainCore.Test/Parsers/MarketplaceBuyParserTest.cs
 MainCore.Test/Commands/Features/BuyCrop/BuyCropRulesTest.cs
 MainCore.Test/Commands/Features/BuyCrop/BuyCropMemoryTest.cs
+MainCore/Commands/Features/RaidListScheduling/RaidListShortageRules.cs
+MainCore.Test/Commands/Features/RaidListScheduling/RaidListShortageRulesTest.cs
