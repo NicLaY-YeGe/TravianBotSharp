@@ -89,3 +89,9 @@ MainCore.Test/Commands/Features/BuyCrop/BuyCropRulesTest.cs
 MainCore.Test/Commands/Features/BuyCrop/BuyCropMemoryTest.cs
 MainCore/Commands/Features/RaidListScheduling/RaidListShortageRules.cs
 MainCore.Test/Commands/Features/RaidListScheduling/RaidListShortageRulesTest.cs
+MainCore/Commands/Features/VillageOverview/VillageOverviewStore.cs
+MainCore/Commands/Features/VillageOverview/VillageOverviewRules.cs
+MainCore.Test/Commands/Features/VillageOverview/VillageOverviewRulesTest.cs
+MainCore.Test/Commands/Features/VillageOverview/VillageOverviewStoreTest.cs
+MainCore/Parsers/RallyPointTroopsParser.cs
+MainCore.Test/Parsers/RallyPointTroopsParserTest.cs

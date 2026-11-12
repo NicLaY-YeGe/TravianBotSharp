@@ -2,6 +2,7 @@
 using MainCore.Commands.Features.Scheduling;
 using MainCore.Commands.Features.TrainTroop;
 using MainCore.Commands.Features.UseHeroItem;
+using MainCore.Commands.Features.VillageOverview;
 using MainCore.Commands.NextExecute;
 using MainCore.Commands.UI.Misc;
 using MainCore.Tasks.Base;
@@ -150,6 +151,7 @@ namespace MainCore.Tasks
                 var runningSeconds = TrainQueueParser.GetSecondsRemaining(browser.Html);
                 if (runningSeconds is not null)
                 {
+                    VillageOverviewStore.SetTrainQueue(task.VillageId.Value, (int)building, runningSeconds.Value);
                     logger.Information(
                         "Train troop in {VillageId}: the {Building} queue is busy for another {Seconds}s ({Timers} timer(s) on the page) - no new batch now.",
                         task.VillageId, building, runningSeconds.Value, TrainQueueParser.CountTimers(browser.Html));
@@ -209,6 +211,7 @@ namespace MainCore.Tasks
                     }
 
                     var queueSeconds = await QueueWait.ReadSecondsAfterActionAsync(browser, cancellationToken);
+                    if (queueSeconds is not null) VillageOverviewStore.SetTrainQueue(task.VillageId.Value, (int)building, queueSeconds.Value);
                     var trainedNext = DateTime.Now.AddSeconds(QueueDeferRules.NextBuildingSeconds(true, queueSeconds, intervalSeconds, Random.Shared));
                     TrainTroopSchedule.Set(task.VillageId, building, trainedNext, plan.Troop);
                     nextTimes.Add(trainedNext);
@@ -397,6 +400,9 @@ namespace MainCore.Tasks
             logger.Information(
                 "Train troop in {VillageId}: {Building} next visit at {Time:HH:mm:ss} ({Reason}; queue holds {Queue} min).",
                 task.VillageId, building, next, visit.Reason, queueNow / 60);
+
+            // 2026-11-11 (village overview tab): the queue length as it is after this visit.
+            VillageOverviewStore.SetTrainQueue(task.VillageId.Value, (int)building, queueNow);
 
             TrainTroopSchedule.Set(task.VillageId, building, next);
             nextTimes.Add(next);

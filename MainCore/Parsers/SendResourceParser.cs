@@ -122,6 +122,28 @@ namespace MainCore.Parsers
             return free < 0 ? 0 : free;
         }
 
+        // 2026-11-11 (village overview): free AND total merchants of the "free/total" line, null when the line is missing or
+        // unreadable - unlike GetFreeMerchants (0 = "none free" and "not found" look the same) the caller can tell them apart.
+        public static (int Free, int Total)? GetMerchantCounts(HtmlDocument doc)
+        {
+            var node = doc.DocumentNode
+                .Descendants("div")
+                .FirstOrDefault(x => x.HasClass("merchantsInformation"))
+                ?.Descendants("div")
+                .FirstOrDefault(x => x.HasClass("available"))
+                ?.Descendants("span")
+                .FirstOrDefault(x => x.HasClass("value"));
+            if (node is null) return null;
+
+            var parts = node.InnerText.Split('/');
+            if (parts.Length != 2) return null;
+
+            var free = parts[0].ParseInt();
+            var total = parts[1].ParseInt();
+            if (free < 0 || total < 0 || free > total) return null;
+            return (free, total);
+        }
+
         // How much resource a single merchant can carry.
         public static long GetMerchantCapacity(HtmlDocument doc)
         {

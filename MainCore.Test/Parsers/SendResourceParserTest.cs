@@ -25,6 +25,21 @@ namespace MainCore.Test.Parsers
             SendResourceParser.GetMerchantCapacity(doc).ShouldBe(2250);
         }
 
+        // 2026-11-11 (village overview): free AND total, null when the line is missing (0 would look like "none free").
+        [Fact]
+        public void RealCapture_MerchantCountsAreFreeAndTotal()
+        {
+            SendResourceParser.GetMerchantCounts(Load()).ShouldBe((7, 7));
+        }
+
+        [Fact]
+        public void PageWithoutTheMerchantLine_HasNoMerchantCounts()
+        {
+            var doc = new HtmlDocument();
+            doc.LoadHtml("<div class=\"deliveriesOverview\"></div>");
+            SendResourceParser.GetMerchantCounts(doc).ShouldBeNull();
+        }
+
         [Fact]
         public void PageWithoutTheMerchantLine_IsNotReadYet()
         {

@@ -56,6 +56,21 @@
                 logger.Warning("Marketplace: the merchant line did not show up within {Seconds}s - reading the page as it is.", MerchantInfoWaitSeconds);
             }
 
+            // 2026-11-11 (village overview tab): the page is open anyway - remember free/total merchants, no extra page load.
+            // Best effort: reading the page can fail while a navigation is in flight, and that must never fail this command.
+            try
+            {
+                var counts = SendResourceParser.GetMerchantCounts(browser.Html);
+                if (counts is not null)
+                {
+                    MainCore.Commands.Features.VillageOverview.VillageOverviewStore.SetMerchants(villageId.Value, counts.Value.Free, counts.Value.Total);
+                }
+            }
+            catch (BrowserException)
+            {
+                // not readable right now - the overview simply keeps its older snapshot
+            }
+
             return Result.Ok();
         }
     }
