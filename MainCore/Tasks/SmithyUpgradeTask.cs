@@ -1,3 +1,4 @@
+using MainCore.Commands.Features.Scheduling;
 using MainCore.Commands.Features.SmithyUpgrade;
 using MainCore.Commands.UI.Misc;
 using MainCore.Tasks.Base;
@@ -28,7 +29,49 @@ namespace MainCore.Tasks
             }
         }
 
+        // 2026-11-06 (live log 17:56:20): "research block not found" came back as Stop and PAUSED the account - no Attack
+        // check, Defend or Dodge for hours. Smithy is a secondary task (CLAUDE.md rule 4): the whole run has a hard time
+        // budget and any failure other than a user pause or a dead browser becomes "look again later". The next visit is
+        // the busy-until setting that CanStart reads; UpdateStorageCommand queues the task again once it has passed (the
+        // task itself ends with ExecuteAt unchanged, so TimerManager removes it - that is intended here).
+        private const int BudgetSeconds = 90;
+        private const int FailedMinMinutes = 10;
+        private const int FailedMaxMinutes = 20;
+
         private static async ValueTask<Result> HandleAsync(
+            Task task,
+            IChromeBrowser browser,
+            ToSmithyPageCommand.Handler toSmithyPageCommand,
+            SmithyUpgradeCommand.Handler smithyUpgradeCommand,
+            SaveVillageSettingCommand.Handler saveVillageSettingCommand,
+            AppDbContext context,
+            ILogger logger,
+            CancellationToken cancellationToken)
+        {
+            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            deadline.CancelAfter(TimeSpan.FromSeconds(BudgetSeconds));
+
+            var result = await RunAsync(task, browser, toSmithyPageCommand, smithyUpgradeCommand, saveVillageSettingCommand, context, logger, deadline.Token);
+            if (result.IsSuccess) return result;
+
+            // A user pause stays a pause; a dead browser is the behaviors' business; "no smithy" already disabled the setting.
+            if (cancellationToken.IsCancellationRequested) return result;
+            if (result.HasError<BrowserClosed>() || result.HasError<MissingBuilding>()) return result;
+
+            var timedOut = deadline.IsCancellationRequested;
+            if (timedOut) await PageDump.SaveAsync(browser, logger, "smithy-timeout");
+
+            var reasons = string.Join(" | ", result.Reasons.Select(x => x.Message).Where(x => !string.IsNullOrWhiteSpace(x)));
+            if (timedOut) reasons = $"no answer within {BudgetSeconds}s" + (reasons.Length > 0 ? $" ({reasons})" : "");
+
+            var waitMinutes = Random.Shared.Next(FailedMinMinutes, FailedMaxMinutes + 1);
+            await SetBusyUntil(task, saveVillageSettingCommand, waitMinutes * 60, cancellationToken);
+            logger.Warning("Smithy upgrade in {VillageId}: could not finish ({Reasons}) - next visit in {Minutes} min.", task.VillageId, reasons, waitMinutes);
+            return Result.Ok();
+        }
+
+        // The token carries the user's pause plus the time budget (every browser call gets it).
+        private static async ValueTask<Result> RunAsync(
             Task task,
             IChromeBrowser browser,
             ToSmithyPageCommand.Handler toSmithyPageCommand,
@@ -62,7 +105,7 @@ namespace MainCore.Tasks
                     logger.Warning("No smithy in this village, disabling smithy upgrade.");
                     return Skip.Error.WithErrors(pageResult.Errors);
                 }
-                return Stop.Error.WithErrors(pageResult.Errors);
+                return Skip.Error.WithErrors(pageResult.Errors);
             }
 
             // If a research is already running (for this or any other troop type in this
@@ -71,20 +114,38 @@ namespace MainCore.Tasks
             var secondsRemaining = SmithyParser.GetOngoingResearchSecondsRemaining(browser.Html);
             if (secondsRemaining is not null)
             {
-                await SetBusyUntil(task, saveVillageSettingCommand, secondsRemaining.Value, cancellationToken);
-                logger.Information("Smithy research already running in {VillageId}, {Seconds}s left - won't check again until then.", task.VillageId, secondsRemaining.Value);
+                // 2026-10-25: the exact end plus a 30-60 s buffer (QueueDeferRules), so the next visit
+                // never lands a moment before the research is really finished.
+                var waitSeconds = QueueDeferRules.BusySeconds(secondsRemaining, Random.Shared);
+                await SetBusyUntil(task, saveVillageSettingCommand, waitSeconds, cancellationToken);
+                logger.Information("Smithy research already running in {VillageId}, {Seconds}s left - won't check again for {Wait}s (its end plus a small buffer).", task.VillageId, secondsRemaining.Value, waitSeconds);
                 return Result.Ok();
             }
 
             var result = await smithyUpgradeCommand.HandleAsync(new(task.VillageId, troopSlot, tribe), cancellationToken);
-            if (result.IsFailed) return Stop.Error.WithErrors(result.Errors);
+            if (result.IsFailed) return result;
 
-            // Safety net: whether we just started a research or the page said it isn't
-            // available for some reason we didn't specifically detect, don't come back to
-            // this page again for a while. Repeatedly hammering the same page every cycle
-            // is exactly the kind of pattern that looks bad, even if each visit is harmless.
-            const int minCooldownSeconds = 20 * 60;
-            await SetBusyUntil(task, saveVillageSettingCommand, minCooldownSeconds, cancellationToken);
+            // Whether we just started a research or the page said it isn't available, never come back
+            // to this page before the game says something can have changed (repeatedly hammering the
+            // same page is the kind of pattern that looks bad even when each visit is harmless):
+            //   - a research is running now (just started): wait for its exact end + buffer;
+            //   - nothing readable running and no Improve button (resources short, level too low,
+            //     already maxed...): the reason is unknown, so 45-60 minutes (random). It used to be a
+            //     fixed 20 minutes, which showed as a visit every 20-22 minutes per village.
+            var runningAfter = SmithyParser.GetOngoingResearchSecondsRemaining(browser.Html);
+            var nextWaitSeconds = QueueDeferRules.BusySeconds(runningAfter, Random.Shared);
+            await SetBusyUntil(task, saveVillageSettingCommand, nextWaitSeconds, cancellationToken);
+
+            if (runningAfter is null)
+            {
+                logger.Information(
+                    "Smithy in {VillageId}: nothing running and no Improve button (queue table on the page: {HasTable}) - next visit in {Minutes} min.",
+                    task.VillageId, TrainQueueParser.HasQueueTable(browser.Html), nextWaitSeconds / 60);
+            }
+            else
+            {
+                logger.Information("Smithy research in {VillageId} ends in {Seconds}s - next visit in {Wait}s.", task.VillageId, runningAfter.Value, nextWaitSeconds);
+            }
 
             return Result.Ok();
         }

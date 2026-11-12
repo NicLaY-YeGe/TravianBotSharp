@@ -26,6 +26,7 @@ namespace MainCore.UI.Stores
         private readonly AddAccountsViewModel _addAccountsViewModel;
         private readonly AccountSettingViewModel _accountSettingViewModel;
         private readonly VillageViewModel _villageViewModel;
+        private readonly VillageOverviewViewModel _villageOverviewViewModel;
         private readonly EditAccountViewModel _editAccountViewModel;
         private readonly FarmingViewModel _farmingViewModel;
         private readonly SyncAttackViewModel _syncAttackViewModel;
@@ -34,7 +35,7 @@ namespace MainCore.UI.Stores
         private readonly MapAnalysisViewModel _mapAnalysisViewModel;
         private readonly DebugViewModel _debugViewModel;
 
-        public AccountTabStore(NoAccountViewModel noAccountViewModel, AddAccountViewModel addAccountViewModel, AddAccountsViewModel addAccountsViewModel, EditAccountViewModel editAccountViewModel, DebugViewModel debugViewModel, AccountSettingViewModel accountSettingViewModel, VillageViewModel villageViewModel, FarmingViewModel farmingViewModel, SyncAttackViewModel syncAttackViewModel, WaveAttackViewModel waveAttackViewModel, RaidListViewModel raidListViewModel, MapAnalysisViewModel mapAnalysisViewModel)
+        public AccountTabStore(NoAccountViewModel noAccountViewModel, AddAccountViewModel addAccountViewModel, AddAccountsViewModel addAccountsViewModel, EditAccountViewModel editAccountViewModel, DebugViewModel debugViewModel, AccountSettingViewModel accountSettingViewModel, VillageViewModel villageViewModel, FarmingViewModel farmingViewModel, SyncAttackViewModel syncAttackViewModel, WaveAttackViewModel waveAttackViewModel, RaidListViewModel raidListViewModel, MapAnalysisViewModel mapAnalysisViewModel, VillageOverviewViewModel villageOverviewViewModel)
         {
             _noAccountViewModel = noAccountViewModel;
             _addAccountViewModel = addAccountViewModel;
@@ -48,6 +49,7 @@ namespace MainCore.UI.Stores
             _waveAttackViewModel = waveAttackViewModel;
             _raidListViewModel = raidListViewModel;
             _mapAnalysisViewModel = mapAnalysisViewModel;
+            _villageOverviewViewModel = villageOverviewViewModel;
         }
 
         public void SetTabType(AccountTabType tabType)
@@ -108,5 +110,6 @@ namespace MainCore.UI.Stores
         public WaveAttackViewModel WaveAttackViewModel => _waveAttackViewModel;
         public RaidListViewModel RaidListViewModel => _raidListViewModel;
         public MapAnalysisViewModel MapAnalysisViewModel => _mapAnalysisViewModel;
+        public VillageOverviewViewModel VillageOverviewViewModel => _villageOverviewViewModel;
     }
 }

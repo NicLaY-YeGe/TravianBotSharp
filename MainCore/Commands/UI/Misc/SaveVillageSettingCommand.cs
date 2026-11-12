@@ -90,6 +90,22 @@
                 }
             }
 
+            if (settings.ContainsKey(VillageSettingEnums.BuyCropEnable))
+            {
+                if (settings[VillageSettingEnums.BuyCropEnable] == 1)
+                {
+                    var task = new BuyCropTask.Task(accountId, villageId);
+                    if (task.CanStart(context) && !taskManager.IsExist<BuyCropTask.Task>(accountId, villageId))
+                    {
+                        taskManager.Add(task);
+                    }
+                }
+                else
+                {
+                    taskManager.Remove<BuyCropTask.Task>(accountId, villageId);
+                }
+            }
+
             if (settings.ContainsKey(VillageSettingEnums.AutoRefreshEnable))
             {
                 if (settings[VillageSettingEnums.AutoRefreshEnable] == 1)

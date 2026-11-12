@@ -88,18 +88,37 @@ namespace MainCore.Parsers
                 .ToList();
         }
 
-        // Seconds remaining until the soonest incoming attack lands, if this village has one.
-        // Reads the countdown from the "inAttack" movement row(s) on this same Overview tab.
-        public static int? GetIncomingAttackSeconds(HtmlDocument doc)
+        // 2026-10-23: the Overview tab marks hostile incoming movements by the table class:
+        // "troop_details inAttack" (headline "X attacks Y") and "troop_details inRaid" (headline
+        // "X raids Y"). Both captured live. Until now only inAttack was read, so a village that was
+        // only being raided looked "under attack" (flag on) but had no attack on the page and
+        // Dodge/Defend skipped silently. The countdown markup is identical for both.
+        public enum IncomingKind
         {
+            Attack,
+            Raid,
+        }
+
+        public sealed record IncomingMovement(IncomingKind Kind, int Seconds, string Headline);
+
+        // Every hostile incoming movement (attack or raid) with its countdown. Rows without a
+        // readable, positive countdown are left out.
+        public static List<IncomingMovement> GetIncomingMovements(HtmlDocument doc)
+        {
+            var result = new List<IncomingMovement>();
+
             var tables = doc.DocumentNode
                 .Descendants("table")
-                .Where(x => x.GetAttributeValue("class", "").Contains("inAttack"));
-
-            int? soonest = null;
+                .Where(x => x.GetAttributeValue("class", "").Contains("troop_details"));
 
             foreach (var table in tables)
             {
+                var tableClass = table.GetAttributeValue("class", "");
+                IncomingKind kind;
+                if (tableClass.Contains("inAttack")) kind = IncomingKind.Attack;
+                else if (tableClass.Contains("inRaid")) kind = IncomingKind.Raid;
+                else continue;
+
                 var timer = table.Descendants("span")
                     .FirstOrDefault(x => x.GetAttributeValue("class", "") == "timer");
                 if (timer is null) continue;
@@ -114,9 +133,34 @@ namespace MainCore.Parsers
                 var seconds = raw.ParseInt();
                 if (seconds <= 0) continue;
 
-                if (soonest is null || seconds < soonest) soonest = seconds;
+                var headline = table.Descendants("td")
+                    .FirstOrDefault(x => x.GetAttributeValue("class", "").Contains("troopHeadline"));
+                var headlineText = headline is null ? "" : TravianCoordinateText.Normalize(headline.InnerText);
+
+                result.Add(new IncomingMovement(kind, seconds, headlineText));
             }
 
+            return result;
+        }
+
+        // Seconds remaining until the soonest incoming ATTACK lands (raids are ignored), if this
+        // village has one. Same behaviour as before 2026-10-23.
+        public static int? GetIncomingAttackSeconds(HtmlDocument doc)
+            => Soonest(GetIncomingMovements(doc), includeRaids: false);
+
+        // Seconds until the soonest incoming attack, or - when includeRaids is set - the soonest
+        // attack OR raid. Null if nothing qualifies.
+        public static int? GetIncomingHostileSeconds(HtmlDocument doc, bool includeRaids)
+            => Soonest(GetIncomingMovements(doc), includeRaids);
+
+        private static int? Soonest(List<IncomingMovement> movements, bool includeRaids)
+        {
+            int? soonest = null;
+            foreach (var movement in movements)
+            {
+                if (movement.Kind == IncomingKind.Raid && !includeRaids) continue;
+                if (soonest is null || movement.Seconds < soonest) soonest = movement.Seconds;
+            }
             return soonest;
         }
     }

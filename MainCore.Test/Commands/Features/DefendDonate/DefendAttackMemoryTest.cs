@@ -24,6 +24,19 @@ namespace MainCore.Test.Commands.Features.DefendDonate
         }
 
         [Fact]
+        public void ClearOneVillage_KeepsTheOthers()
+        {
+            DefendAttackMemory.Clear();
+            DefendAttackMemory.MarkHandled(1, Now.AddSeconds(180), Now);
+            DefendAttackMemory.MarkHandled(2, Now.AddSeconds(180), Now);
+
+            DefendAttackMemory.Clear(1);
+
+            DefendAttackMemory.IsHandled(1, Now.AddSeconds(10)).ShouldBeFalse();
+            DefendAttackMemory.IsHandled(2, Now.AddSeconds(10)).ShouldBeTrue();
+        }
+
+        [Fact]
         public void Marked_OtherVillageUnaffected()
         {
             DefendAttackMemory.Clear();
