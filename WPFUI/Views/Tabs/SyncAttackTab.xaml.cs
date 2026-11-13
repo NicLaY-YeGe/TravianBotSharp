@@ -26,6 +26,8 @@ namespace WPFUI.Views.Tabs
 
                 this.Bind(ViewModel, vm => vm.TargetX, v => v.TargetX.Text).DisposeWith(d);
                 this.Bind(ViewModel, vm => vm.TargetY, v => v.TargetY.Text).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.CatapultTargets, v => v.CatapultTargetComboBox.ItemsSource).DisposeWith(d);
+                this.Bind(ViewModel, vm => vm.SelectedCatapultTarget, v => v.CatapultTargetComboBox.SelectedItem).DisposeWith(d);
                 this.Bind(ViewModel, vm => vm.DesiredArrivalDate, v => v.DesiredArrivalDate.SelectedDate).DisposeWith(d);
                 this.Bind(ViewModel, vm => vm.DesiredArrivalTime, v => v.DesiredArrivalTime.Text).DisposeWith(d);
 

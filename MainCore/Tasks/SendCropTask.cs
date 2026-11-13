@@ -137,9 +137,13 @@ namespace MainCore.Tasks
             var rawAmount = Math.Min(plan.Amount, maxTotal);
             if (rawAmount <= 0) return Result.Ok();
 
-            var jitter = 1 + ((Random.Shared.NextDouble() * 0.06) - 0.03);
-            var amount = (long)Math.Round((rawAmount * jitter) / 100.0) * 100;
-            if (amount <= 0) amount = Math.Min(100, maxTotal);
+            // 2026-10-25: full merchant loads only (multiples of 750, rounded down).
+            var amount = MerchantAmountRules.RoundDown(rawAmount);
+            if (amount <= 0)
+            {
+                logger.Information("Village {VillageId}: only {Amount} crop to move, less than one merchant load ({Load}) - skipping this time.", task.VillageId, rawAmount, MerchantAmountRules.LoadPerMerchant);
+                return Result.Ok();
+            }
 
             logger.Information(
                 "Village {VillageId}: {SpareOrNeeded} crop to move, {Capacity} per merchant, {FreeMerchants} free -> sending {Amount}.",

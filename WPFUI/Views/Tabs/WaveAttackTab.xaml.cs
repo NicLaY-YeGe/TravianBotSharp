@@ -24,6 +24,8 @@ namespace WPFUI.Views.Tabs
             {
                 this.OneWayBind(ViewModel, vm => vm.Villages, v => v.VillageComboBox.ItemsSource).DisposeWith(d);
                 this.Bind(ViewModel, vm => vm.SelectedVillage, v => v.VillageComboBox.SelectedItem).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.CatapultTargets, v => v.CatapultTargetComboBox.ItemsSource).DisposeWith(d);
+                this.Bind(ViewModel, vm => vm.SelectedCatapultTarget, v => v.CatapultTargetComboBox.SelectedItem).DisposeWith(d);
 
                 this.OneWayBind(ViewModel, vm => vm.MainWaveSlots, v => v.MainWaveList.ItemsSource).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.RepeatWaveSlots, v => v.RepeatWaveList.ItemsSource).DisposeWith(d);

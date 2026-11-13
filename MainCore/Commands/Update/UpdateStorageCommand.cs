@@ -65,6 +65,13 @@
                 taskManager.Add(task);
             }
 
+            // 2026-11-10: independent of the NPC exchange above. CanStart holds the "not again before" memory.
+            var buyCropTask = new BuyCropTask.Task(accountId, villageId);
+            if (buyCropTask.CanStart(context) && !taskManager.IsExist<BuyCropTask.Task>(accountId, villageId))
+            {
+                taskManager.Add(buyCropTask);
+            }
+
             var sendCropTask = new SendCropTask.Task(accountId, villageId);
             if (sendCropTask.CanStart(context) && !taskManager.IsExist<SendCropTask.Task>(accountId, villageId))
             {

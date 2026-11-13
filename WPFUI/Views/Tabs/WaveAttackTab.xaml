@@ -34,6 +34,9 @@
                     <RadioButton x:Name="AttackRaidRadio" Content="Raid" GroupName="EventType" VerticalAlignment="Center" Margin="10,0,0,0" />
                     <RadioButton x:Name="ReinforcementRadio" Content="Reinforcement" GroupName="EventType" VerticalAlignment="Center" Margin="10,0,0,0" />
 
+                    <Label Content="Catapult target:" VerticalAlignment="Center" Margin="30,0,0,0" ToolTip="Applied on the confirmation screen of an attack that carries catapults, when the game offers the building (Rally Point level 3-10 depending on the building). Not used for raids." />
+                    <ComboBox x:Name="CatapultTargetComboBox" Width="170" Margin="10,0,0,0" DisplayMemberPath="Name" ToolTip="Applied on the confirmation screen of an attack that carries catapults, when the game offers the building (Rally Point level 3-10 depending on the building). Not used for raids." />
+
                     <Button x:Name="ScheduleButton" Content="Calculate &amp; schedule wave attack" Margin="30,0,0,0" />
                 </StackPanel>
             </StackPanel>

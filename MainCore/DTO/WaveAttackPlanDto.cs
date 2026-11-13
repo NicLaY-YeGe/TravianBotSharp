@@ -15,5 +15,8 @@ namespace MainCore.DTO
         bool MainWaveIncludeHero,
         IReadOnlyDictionary<int, long> RepeatWaveTroopAmounts,
         int WaveCount,
-        int GapSeconds);
+        int GapSeconds,
+        // 2026-11-08: catapult target (CatapultTargetEnums value, 0 = game default/Random), applied
+        // to every wave that carries catapults.
+        int CatapultTarget = 0);
 }
