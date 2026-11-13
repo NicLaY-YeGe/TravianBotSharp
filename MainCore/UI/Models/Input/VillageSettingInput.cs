@@ -183,6 +183,16 @@ namespace MainCore.UI.Models.Input
         public AmountInputViewModel BuyCropTargetPercent { get; } = new();
         public AmountInputViewModel BuyCropMaxMinutes { get; } = new();
 
+        // 2026-11-13: share-based troop training (ShareTrainTask), a mode of its own next to the old training.
+        [Reactive]
+        private bool _trainShareEnable;
+
+        public ShareWeightsViewModel InfantryShares { get; } = new(BuildingEnums.Barracks);
+        public ShareWeightsViewModel CavalryShares { get; } = new(BuildingEnums.Stable);
+        public ShareWeightsViewModel SiegeShares { get; } = new(BuildingEnums.Workshop);
+        public AmountInputViewModel TrainShareTriggerPercent { get; } = new();
+        public AmountInputViewModel TrainShareQueueMaxMinutes { get; } = new();
+
         [Reactive]
         private bool _trapEnable;
 
@@ -335,6 +345,13 @@ namespace MainCore.UI.Models.Input
             BuyCropTargetPercent.Set(settings.GetValueOrDefault(VillageSettingEnums.BuyCropTargetPercent));
             BuyCropMaxMinutes.Set(settings.GetValueOrDefault(VillageSettingEnums.BuyCropMaxMinutes));
 
+            TrainShareEnable = settings.GetValueOrDefault(VillageSettingEnums.TrainShareEnable) == 1;
+            InfantryShares.Set(settings, tribe);
+            CavalryShares.Set(settings, tribe);
+            SiegeShares.Set(settings, tribe);
+            TrainShareTriggerPercent.Set(settings.GetValueOrDefault(VillageSettingEnums.TrainShareTriggerPercent));
+            TrainShareQueueMaxMinutes.Set(settings.GetValueOrDefault(VillageSettingEnums.TrainShareQueueMaxMinutes));
+
             TrapEnable = settings.GetValueOrDefault(VillageSettingEnums.TrapEnable) == 1;
             TrapAmount.Set(
                 settings.GetValueOrDefault(VillageSettingEnums.TrapAmountMin),
@@ -455,6 +472,10 @@ namespace MainCore.UI.Models.Input
             // the target can never sit below the trigger, otherwise a purchase would not even leave the trigger zone
             var buyCropTargetPercent = Math.Clamp(Math.Max(BuyCropTargetPercent.Get(), buyCropGranaryPercent), 0, 100);
             var buyCropMaxMinutes = Math.Max(BuyCropMaxMinutes.Get(), 0);
+
+            var trainShareEnable = TrainShareEnable ? 1 : 0;
+            var trainShareTriggerPercent = Math.Clamp(TrainShareTriggerPercent.Get(), 0, 100);
+            var trainShareQueueMaxMinutes = Math.Max(TrainShareQueueMaxMinutes.Get(), 0);
 
             var trapEnable = TrapEnable ? 1 : 0;
             var (trapAmountMin, trapAmountMax) = TrapAmount.Get();
@@ -588,6 +609,9 @@ namespace MainCore.UI.Models.Input
                 { VillageSettingEnums.BuyCropGranaryPercent, buyCropGranaryPercent },
                 { VillageSettingEnums.BuyCropTargetPercent, buyCropTargetPercent },
                 { VillageSettingEnums.BuyCropMaxMinutes, buyCropMaxMinutes },
+                { VillageSettingEnums.TrainShareEnable, trainShareEnable },
+                { VillageSettingEnums.TrainShareTriggerPercent, trainShareTriggerPercent },
+                { VillageSettingEnums.TrainShareQueueMaxMinutes, trainShareQueueMaxMinutes },
 
                 { VillageSettingEnums.TrapEnable, trapEnable },
                 { VillageSettingEnums.TrapAmountMin, trapAmountMin },
@@ -608,6 +632,9 @@ namespace MainCore.UI.Models.Input
             InfantrySlots.WriteTo(settings);
             CavalrySlots.WriteTo(settings);
             SiegeSlots.WriteTo(settings);
+            InfantryShares.WriteTo(settings);
+            CavalryShares.WriteTo(settings);
+            SiegeShares.WriteTo(settings);
             return settings;
         }
 
@@ -622,6 +649,9 @@ namespace MainCore.UI.Models.Input
                     InfantrySlots.ChangeTribe(tribe);
                     CavalrySlots.ChangeTribe(tribe);
                     SiegeSlots.ChangeTribe(tribe);
+                    InfantryShares.ChangeTribe(tribe);
+                    CavalryShares.ChangeTribe(tribe);
+                    SiegeShares.ChangeTribe(tribe);
                     DodgeTroopSlots.ChangeTribe(tribe);
                 });
         }

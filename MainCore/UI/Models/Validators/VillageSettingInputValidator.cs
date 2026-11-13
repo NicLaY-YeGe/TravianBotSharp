@@ -65,6 +65,17 @@ namespace MainCore.UI.Models.Validators
                 }
             });
 
+            // 2026-11-13: share mode needs a construction reserve (otherwise it would spend the whole stock).
+            RuleFor(x => x).Custom((input, context) =>
+            {
+                if (!input.TrainShareEnable) return;
+                if (input.ConstructionReservePercent.Get() <= 0)
+                    context.AddFailure("share-based training: set the construction reserve above 0 (it decides what counts as 'above the reserve')");
+                var rows = input.InfantryShares.AllRows.Concat(input.CavalryShares.AllRows).Concat(input.SiegeShares.AllRows);
+                if (rows.Any(x => x.Weight.Get() < 0))
+                    context.AddFailure("share-based training: a weight cannot be negative");
+            });
+
             // 2026-10-27: per-troop rows (amount and interval).
             RuleFor(x => x).Custom((input, context) =>
             {

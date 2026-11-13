@@ -211,6 +211,48 @@
                 </Border>
                 <Border Style="{DynamicResource Box}">
                     <StackPanel>
+                        <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Share-based troop training (separate mode)" VerticalAlignment="Center" FontWeight="Bold" />
+                        <CheckBox x:Name="TrainShareEnable" Content="Train by shares instead of the settings below (switches the old 'Troop training settings' off for this village; its values are kept)" />
+                        <TextBlock TextWrapping="Wrap" FontStyle="Italic" Opacity="0.7" Text="No visit times and no unit amounts: when the stock above the construction reserve (set it below, it must be above 0) reaches the trigger, ALL of it is split between the troops in proportion to their weights, per resource. What a troop cannot use (a unit does not fit, queue ceiling, not researched) flows on to the others by the same weights. Only the village's own stock is used (no NPC trade, no hero inventory). Great barracks / great stable are not part of this mode." />
+                        <uc:AmountInputUc x:Name="TrainShareTriggerPercent" Text="Train when the stock above the reserve is worth at least" Unit="% of storage" />
+                        <uc:AmountInputUc x:Name="TrainShareQueueMaxMinutes" Text="Never fill a building's queue beyond (0 = no ceiling)" Unit="mins" />
+                        <TextBlock Text="Barracks (infantry) weights" FontWeight="SemiBold" Margin="0,8,0,0" />
+                        <ItemsControl x:Name="InfantryShareItems">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding Name}" Width="150" VerticalAlignment="Bottom" Margin="0,0,10,6" />
+                                        <uc:AmountInputUc ViewModel="{Binding Weight}" Text="weight" Unit="(0 = not trained)" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Text="Stable (cavalry) weights" FontWeight="SemiBold" Margin="0,8,0,0" />
+                        <ItemsControl x:Name="CavalryShareItems">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding Name}" Width="150" VerticalAlignment="Bottom" Margin="0,0,10,6" />
+                                        <uc:AmountInputUc ViewModel="{Binding Weight}" Text="weight" Unit="(0 = not trained)" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Text="Workshop (siege) weights" FontWeight="SemiBold" Margin="0,8,0,0" />
+                        <ItemsControl x:Name="SiegeShareItems">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding Name}" Width="150" VerticalAlignment="Bottom" Margin="0,0,10,6" />
+                                        <uc:AmountInputUc ViewModel="{Binding Weight}" Text="weight" Unit="(0 = not trained)" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+                <Border Style="{DynamicResource Box}">
+                    <StackPanel>
                         <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Troop training settings" VerticalAlignment="Center" FontWeight="Bold" />
                         <CheckBox x:Name="TrainTroopEnable" Content="Enable train troop" />
                         <CheckBox x:Name="ConstructionFirst" Content="Construction first: no troop training while a building waits for resources (off = troops first)" />

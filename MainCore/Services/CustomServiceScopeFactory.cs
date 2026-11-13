@@ -85,6 +85,10 @@ namespace MainCore.Services
                     var buyCropTaskHandler = scope.GetHandler<BuyCropTask.Task>();
                     return await buyCropTaskHandler.HandleAsync(buyCropTask, cancellationToken);
 
+                case ShareTrainTask.Task shareTrainTask:
+                    var shareTrainTaskHandler = scope.GetHandler<ShareTrainTask.Task>();
+                    return await shareTrainTaskHandler.HandleAsync(shareTrainTask, cancellationToken);
+
                 case SendCropTask.Task sendCropTask:
                     var sendCropTaskHandler = scope.GetHandler<SendCropTask.Task>();
                     return await sendCropTaskHandler.HandleAsync(sendCropTask, cancellationToken);

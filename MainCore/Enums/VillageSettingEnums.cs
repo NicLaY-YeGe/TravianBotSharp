@@ -389,5 +389,25 @@
         BuyCropGranaryPercent,
         BuyCropTargetPercent,
         BuyCropMaxMinutes,
+
+        // 2026-11-13, user decision: SHARE-BASED troop training, a separate mode next to the old TrainTroopTask (ShareTrainTask).
+        // TrainShareEnable = the mode switch (1 = ShareTrainTask trains this village and TrainTroopTask is off; 0 = the old
+        // behaviour, all old settings stay untouched). TrainShare<Infantry|Cavalry|Siege><slot> = weight of that slot's troop
+        // (0 = not trained in this mode). TrainShareTriggerPercent = train when the stock above the construction reserve is
+        // worth this much of the storage capacity; TrainShareQueueMaxMinutes = a building's queue is never filled beyond this
+        // (0 = no ceiling). Appended last on purpose (numbering).
+        TrainShareEnable,
+        TrainShareInfantry1,
+        TrainShareInfantry2,
+        TrainShareInfantry3,
+        TrainShareInfantry4,
+        TrainShareCavalry1,
+        TrainShareCavalry2,
+        TrainShareCavalry3,
+        TrainShareCavalry4,
+        TrainShareSiege1,
+        TrainShareSiege2,
+        TrainShareTriggerPercent,
+        TrainShareQueueMaxMinutes,
     }
 }

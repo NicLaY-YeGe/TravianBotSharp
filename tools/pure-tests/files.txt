@@ -95,3 +95,7 @@ MainCore.Test/Commands/Features/VillageOverview/VillageOverviewRulesTest.cs
 MainCore.Test/Commands/Features/VillageOverview/VillageOverviewStoreTest.cs
 MainCore/Parsers/RallyPointTroopsParser.cs
 MainCore.Test/Parsers/RallyPointTroopsParserTest.cs
+MainCore/Commands/Features/ShareTrain/ShareTrainRules.cs
+MainCore/Commands/Features/ShareTrain/ShareTrainMemory.cs
+MainCore.Test/Commands/Features/ShareTrain/ShareTrainRulesTest.cs
+MainCore.Test/Commands/Features/ShareTrain/ShareTrainMemoryTest.cs

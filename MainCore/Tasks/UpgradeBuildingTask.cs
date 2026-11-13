@@ -24,6 +24,8 @@ namespace MainCore.Tasks
             try
             {
                 if (!context.BooleanByName(task.VillageId, VillageSettingEnums.TrainTroopEnable)) return;
+                // 2026-11-13: the share mode has no visit times to bring forward (it reacts to the stock itself).
+                if (context.BooleanByName(task.VillageId, VillageSettingEnums.TrainShareEnable)) return;
 
                 var current = taskManager.GetTaskList(task.AccountId)
                     .OfType<TrainTroopTask.Task>()

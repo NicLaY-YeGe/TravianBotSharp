@@ -60,6 +60,8 @@ namespace MainCore.Tasks
             {
                 var settingEnable = context.BooleanByName(VillageId, VillageSettingEnums.TrainTroopEnable);
                 if (!settingEnable) return false;
+                // 2026-11-13: the share mode (ShareTrainTask) trains this village instead - the two modes exclude each other.
+                if (context.BooleanByName(VillageId, VillageSettingEnums.TrainShareEnable)) return false;
                 return true;
             }
         }
@@ -80,6 +82,10 @@ namespace MainCore.Tasks
             ILogger logger,
             CancellationToken cancellationToken)
         {
+            // 2026-11-13: CanStart is only checked when a task is queued, so a task that was already waiting when the user
+            // switched to the share mode ends here (ExecuteAt unchanged = removed from the queue, rule 16, intended).
+            if (context.BooleanByName(task.VillageId, VillageSettingEnums.TrainShareEnable)) return Result.Ok();
+
             if (context.BooleanByName(task.VillageId, VillageSettingEnums.ConstructionFirst))
             {
                 var holdUntil = ConstructionHold.GetUntil(task.VillageId);

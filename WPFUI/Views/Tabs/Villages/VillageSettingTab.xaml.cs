@@ -129,6 +129,12 @@ namespace WPFUI.Views.Tabs.Villages
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.BuyCropGranaryPercent, v => v.BuyCropGranaryPercent.ViewModel).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.BuyCropTargetPercent, v => v.BuyCropTargetPercent.ViewModel).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.BuyCropMaxMinutes, v => v.BuyCropMaxMinutes.ViewModel).DisposeWith(d);
+                this.Bind(ViewModel, vm => vm.VillageSettingInput.TrainShareEnable, v => v.TrainShareEnable.IsChecked).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.TrainShareTriggerPercent, v => v.TrainShareTriggerPercent.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.TrainShareQueueMaxMinutes, v => v.TrainShareQueueMaxMinutes.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.InfantryShares.Items, v => v.InfantryShareItems.ItemsSource).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.CavalryShares.Items, v => v.CavalryShareItems.ItemsSource).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.VillageSettingInput.SiegeShares.Items, v => v.SiegeShareItems.ItemsSource).DisposeWith(d);
 
                 this.Bind(ViewModel, vm => vm.VillageSettingInput.AutoClaimQuestEnable, v => v.AutoClaimQuestEnable.IsChecked).DisposeWith(d);
             });
