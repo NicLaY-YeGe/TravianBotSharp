@@ -61,6 +61,34 @@ namespace MainCore.Commands.Features.VillageOverview
             return $"until {snapshot.EndsAt:HH:mm} ({minutes} min)";
         }
 
+        // One running construction job of a village (from the QueueBuildings table). `Name` is already text so this file
+        // stays free of entity / enum types.
+        public sealed record ConstructionItem(string Name, int Level, DateTime CompleteTime);
+
+        // 2026-11-12: "Granary 7 until 14:48 (12 min)", several jobs joined with "; ". Jobs whose end has passed are ignored
+        // (the table is only cleaned when the village page is read again). Nothing running: "idle", and when the build
+        // list still holds jobs "idle, N job(s) waiting" - the case that explains "why is nothing being built".
+        // `known` = false (the village was never read) gives "?".
+        public static string FormatConstruction(IReadOnlyList<ConstructionItem> items, int waitingJobs, bool known, DateTime now)
+        {
+            var running = items
+                .Where(x => x.CompleteTime > now)
+                .OrderBy(x => x.CompleteTime)
+                .ToList();
+
+            if (running.Count == 0)
+            {
+                if (!known) return Unknown;
+                return waitingJobs > 0 ? $"idle, {waitingJobs} job(s) waiting" : "idle";
+            }
+
+            return string.Join("; ", running.Select(x =>
+            {
+                var minutes = (int)Math.Ceiling((x.CompleteTime - now).TotalMinutes);
+                return $"{x.Name} {x.Level} until {x.CompleteTime:HH:mm} ({minutes} min)";
+            }));
+        }
+
         // Smithy / Small celebration: the village setting says whether the task is on and, while the building is busy,
         // until when (Unix seconds, 0 = none known).
         public static string FormatBusyUntil(bool enabled, long busyUntilUnixSeconds, DateTime now)

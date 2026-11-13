@@ -109,6 +109,38 @@ namespace MainCore.Test.Commands.Features.VillageOverview
         }
 
         [Fact]
+        public void FormatConstruction_RunningJobsAreListedByEndTime()
+        {
+            var text = VillageOverviewRules.FormatConstruction(
+                [new("Warehouse", 8, Now.AddMinutes(30)), new("Granary", 7, Now.AddMinutes(12))], 0, true, Now);
+            text.ShouldBe("Granary 7 until 14:12 (12 min); Warehouse 8 until 14:30 (30 min)");
+        }
+
+        [Fact]
+        public void FormatConstruction_FinishedJobsCountAsIdle()
+        {
+            VillageOverviewRules.FormatConstruction([new("Granary", 7, Now.AddMinutes(-1))], 0, true, Now).ShouldBe("idle");
+        }
+
+        [Fact]
+        public void FormatConstruction_IdleWithWaitingJobsSaysSo()
+        {
+            VillageOverviewRules.FormatConstruction([], 3, true, Now).ShouldBe("idle, 3 job(s) waiting");
+        }
+
+        [Fact]
+        public void FormatConstruction_NeverReadVillageIsUnknown()
+        {
+            VillageOverviewRules.FormatConstruction([], 0, false, Now).ShouldBe("?");
+        }
+
+        [Fact]
+        public void FormatConstruction_RunningJobWinsOverUnknown()
+        {
+            VillageOverviewRules.FormatConstruction([new("Barracks", 3, Now.AddMinutes(5))], 0, false, Now).ShouldBe("Barracks 3 until 14:05 (5 min)");
+        }
+
+        [Fact]
         public void FormatAgo_Steps()
         {
             VillageOverviewRules.FormatAgo(null, Now).ShouldBe("never");

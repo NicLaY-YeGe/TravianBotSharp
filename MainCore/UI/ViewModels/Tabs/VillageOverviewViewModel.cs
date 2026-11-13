@@ -118,6 +118,34 @@ namespace MainCore.UI.ViewModels.Tabs
                 .Select(x => (x.VillageId, x.Type))
                 .ToHashSet();
 
+            // Construction (2026-11-12): one query for the running jobs of all villages, one for the build-list sizes and
+            // one for "village page was read" (any Buildings row). Both tables are filled by page reads the bot does anyway.
+            var queueRows = context.QueueBuildings
+                .AsNoTracking()
+                .Where(x => ids.Contains(x.VillageId))
+                .ToList()
+                .Where(x => x.CompleteTime > now)
+                .GroupBy(x => x.VillageId)
+                .ToDictionary(
+                    x => x.Key,
+                    x => x.Select(q => new VillageOverviewRules.ConstructionItem(q.Type.ToString(), q.Level, q.CompleteTime)).ToList());
+
+            var waitingJobs = context.Jobs
+                .AsNoTracking()
+                .Where(x => ids.Contains(x.VillageId))
+                .Select(x => x.VillageId)
+                .ToList()
+                .GroupBy(x => x)
+                .ToDictionary(x => x.Key, x => x.Count());
+
+            var villagesWithBuildings = context.Buildings
+                .AsNoTracking()
+                .Where(x => ids.Contains(x.VillageId))
+                .Select(x => x.VillageId)
+                .Distinct()
+                .ToList()
+                .ToHashSet();
+
             var rows = new List<VillageOverviewRow>();
             foreach (var village in villages)
             {
@@ -146,6 +174,11 @@ namespace MainCore.UI.ViewModels.Tabs
                     storage is null ? VillageOverviewRules.Unknown : VillageOverviewRules.FormatStock(storage.Iron, storage.Warehouse),
                     storage is null ? VillageOverviewRules.Unknown : VillageOverviewRules.FormatStock(storage.Crop, storage.Granary),
                     storage is null ? VillageOverviewRules.Unknown : VillageOverviewRules.FormatCropBalance(storage.FreeCrop),
+                    VillageOverviewRules.FormatConstruction(
+                        queueRows.TryGetValue(village.Id, out var running) ? running : [],
+                        waitingJobs.TryGetValue(village.Id, out var waiting) ? waiting : 0,
+                        villagesWithBuildings.Contains(village.Id),
+                        now),
                     VillageOverviewRules.HomeText(troops),
                     VillageOverviewRules.ReinforcementText(troops),
                     VillageOverviewRules.OutsideText(troops),

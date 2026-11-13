@@ -9,6 +9,7 @@ namespace MainCore.UI.Models.Output
         string Iron,
         string Crop,
         string CropBalance,
+        string Construction,
         string Troops,
         string Reinforcements,
         string Outside,

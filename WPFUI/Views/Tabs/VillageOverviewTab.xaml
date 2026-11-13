@@ -51,6 +51,7 @@
                     <DataGridTextColumn Header="Iron" Binding="{Binding Iron}" ElementStyle="{StaticResource WrapText}" Width="100" />
                     <DataGridTextColumn Header="Crop" Binding="{Binding Crop}" ElementStyle="{StaticResource WrapText}" Width="100" />
                     <DataGridTextColumn Header="Crop /h" Binding="{Binding CropBalance}" ElementStyle="{StaticResource WrapText}" Width="70" />
+                    <DataGridTextColumn Header="Construction" Binding="{Binding Construction}" ElementStyle="{StaticResource WrapText}" Width="190" />
                     <DataGridTextColumn Header="Troops at home" Binding="{Binding Troops}" ElementStyle="{StaticResource WrapText}" Width="220" />
                     <DataGridTextColumn Header="Reinforcements here (own villages)" Binding="{Binding Reinforcements}" ElementStyle="{StaticResource WrapText}" Width="150" />
                     <DataGridTextColumn Header="Troops outside (away, returning, stationed)" Binding="{Binding Outside}" ElementStyle="{StaticResource WrapText}" Width="220" />
