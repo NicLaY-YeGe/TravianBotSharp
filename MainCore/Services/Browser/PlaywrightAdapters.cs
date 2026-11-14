@@ -133,7 +133,14 @@ namespace MainCore.Services
             await Gate.WaitAsync();
             try
             {
-                _instance?.Dispose();
+                try
+                {
+                    _instance?.Dispose();
+                }
+                catch
+                {
+                    // a driver that already died may throw on dispose - it is dropped anyway
+                }
                 _instance = null;
             }
             finally

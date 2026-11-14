@@ -1,5 +1,6 @@
 using MainCore.Commands.Features.ShareTrain;
 using MainCore.Commands.Features.TrainTroop;
+using MainCore.Enums;
 
 namespace MainCore.Test.Commands.Features.ShareTrain
 {

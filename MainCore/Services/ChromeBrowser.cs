@@ -105,7 +105,21 @@ namespace MainCore.Services
             if (!Directory.Exists(pathUserData)) Directory.CreateDirectory(pathUserData);
             pathUserData = Path.Combine(pathUserData, string.IsNullOrEmpty(setting.ProxyHost) ? "default" : setting.ProxyHost);
 
-            var context = await playwright.Chromium.LaunchPersistentContextAsync(pathUserData, options);
+            // 2026-11-14 (live 13:24-15:54, 6163 failed reopens): "Process exited" means the Playwright DRIVER process died
+            // (it is not the browser). PlaywrightHost keeps one driver for the whole app, so a dead one made every launch
+            // fail at once until the app was restarted. The driver is dropped and one fresh one is tried right away.
+            IBrowserContext context;
+            try
+            {
+                context = await playwright.Chromium.LaunchPersistentContextAsync(pathUserData, options);
+            }
+            catch (PlaywrightException ex) when (ex.Message.Contains("Process exited", StringComparison.OrdinalIgnoreCase))
+            {
+                Logger.Warning("The Playwright driver has exited ({Message}) - starting a new one.", ex.Message);
+                await PlaywrightHost.DisposeAsync();
+                playwright = await PlaywrightHost.GetAsync();
+                context = await playwright.Chromium.LaunchPersistentContextAsync(pathUserData, options);
+            }
             context.SetDefaultTimeout(DefaultActionTimeoutMs);
             context.SetDefaultNavigationTimeout(NavigationTimeoutMs);
 

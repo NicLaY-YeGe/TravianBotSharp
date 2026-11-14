@@ -279,7 +279,7 @@ namespace MainCore.Tasks
             if (stock.All(x => x >= 0)) return stock;
 
             var storage = context.Storages.FirstOrDefault(x => x.VillageId == villageId.Value);
-            long[] stored = storage is null ? [0, 0, 0, 0] : [storage.Wood, storage.Clay, storage.Iron, storage.Crop];
+            long[] stored = storage is null ? new long[] { 0, 0, 0, 0 } : new long[] { storage.Wood, storage.Clay, storage.Iron, storage.Crop };
             for (var i = 0; i < 4; i++)
             {
                 if (stock[i] < 0) stock[i] = stored[i];
