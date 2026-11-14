@@ -18,7 +18,19 @@ namespace MainCore.Services
             _rxQueue = rxQueue;
         }
 
+        // 2026-11-14: one lock for the dictionary and the lists. Readers (Debug tab, LogService) get a COPY, so enumerating
+        // it while Emit adds a line no longer throws "Collection was modified" (TODO P2 "LogSink is not thread-safe").
+        private readonly object _gate = new();
+
         public LinkedList<LogEvent> GetLogs(AccountId accountId)
+        {
+            lock (_gate)
+            {
+                return new LinkedList<LogEvent>(GetOrCreate(accountId));
+            }
+        }
+
+        private LinkedList<LogEvent> GetOrCreate(AccountId accountId)
         {
             var logs = Logs.GetValueOrDefault(accountId);
             if (logs is null)
@@ -38,12 +50,15 @@ namespace MainCore.Services
             var value = scalarValue.Value as string;
             var accountId = new AccountId(int.Parse(value!));
 
-            var logs = GetLogs(accountId);
-            logs.AddFirst(logEvent);
-            // keeps 200 message
-            if (logs.Count > 200)
+            lock (_gate)
             {
-                logs.RemoveLast();
+                var logs = GetOrCreate(accountId);
+                logs.AddFirst(logEvent);
+                // keeps 200 message
+                if (logs.Count > 200)
+                {
+                    logs.RemoveLast();
+                }
             }
 
             _rxQueue.Enqueue(new LogEmitted(accountId, logEvent));
