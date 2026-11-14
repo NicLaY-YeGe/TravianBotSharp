@@ -26,7 +26,7 @@ namespace MainCore.Test.Commands.Features.ShareTrain
                 [ShareTrainSlots.Key(BuildingEnums.Stable, 3)] = 2,
             };
 
-            var weights = ShareTrainSlots.GetWeights(TribeEnums.Gaul, key => settings.GetValueOrDefault(key));
+            var weights = ShareTrainSlots.GetWeights(TribeEnums.Gauls, key => settings.GetValueOrDefault(key));
 
             weights.Count.ShouldBe(2);
             weights[0].Building.ShouldBe(BuildingEnums.Barracks);
@@ -39,7 +39,7 @@ namespace MainCore.Test.Commands.Features.ShareTrain
         [Fact]
         public void GetWeights_ClampsToTheMaximum()
         {
-            var weights = ShareTrainSlots.GetWeights(TribeEnums.Gaul, key => key == ShareTrainSlots.Key(BuildingEnums.Barracks, 1) ? 99999 : 0);
+            var weights = ShareTrainSlots.GetWeights(TribeEnums.Gauls, key => key == ShareTrainSlots.Key(BuildingEnums.Barracks, 1) ? 99999 : 0);
 
             weights.Single().Weight.ShouldBe(ShareTrainRules.MaxWeight);
         }
