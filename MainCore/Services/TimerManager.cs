@@ -222,8 +222,18 @@ namespace MainCore.Services
                     var message = string.Join(Environment.NewLine, result.Reasons.Select(e => e.Message));
                     if (!string.IsNullOrEmpty(message))
                     {
-                        logger.Warning("Task {TaskName} failed", task.Description, message);
-                        logger.Warning("{Message}", message);
+                        // 2026-11-15: a planned wait (build queue full, prerequisite still in the queue) is not a
+                        // failure; it printed 3 warnings after every successful upgrade (190 of 229 WRN lines in 11 h).
+                        var plannedWaits = result.Errors.OfType<MainCore.Errors.NextExecuteError>().Select(e => e.Message).Distinct().ToList();
+                        if (plannedWaits.Count > 0)
+                        {
+                            logger.Information("Task {TaskName} waits: {Message}", task.Description, string.Join("; ", plannedWaits));
+                        }
+                        else
+                        {
+                            logger.Warning("Task {TaskName} failed", task.Description, message);
+                            logger.Warning("{Message}", message);
+                        }
                     }
 
                     if (result.HasError<BrowserClosed>())
@@ -298,7 +308,13 @@ namespace MainCore.Services
         // so a dropped network surfaces here as "no working access yet" rather than a launch
         // failure - either way we just report false and let the caller back off and retry on
         // the next tick, no upper limit (2026-08-25).
-        private static async Task<bool> EnsureBrowserOpen(AccountId accountId, IServiceScope scope, IChromeBrowser browser, CancellationToken cancellationToken)
+        // 2026-11-14 (live 13:25-15:54: 6163 reopen attempts, one every 1.4 s, for 2.5 hours - the Playwright driver was dead
+        // and nothing told the user): the attempts now slow down after the third failure in a row (5 s more per attempt,
+        // 60 s at most) and the user gets ONE Telegram message after 10 failures in a row (NotifyOnPause) and another
+        // after 100.
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<int, int> ReopenFailures = new();
+
+        private async Task<bool> EnsureBrowserOpen(AccountId accountId, IServiceScope scope, IChromeBrowser browser, CancellationToken cancellationToken)
         {
             var getAccessQuery = scope.ServiceProvider.GetRequiredService<GetValidAccessCommand.Handler>();
             var openBrowserCommand = scope.ServiceProvider.GetRequiredService<OpenBrowserCommand.Handler>();
@@ -315,12 +331,54 @@ namespace MainCore.Services
             {
                 await openBrowserCommand.HandleAsync(new(accountId, accessResult.Value), cancellationToken);
                 browser.Logger.Information("Browser was closed - reopened it automatically.");
+                ReopenFailures.TryRemove(accountId.Value, out _);
                 return true;
             }
             catch (Exception ex)
             {
-                browser.Logger.Warning("Could not reopen browser yet ({Message}), will keep trying.", ex.Message);
+                var failures = ReopenFailures.AddOrUpdate(accountId.Value, 1, (_, n) => n + 1);
+                browser.Logger.Warning(
+                    "Could not reopen browser yet ({Type}: {Message}{Inner}), attempt {Attempt} in a row, will keep trying.",
+                    ex.GetType().Name, FirstLineOf(ex.Message), ex.InnerException is null ? "" : $" <- {ex.InnerException.GetType().Name}: {FirstLineOf(ex.InnerException.Message)}", failures);
+
+                if (failures == 10 || failures == 100)
+                {
+                    await NotifyText(accountId, $"\u26A0 {accountId}: browser cannot be reopened ({failures} attempts in a row: {FirstLineOf(ex.Message)}). The bot is not working until it is restarted.");
+                }
+
+                if (failures > 3)
+                {
+                    try
+                    {
+                        await Task.Delay(TimeSpan.FromSeconds(Math.Min(60, 5 * (failures - 3))), cancellationToken);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        // the pause button: the caller notices it on the next tick
+                    }
+                }
                 return false;
+            }
+        }
+
+        private static string FirstLineOf(string? text)
+        {
+            if (string.IsNullOrEmpty(text)) return "";
+            var index = text.IndexOfAny(['\r', '\n']);
+            return index < 0 ? text : text[..index];
+        }
+
+        private async Task NotifyText(AccountId accountId, string text)
+        {
+            try
+            {
+                var setting = _telegramNotifier.Get(accountId);
+                if (!setting.NotifyOnPause) return;
+                await _telegramNotifier.NotifyAsync(accountId, text);
+            }
+            catch
+            {
+                // notification is best-effort, never let it break the bot loop
             }
         }
 
@@ -345,6 +403,32 @@ namespace MainCore.Services
             }
         }
 
+        // The task that was running (if any) stays where it is; the queue is released and the account paused.
+        private void HandleLoopFailure(AccountId accountId, Exception ex)
+        {
+            if (ex is OperationCanceledException)
+            {
+                // the user's pause button reaching a call outside the pipeline
+                try { _taskManager.SetStatus(accountId, StatusEnums.Paused); } catch { /* best effort */ }
+                return;
+            }
+
+            CrashLog.Write($"TimerManager loop of account {accountId} failed", ex);
+            try
+            {
+                var queue = _taskManager.GetTaskQueue(accountId);
+                foreach (var queued in queue.Tasks.Where(x => x.Stage == StageEnums.Executing)) queued.Stage = StageEnums.Waiting;
+                queue.IsExecuting = false;
+                queue.CancellationTokenSource = null;
+                _taskManager.SetStatus(accountId, StatusEnums.Paused);
+                _rxQueue.Enqueue(new TasksModified(accountId));
+            }
+            catch (Exception inner)
+            {
+                CrashLog.Write($"TimerManager could not release the queue of account {accountId}", inner);
+            }
+        }
+
         public void Shutdown()
         {
             _isShutdown = true;
@@ -362,8 +446,23 @@ namespace MainCore.Services
                 timer.Elapsed += async (sender, e) =>
                 {
                     if (_isShutdown) return;
-                    await Execute(accountId);
-                    timer.Start();
+
+                    // 2026-11-14: this is an async event handler - an exception that left Execute (database, online-hours
+                    // check, a delay) used to end the account's loop for good or take the whole process down (CLAUDE.md
+                    // rule 19 area; TODO P2 "TimerManager.Start Elapsed handler has no try/catch"). Now it is written to
+                    // the log, the account is paused (so a permanent fault does not spin at 10 ticks/s) and the loop lives on.
+                    try
+                    {
+                        await Execute(accountId);
+                    }
+                    catch (Exception ex)
+                    {
+                        HandleLoopFailure(accountId, ex);
+                    }
+                    finally
+                    {
+                        if (!_isShutdown) timer.Start();
+                    }
                 };
 
                 _timers.Add(accountId, timer);
