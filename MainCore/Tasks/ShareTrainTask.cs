@@ -45,11 +45,30 @@ namespace MainCore.Tasks
 
                 var surplus = ReadDbSurplus(context, VillageId, out var warehouse, out var granary, out _);
                 if (surplus is null) return false;
-                return ShareTrainRules.ShouldRun(surplus, warehouse, granary, context.ByName(VillageId, VillageSettingEnums.TrainShareTriggerPercent));
+                if (!ShareTrainRules.ShouldRun(surplus, warehouse, granary, context.ByName(VillageId, VillageSettingEnums.TrainShareTriggerPercent))) return false;
+
+                var tribe = (TribeEnums)context.ByName(VillageId, VillageSettingEnums.Tribe);
+                var weights = ShareTrainSlots.GetWeights(tribe, key => context.ByName(VillageId, key));
+                return !NothingAffordable(VillageId, weights, surplus);
             }
         }
 
         private const int BudgetSeconds = 300;
+
+        // 2026-11-15: true when every weighted troop's unit cost is known from an earlier survey and none of them fits into
+        // the surplus - the visit would open the buildings only to train nothing (log 2026-11-15: iron stayed at 0 for hours
+        // while 12 of 17 visits planned 0 units). A troop with an unknown cost means "look".
+        private static bool NothingAffordable(VillageId villageId, IReadOnlyList<ShareWeight> weights, long[] surplus)
+        {
+            var costs = new List<long[]>();
+            foreach (var weight in weights)
+            {
+                var cost = ShareTrainMemory.GetUnitCost(villageId.Value, (int)weight.Troop);
+                if (cost is null) return false;
+                if (cost.Length == 4) costs.Add(cost);
+            }
+            return ShareTrainRules.NothingAffordable(costs, surplus);
+        }
 
         private static async ValueTask<Result> HandleAsync(
             Task task,
@@ -131,6 +150,12 @@ namespace MainCore.Tasks
                 return (Result.Ok(), false);
             }
 
+            if (NothingAffordable(villageId, weights, dbSurplus))
+            {
+                logger.Information("Share train in {VillageId}: stock above the reserve {Pool} (wood/clay/iron/crop) does not cover one unit of any weighted troop - buildings not opened.", villageId, string.Join("/", dbSurplus));
+                return (Result.Ok(), false);
+            }
+
             var queueMax = context.ByName(villageId, VillageSettingEnums.TrainShareQueueMaxMinutes);
 
             // ---- Pass 1: survey. One visit per weighted building.
@@ -167,6 +192,7 @@ namespace MainCore.Tasks
                     if (TrainTroopParser.GetInputBox(html, weight.Troop) is null)
                     {
                         logger.Information("Share train in {VillageId}: {Troop} cannot be trained in the {Building} right now (not researched?) - skipped.", villageId, weight.Troop, building);
+                        ShareTrainMemory.SetUnavailable(villageId.Value, (int)weight.Troop, DateTime.Now);
                         continue;
                     }
 
@@ -178,6 +204,7 @@ namespace MainCore.Tasks
                         continue;
                     }
 
+                    ShareTrainMemory.SetUnitCost(villageId.Value, (int)weight.Troop, unitCost, DateTime.Now);
                     var unitSeconds = TrainTroopParser.GetUnitSeconds(html, weight.Troop);
                     if (unitSeconds <= 0 && queueMax > 0)
                     {

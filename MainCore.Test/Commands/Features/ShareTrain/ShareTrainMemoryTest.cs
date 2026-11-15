@@ -19,6 +19,27 @@ namespace MainCore.Test.Commands.Features.ShareTrain
         }
 
         [Fact]
+        public void UnitCost_IsKnownUntilItExpires()
+        {
+            const int village = 920003;
+            ShareTrainMemory.GetUnitCost(village, 1, Now).ShouldBeNull();
+
+            ShareTrainMemory.SetUnitCost(village, 1, [100, 130, 55, 30], Now);
+            string.Join("/", ShareTrainMemory.GetUnitCost(village, 1, Now.AddHours(11))!).ShouldBe("100/130/55/30");
+            ShareTrainMemory.GetUnitCost(village, 1, Now.AddHours(12)).ShouldBeNull();
+        }
+
+        [Fact]
+        public void Unavailable_IsAnEmptyCostForOneHour()
+        {
+            const int village = 920004;
+            ShareTrainMemory.SetUnavailable(village, 2, Now);
+
+            ShareTrainMemory.GetUnitCost(village, 2, Now.AddMinutes(59))!.Length.ShouldBe(0);
+            ShareTrainMemory.GetUnitCost(village, 2, Now.AddHours(1)).ShouldBeNull();
+        }
+
+        [Fact]
         public void Clear_ForgetsTheHold()
         {
             const int village = 920002;

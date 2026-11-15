@@ -9,6 +9,20 @@ namespace MainCore.Test.Commands.Features.ShareTrain
         private static long Total(long[] cost, int units) => cost.Sum() * units;
 
         [Fact]
+        public void NothingAffordable_TrueOnlyWhenNoTroopFitsEveryResource()
+        {
+            long[] phalanx = [100, 130, 55, 30];
+            long[] druid = [360, 330, 280, 120];
+
+            // iron short for both -> skip the visit
+            ShareTrainRules.NothingAffordable([phalanx, druid], [5000, 5000, 20, 5000]).ShouldBeTrue();
+            // one unit of the cheaper troop fits -> look
+            ShareTrainRules.NothingAffordable([phalanx, druid], [5000, 5000, 55, 5000]).ShouldBeFalse();
+            // nothing known -> look
+            ShareTrainRules.NothingAffordable([], [0, 0, 0, 0]).ShouldBeFalse();
+        }
+
+        [Fact]
         public void Surplus_IsStockAboveTheFloor()
         {
             string.Join("/", ShareTrainRules.Surplus([1000, 500, 200, 900], [400, 600, 200, 100])).ShouldBe("600/0/0/800");

@@ -105,6 +105,15 @@ namespace MainCore.Commands.Features.ShareTrain
             return units;
         }
 
+        // True when none of the given unit costs fits into the surplus (every resource) - a visit could not train a single
+        // unit, so it is skipped. An empty list is never "nothing affordable" (nothing is known, so the buildings must be
+        // looked at).
+        public static bool NothingAffordable(IReadOnlyList<long[]> unitCosts, long[] surplus)
+        {
+            if (unitCosts.Count == 0) return false;
+            return unitCosts.All(cost => Enumerable.Range(0, 4).Any(i => cost[i] > surplus[i]));
+        }
+
         public static bool HasCost(long[] unitCost)
         {
             if (unitCost is null || unitCost.Length != 4) return false;

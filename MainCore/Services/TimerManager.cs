@@ -222,18 +222,8 @@ namespace MainCore.Services
                     var message = string.Join(Environment.NewLine, result.Reasons.Select(e => e.Message));
                     if (!string.IsNullOrEmpty(message))
                     {
-                        // 2026-11-15: a planned wait (build queue full, prerequisite still in the queue) is not a
-                        // failure; it printed 3 warnings after every successful upgrade (190 of 229 WRN lines in 11 h).
-                        var plannedWaits = result.Errors.OfType<MainCore.Errors.NextExecuteError>().Select(e => e.Message).Distinct().ToList();
-                        if (plannedWaits.Count > 0)
-                        {
-                            logger.Information("Task {TaskName} waits: {Message}", task.Description, string.Join("; ", plannedWaits));
-                        }
-                        else
-                        {
-                            logger.Warning("Task {TaskName} failed", task.Description, message);
-                            logger.Warning("{Message}", message);
-                        }
+                        logger.Warning("Task {TaskName} failed", task.Description, message);
+                        logger.Warning("{Message}", message);
                     }
 
                     if (result.HasError<BrowserClosed>())
