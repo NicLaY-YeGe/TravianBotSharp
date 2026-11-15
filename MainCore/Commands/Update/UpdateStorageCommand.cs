@@ -65,6 +65,21 @@
                 taskManager.Add(task);
             }
 
+            // 2026-11-10: independent of the NPC exchange above. CanStart holds the "not again before" memory.
+            var buyCropTask = new BuyCropTask.Task(accountId, villageId);
+            if (buyCropTask.CanStart(context) && !taskManager.IsExist<BuyCropTask.Task>(accountId, villageId))
+            {
+                taskManager.Add(buyCropTask);
+            }
+
+            // 2026-11-13: share-based troop training (separate from TrainTroopTask). CanStart holds the trigger (stock
+            // above the construction reserve) and the "not again before" memory.
+            var shareTrainTask = new ShareTrainTask.Task(accountId, villageId);
+            if (shareTrainTask.CanStart(context) && !taskManager.IsExist<ShareTrainTask.Task>(accountId, villageId))
+            {
+                taskManager.Add(shareTrainTask);
+            }
+
             var sendCropTask = new SendCropTask.Task(accountId, villageId);
             if (sendCropTask.CanStart(context) && !taskManager.IsExist<SendCropTask.Task>(accountId, villageId))
             {
