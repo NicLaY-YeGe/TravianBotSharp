@@ -26,7 +26,20 @@ namespace MainCore.Tasks
                 var hammerVillageId = GetHammerVillageId(context, AccountId, VillageId);
                 if (hammerVillageId is null) return false;
 
-                return GetOverflowingResources(context, VillageId).Count > 0;
+                var overflowing = GetOverflowingResources(context, VillageId);
+                if (overflowing.Count == 0) return false;
+
+                // 2026-11-15: only queue the task when the hammer can really take a merchant load of an overflowing
+                // resource (up to its own overflow percent). Before, a full hammer still cost a Marketplace visit per
+                // storage update (22 runs in 11 h, most of them "nothing worth sending").
+                var source = context.Storages.FirstOrDefault(x => x.VillageId == VillageId.Value);
+                var hammer = context.Storages.FirstOrDefault(x => x.VillageId == hammerVillageId.Value.Value);
+                if (source is null || hammer is null) return true; // unknown state: let the task look
+                var sourcePercent = context.ByName(VillageId, VillageSettingEnums.OverflowToHammerPercent);
+                var hammerCeiling = GetHammerCeilingPercent(context, hammerVillageId.Value);
+                return overflowing.Any(r =>
+                    Math.Min(GetOverflowAmount(source, r, sourcePercent), ReceiveRoomRules.Room(GetCapacity(hammer, r), GetAmount(hammer, r), hammerCeiling))
+                    >= MerchantAmountRules.LoadPerMerchant);
             }
         }
 
@@ -51,6 +64,25 @@ namespace MainCore.Tasks
 
             var hammerVillage = context.Villages.FirstOrDefault(x => x.Id == hammerVillageIdRaw && x.AccountId == accountId.Value);
             return hammerVillage is null ? null : new VillageId(hammerVillage.Id);
+        }
+
+        // 2026-11-15: the hammer village is a RECEIVER here; if it has Auto balance on it ships resources away above its
+        // own Auto balance overflow percent, so this task must not fill it past that (the log showed 20-33k crop going
+        // back and forth between the hammer and a side village). Without Auto balance there is no limit but capacity.
+        private static int GetHammerCeilingPercent(AppDbContext context, VillageId hammerId)
+            => ReceiveRoomRules.CeilingPercent(
+                context.BooleanByName(hammerId, VillageSettingEnums.AutoBalanceEnable),
+                context.ByName(hammerId, VillageSettingEnums.AutoBalanceOverflowPercent),
+                false,
+                0);
+
+        // 2026-11-15: every early exit used to be a silent Skip.Error with ExecuteAt unchanged ("Task failed / Bot skip
+        // this task", 4x in the 2026-11-15 log, no reason). Say why and move the task out (same pattern as Balance resources).
+        private static Result Defer(Task task, ILogger logger, string reason)
+        {
+            task.ExecuteAt = DateTime.Now.AddMinutes(Random.Shared.Next(20, 31));
+            logger.Information("Overflow to hammer in {VillageId}: nothing to send ({Reason}), next look at {Time:HH:mm}.", task.VillageId, reason, task.ExecuteAt);
+            return Result.Ok();
         }
 
         // Resource types currently at/above the chosen overflow threshold, most-full first.
@@ -128,13 +160,13 @@ namespace MainCore.Tasks
             CancellationToken cancellationToken)
         {
             var overflowing = GetOverflowingResources(context, task.VillageId);
-            if (overflowing.Count == 0) return Skip.Error;
+            if (overflowing.Count == 0) return Defer(task, logger, "no resource is above the overflow percent any more");
 
             var hammerVillageId = GetHammerVillageId(context, task.AccountId, task.VillageId);
-            if (hammerVillageId is null) return Skip.Error;
+            if (hammerVillageId is null) return Defer(task, logger, "no hammer village is set for this account");
 
-            var hammerVillage = context.Villages.FirstOrDefault(x => x.Id == hammerVillageId.Value.Value);
-            if (hammerVillage is null) return Skip.Error;
+            var hammerVillage = context.Villages.FirstOrDefault(x => x.Id == hammerVillageId.Value.Value && x.AccountId == task.AccountId.Value);
+            if (hammerVillage is null) return Defer(task, logger, "the hammer village was not found");
 
             var pageResult = await toSendResourcePageCommand.HandleAsync(new(task.VillageId), cancellationToken);
             if (pageResult.IsFailed)
@@ -166,12 +198,13 @@ namespace MainCore.Tasks
             var overflowPercent = context.ByName(task.VillageId, VillageSettingEnums.OverflowToHammerPercent);
             var sourceStorage = context.Storages.FirstOrDefault(x => x.VillageId == task.VillageId.Value);
             var hammerStorage = context.Storages.FirstOrDefault(x => x.VillageId == hammerVillage.Id);
+            var hammerCeilingPercent = GetHammerCeilingPercent(context, hammerVillageId.Value);
 
             var weights = new Dictionary<string, long>();
             var maxPerResource = new Dictionary<string, long>();
             foreach (var resource in overflowing)
             {
-                var room = hammerStorage is null ? long.MaxValue : Math.Max(0, GetCapacity(hammerStorage, resource) - GetAmount(hammerStorage, resource));
+                var room = hammerStorage is null ? long.MaxValue : ReceiveRoomRules.Room(GetCapacity(hammerStorage, resource), GetAmount(hammerStorage, resource), hammerCeilingPercent);
                 var overflowAmount = sourceStorage is null ? 0 : GetOverflowAmount(sourceStorage, resource, overflowPercent);
 
                 weights[resource] = overflowAmount;
@@ -187,7 +220,7 @@ namespace MainCore.Tasks
                 // Say why, and move the task out so the re-add finds it already queued.
                 task.ExecuteAt = DateTime.Now.AddMinutes(Random.Shared.Next(20, 31));
                 logger.Information(
-                    "Overflow to hammer in {VillageId}: nothing worth sending (surplus or the hammer's free room is below one merchant load), next look at {Time:HH:mm}.",
+                    "Overflow to hammer in {VillageId}: nothing worth sending (surplus or the hammer's free room - up to its own overflow percent - is below one merchant load), next look at {Time:HH:mm}.",
                     task.VillageId, task.ExecuteAt);
                 return Result.Ok();
             }

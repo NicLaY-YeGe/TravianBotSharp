@@ -60,6 +60,20 @@ namespace MainCore.Behaviors
                 // navigates, WaitPageChanged("dorf") just times out).
                 await _dismissCookieConsentCommand.HandleAsync(new(), cancellationToken);
 
+                // 2026-11-15: after a long idle gap (offline hours, pause) the page on screen is stale and the server
+                // session may be gone; the first click then waited 180 s for nothing (see IdleSessionRules). Reload
+                // first, so a dead session shows the login page right away and the re-login path below takes over.
+                if (request is not LoginTask.Task && IdleSessionRules.ShouldRefresh(AccountActivity.Get(accountId.Value), DateTime.Now))
+                {
+                    _logger.Information("{Task}: the account was idle for {Minutes} min, reloading the page before the task", request.Description, (int)(DateTime.Now - AccountActivity.Get(accountId.Value)!.Value).TotalMinutes);
+                    AccountActivity.Touch(accountId.Value);
+                    var idleRefresh = await _browser.Refresh(cancellationToken);
+                    if (idleRefresh.IsSuccess)
+                    {
+                        await _dismissCookieConsentCommand.HandleAsync(new(), cancellationToken);
+                    }
+                }
+
                 if (!LoginParser.IsIngamePage(_browser.Html))
                 {
                     // 2026-10-18 (real TS32 incident: 268 "not ingame nor login" skips over 8
@@ -152,6 +166,7 @@ namespace MainCore.Behaviors
             TransientStreak.Reset(accountId.Value);
 
             var response = await Next(request, cancellationToken);
+            AccountActivity.Touch(accountId.Value);
 
             try
             {

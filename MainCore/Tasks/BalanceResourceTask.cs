@@ -79,8 +79,27 @@ namespace MainCore.Tasks
                 .ToList();
         }
 
+        // 2026-11-15: the percent at which the RECEIVER would start sending resources away itself (its own
+        // Auto balance overflow percent and, unless it is the hammer village, its Overflow to hammer percent).
+        // A shipment must stop below it, otherwise the receiver ships the load straight back (live log 2026-11-15:
+        // ~20 shipments of 20-33k crop between two villages). See ReceiveRoomRules.
+        private static int GetReceiverCeilingPercent(AppDbContext context, AccountId accountId, VillageId receiverId)
+        {
+            var hammerId = context.ByName(accountId, AccountSettingEnums.HammerVillageId);
+            var sendsToHammer = hammerId > 0
+                && hammerId != receiverId.Value
+                && context.BooleanByName(receiverId, VillageSettingEnums.OverflowToHammerEnable);
+
+            return ReceiveRoomRules.CeilingPercent(
+                context.BooleanByName(receiverId, VillageSettingEnums.AutoBalanceEnable),
+                context.ByName(receiverId, VillageSettingEnums.AutoBalanceOverflowPercent),
+                sendsToHammer,
+                context.ByName(receiverId, VillageSettingEnums.OverflowToHammerPercent));
+        }
+
         // The AutoBalanceEnable village (other than the source) with the most combined free
-        // room across the resources we're trying to offload.
+        // room across the resources we're trying to offload. "Room" stops below the receiver's own
+        // outgoing threshold (2026-11-15), not at its full capacity.
         private static VillageId? GetBestTarget(AppDbContext context, AccountId accountId, VillageId sourceVillageId, List<string> resources)
         {
             var candidates = context.Villages
@@ -100,7 +119,8 @@ namespace MainCore.Tasks
                 var storage = context.Storages.FirstOrDefault(s => s.VillageId == id.Value);
                 if (storage is null) continue;
 
-                var room = resources.Sum(r => Math.Max(0, GetCapacity(storage, r) - GetAmount(storage, r)));
+                var ceilingPercent = GetReceiverCeilingPercent(context, accountId, id);
+                var room = resources.Sum(r => ReceiveRoomRules.Room(GetCapacity(storage, r), GetAmount(storage, r), ceilingPercent));
                 if (room <= 0) continue;
 
                 if (bestId is null || room > bestRoom)
@@ -213,12 +233,13 @@ namespace MainCore.Tasks
             var targetStorage = context.Storages.FirstOrDefault(x => x.VillageId == targetVillage.Id);
             var sourceStorage = context.Storages.FirstOrDefault(x => x.VillageId == task.VillageId.Value);
             var targetPercent = context.ByName(task.VillageId, VillageSettingEnums.AutoBalanceTargetPercent);
+            var receiverCeilingPercent = GetReceiverCeilingPercent(context, task.AccountId, targetId.Value);
 
             var weights = new Dictionary<string, long>();
             var maxPerResource = new Dictionary<string, long>();
             foreach (var resource in overflowing)
             {
-                var room = targetStorage is null ? long.MaxValue : Math.Max(0, GetCapacity(targetStorage, resource) - GetAmount(targetStorage, resource));
+                var room = targetStorage is null ? long.MaxValue : ReceiveRoomRules.Room(GetCapacity(targetStorage, resource), GetAmount(targetStorage, resource), receiverCeilingPercent);
                 var surplus = sourceStorage is null ? 0 : GetSourceSurplus(sourceStorage, resource, targetPercent);
 
                 weights[resource] = surplus;
@@ -226,7 +247,7 @@ namespace MainCore.Tasks
             }
 
             var amounts = DistributeProportionally(overflowing, weights, maxPerResource, totalToSend);
-            if (amounts.Values.Sum() <= 0) return Defer(task, logger, "the surplus or the target's free room is below one merchant load");
+            if (amounts.Values.Sum() <= 0) return Defer(task, logger, "the surplus or the target's free room (up to its own overflow percent) is below one merchant load");
 
             var sendResult = await sendResourceCommand.HandleAsync(new(task.VillageId, targetId.Value, amounts), cancellationToken);
             // SendResourceCommand already classifies its failures (Skip for form problems, Cancel for
