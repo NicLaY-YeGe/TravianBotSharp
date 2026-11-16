@@ -3,6 +3,7 @@ using MainCore.UI.Models.Input;
 using MainCore.UI.Models.Output;
 using MainCore.UI.ViewModels.Abstract;
 using Microsoft.Extensions.DependencyInjection;
+using System.Reactive.Concurrency;
 using System.Text.Json;
 
 namespace MainCore.UI.ViewModels.Tabs
@@ -44,10 +45,19 @@ namespace MainCore.UI.ViewModels.Tabs
             await LoadSettingsCommand.Execute(accountId);
 
             var telegramSetting = _telegramNotifier.Get(accountId);
-            TelegramBotToken = telegramSetting.BotToken;
-            TelegramChatId = telegramSetting.ChatId;
-            TelegramNotifyOnAttack = telegramSetting.NotifyOnAttack;
-            TelegramNotifyOnPause = telegramSetting.NotifyOnPause;
+
+            // 2026-10-22: Load runs on the task pool (AccountTabViewModelBase/TabViewModelBase use
+            // ObserveOn(RxApp.TaskpoolScheduler)), and the view two-way binds these properties
+            // (AccountSettingTab.xaml.cs), so setting them here read the control's ViewModel from a
+            // non-UI thread: "The calling thread cannot access this object because a different thread
+            // owns it" (live log 10:35:59). Set them on the UI thread.
+            RxApp.MainThreadScheduler.Schedule(() =>
+            {
+                TelegramBotToken = telegramSetting.BotToken;
+                TelegramChatId = telegramSetting.ChatId;
+                TelegramNotifyOnAttack = telegramSetting.NotifyOnAttack;
+                TelegramNotifyOnPause = telegramSetting.NotifyOnPause;
+            });
         }
 
         [ReactiveCommand]

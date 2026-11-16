@@ -10,8 +10,8 @@
     d:DesignHeight="450" d:DesignWidth="800">
     <Grid Margin="5">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="10*" />
-            <ColumnDefinition Width="45*" />
+            <ColumnDefinition Width="180" />
+            <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
         <Grid Grid.Column="0">
             <Grid.RowDefinitions>
@@ -67,22 +67,25 @@
                 <TabItem x:Name="VillageTab" Header="Villages">
                     <v_tab:VillageTab x:Name="Village" />
                 </TabItem>
+                <TabItem x:Name="VillageOverviewTab" Header="Overview">
+                    <v_tab:VillageOverviewTab x:Name="VillageOverview" />
+                </TabItem>
                 <TabItem x:Name="FarmingTab" Header="Farming">
                     <v_tab:FarmingTab x:Name="Farming" />
                 </TabItem>
-                <TabItem x:Name="SyncAttackTab" Header="Sync attack">
+                <TabItem x:Name="SyncAttackTab" Header="Sync">
                     <v_tab:SyncAttackTab x:Name="SyncAttack" />
                 </TabItem>
-                <TabItem x:Name="WaveAttackTab" Header="Wave attack">
+                <TabItem x:Name="WaveAttackTab" Header="Wave">
                     <v_tab:WaveAttackTab x:Name="WaveAttack" />
                 </TabItem>
                 <TabItem x:Name="RaidListTab" Header="Raid list">
                     <v_tab:RaidListTab x:Name="RaidList" />
                 </TabItem>
-                <TabItem x:Name="MapAnalysisTab" Header="Map analysis">
+                <TabItem x:Name="MapAnalysisTab" Header="Map">
                     <v_tab:MapAnalysisTab x:Name="MapAnalysis" />
                 </TabItem>
-                <TabItem x:Name="EditAccountTab" Header="Edit account">
+                <TabItem x:Name="EditAccountTab" Header="Edit">
                     <v_tab:EditAccountTab x:Name="EditAccount" />
                 </TabItem>
                 <TabItem x:Name="DebugTab" Header="Debug">
