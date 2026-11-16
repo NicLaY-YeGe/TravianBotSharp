@@ -126,12 +126,22 @@ namespace MainCore.Tasks
                 return overviewResult;
             }
 
-            var attackSeconds = RallyPointOverviewParser.GetIncomingAttackSeconds(browser.Html);
+            // 2026-10-23: attacks are always dodged; raids only when DodgeRaidEnable is on.
+            var dodgeRaids = context.BooleanByName(task.VillageId, VillageSettingEnums.DodgeRaidEnable);
+            var movements = RallyPointOverviewParser.GetIncomingMovements(browser.Html);
+            var relevant = movements
+                .Where(x => dodgeRaids || x.Kind == RallyPointOverviewParser.IncomingKind.Attack)
+                .OrderBy(x => x.Seconds)
+                .FirstOrDefault();
+            int? attackSeconds = relevant?.Seconds;
+            var impactAt = DateTime.Now.AddSeconds(attackSeconds ?? 0);
             if (attackSeconds is null)
             {
-                // No incoming attack showing right now (already landed, already dodged, or
-                // the IsUnderAttack flag was stale) - nothing to do this pass.
+                // Nothing to dodge showing right now (already landed, already dodged, only a raid
+                // while raid dodge is off, or the IsUnderAttack flag was stale). Say which, instead
+                // of skipping silently (2026-10-22 log: 14 silent skips).
                 AttackWakeWindow.ReleaseReservation(task.AccountId, task.VillageId);
+                await IncomingMovementDiagnostics.ReportNothingToDoAsync(browser, logger, task.VillageId, "Dodge", movements);
                 return Skip.Error;
             }
 
@@ -155,8 +165,8 @@ namespace MainCore.Tasks
             {
                 task.ExecuteAt = DateTime.Now.AddSeconds(secondsUntilSend);
                 AttackWakeWindow.Apply(context, taskManager, task.AccountId, task.ExecuteAt, DateTime.Now.AddSeconds(attackSeconds.Value), task.SetWakeWindow, logger);
-                logger.Information("Incoming attack on {VillageId} lands in {Seconds}s - will send dodge troops in {SendIn}s.",
-                    task.VillageId, attackSeconds.Value, secondsUntilSend);
+                logger.Information("Incoming {Kind} on {VillageId} lands in {Seconds}s - will send dodge troops in {SendIn}s.",
+                    relevant!.Kind.ToString().ToLowerInvariant(), task.VillageId, attackSeconds.Value, secondsUntilSend);
                 return Result.Ok();
             }
 
@@ -206,10 +216,29 @@ namespace MainCore.Tasks
                 return Skip.Error;
             }
 
+            // 2026-10-22: the send gets a hard deadline just before impact. 2026-10-21 17:49: the send
+            // sat in an element wait with no limit (180 s) and the attack landed unanswered. Past
+            // impact a send is pointless, so give up on time instead of holding the queue.
+            var sendTimeoutSeconds = (int)(impactAt - DateTime.Now).TotalSeconds - 2;
+            if (sendTimeoutSeconds < 5)
+            {
+                logger.Warning("Dodge on {VillageId}: only {Seconds}s left before impact after reaching the send form, skipping.", task.VillageId, sendTimeoutSeconds);
+                return Skip.Error;
+            }
+
             var sendResult = await sendTroopsCommand.HandleAsync(
-                new(task.VillageId, targetX, targetY, RallyPointEventTypeEnums.AttackNormal, troopAmounts, Confirm: true),
+                new(task.VillageId, targetX, targetY, RallyPointEventTypeEnums.AttackNormal, troopAmounts, Confirm: true, TimeoutSeconds: sendTimeoutSeconds),
                 cancellationToken);
-            if (sendResult.IsFailed) return Result.Fail(sendResult.Errors);
+            if (sendResult.IsFailed)
+            {
+                if (cancellationToken.IsCancellationRequested) return Cancel.Error;
+
+                // A Retry/Stop here would hold the single-threaded queue (Polly delay ~40 s) past
+                // impact or pause the account; a late retry cannot save the troops anyway.
+                logger.Warning("Dodge send from {VillageId} to ({X}|{Y}) failed, no recall will be scheduled: {Errors}",
+                    task.VillageId, targetX, targetY, string.Join(" | ", sendResult.Errors.Select(e => e.Message)));
+                return Skip.Error.WithErrors(sendResult.Errors);
+            }
 
             var recallAfterSeconds = context.ByName(task.VillageId, VillageSettingEnums.DodgeRecallSecondsAfterSend);
             if (recallAfterSeconds <= 0) recallAfterSeconds = 50;
