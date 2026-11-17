@@ -101,17 +101,13 @@ namespace MainCore.Tasks
                 .ToList();
         }
 
-        // How much of this resource sits above the overflow threshold - this is both the
-        // weight used to split merchants across resources, and the hard cap on how much of
-        // it makes sense to send (never more than what's actually "extra").
+        // How much of this resource the village may send - this is both the weight used to split merchants across
+        // resources, and the hard cap on how much of it makes sense to send. 2026-11-17: the task still STARTS at the
+        // overflow percent, but it drains DOWN TO `OverflowDrainRules.DrainMarginPercent` points below it (it used to send
+        // only what stood above the threshold, so the village crossed it again within ~19 minutes).
         private static long GetOverflowAmount(Storage storage, string resourceType, int overflowPercent)
         {
-            var capacity = GetCapacity(storage, resourceType);
-            if (capacity <= 0) return 0;
-
-            var thresholdAmount = capacity * overflowPercent / 100;
-            var current = GetAmount(storage, resourceType);
-            return Math.Max(0, current - thresholdAmount);
+            return OverflowDrainRules.SendableAmount(GetCapacity(storage, resourceType), GetAmount(storage, resourceType), overflowPercent);
         }
 
         // 2026-10-25, user request: shipments are multiples of one merchant's load (750), rounded
@@ -210,6 +206,8 @@ namespace MainCore.Tasks
                 weights[resource] = overflowAmount;
                 maxPerResource[resource] = Math.Min(room, overflowAmount);
             }
+
+            logger.Information("Overflow to hammer in {VillageId}: {Resources} at or above {Percent} %, draining down to {Target} %.", task.VillageId, string.Join("/", overflowing), overflowPercent, OverflowDrainRules.DrainTargetPercent(overflowPercent));
 
             var amounts = DistributeProportionally(overflowing, weights, maxPerResource, totalToSend);
             if (amounts.Values.Sum() <= 0)
