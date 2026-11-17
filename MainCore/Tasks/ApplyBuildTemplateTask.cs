@@ -79,6 +79,8 @@ namespace MainCore.Tasks
             Task task,
             AppDbContext context,
             FixJobsCommand.Handler fixJobsCommand,
+            ITaskManager taskManager,
+            IRxQueue rxQueue,
             ILogger logger,
             CancellationToken cancellationToken)
         {
@@ -113,6 +115,15 @@ namespace MainCore.Tasks
             logger.Information(
                 "Applied default build template to newly founded village {VillageId}: {Count}/{Total} jobs matched the village's layout.",
                 task.VillageId, additionJobs.Count, template.Count);
+
+            // 2026-11-07: the jobs above go straight into the database. Nothing queued Upgrade building for this village
+            // (the account-init scan only sees villages that already had jobs at login; JobsModified is handled by a view
+            // model), so a village founded during a session kept its whole template waiting until the next login/Restart.
+            if (additionJobs.Count > 0)
+            {
+                taskManager.AddOrUpdate<UpgradeBuildingTask.Task>(new(task.AccountId, task.VillageId));
+                rxQueue.Enqueue(new JobsModified(task.VillageId));
+            }
 
             return Result.Ok();
         }

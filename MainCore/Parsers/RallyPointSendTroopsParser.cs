@@ -100,6 +100,27 @@ namespace MainCore.Parsers
             return doc.GetElementbyId("confirmSendTroops");
         }
 
+        // Catapult target drop-down of the confirmation screen (2026-11-08, real capture). It is
+        // only on the page when catapults are part of the movement; which options it holds depends
+        // on the Rally Point level, so callers must check HasCatapultTargetOption before selecting.
+        public const string CatapultTargetSelectName = "troops[0][catapultTarget1]";
+
+        public static HtmlNode? GetCatapultTargetSelect(HtmlDocument doc)
+        {
+            return doc.DocumentNode
+                .Descendants("select")
+                .FirstOrDefault(x => x.GetAttributeValue("name", "") == CatapultTargetSelectName);
+        }
+
+        public static bool HasCatapultTargetOption(HtmlDocument doc, int value)
+        {
+            var select = GetCatapultTargetSelect(doc);
+            if (select is null) return false;
+
+            return select.Descendants("option")
+                .Any(x => x.GetAttributeValue("value", "") == $"{value}");
+        }
+
         // Unix timestamp of arrival, shown on the confirmation screen. Useful to log/verify
         // timing but not required to submit the movement.
         public static long? GetArrivalTimestamp(HtmlDocument doc)

@@ -51,7 +51,7 @@ jobs:
           cache-dependency-path: '**/packages.lock.json'
 
       - name: Install dependencies
-        run: dotnet restore --locked-mode
+        run: dotnet restore --force-evaluate
       
       - name: Publish
         run: dotnet publish WPFUI -c Release --no-restore --self-contained -p:PublishSingleFile=true -p:AssemblyVersion=${{needs.version.outputs.version}}
@@ -62,6 +62,7 @@ jobs:
           name: TBS-${{needs.version.outputs.version}}
           path: WPFUI\bin\Release\net8.0-windows10.0.19041.0\win-x64\publish\
           if-no-files-found: error
+          include-hidden-files: true
                   
   Release:
     runs-on: ubuntu-latest

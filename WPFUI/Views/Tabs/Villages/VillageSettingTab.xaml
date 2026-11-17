@@ -9,6 +9,29 @@
     xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
     mc:Ignorable="d"
     d:DesignHeight="450" d:DesignWidth="800">
+    <v:VillageSettingTabBase.Resources>
+        <!-- 2026-11-15: layout only. Every x:Name below is unchanged (the code-behind binds them by name).
+             Each feature is a collapsed Expander; its header shows a green "ON" while its switch is ticked, and the
+             detail fields of a feature are hidden while its own switch is off (the values stay in the database). -->
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+        <Style x:Key="SectionTitle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Margin" Value="10,14,5,2" />
+            <Setter Property="Opacity" Value="0.75" />
+        </Style>
+        <Style x:Key="OnBadge" TargetType="TextBlock">
+            <Setter Property="Text" Value="  ● ON" />
+            <Setter Property="Foreground" Value="#FF2E7D32" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style x:Key="SubTitle" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="0,8,0,0" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+    </v:VillageSettingTabBase.Resources>
     <Grid  Background="#FFE5E5E5">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -32,211 +55,532 @@
         </Grid>
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
             <StackPanel>
+
+                <!-- ============================== VILLAGE &amp; BUILDING ============================== -->
+                <TextBlock Style="{StaticResource SectionTitle}" Text="Village &amp; building" />
+
                 <Border Style="{DynamicResource Box}">
-                    <StackPanel>
-                        <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Upgrade settings" VerticalAlignment="Center" FontWeight="Bold" />
-                        <CheckBox x:Name="UseHeroResForBuilding" Content="Use hero resources when lack of resources" />
-                        <CheckBox x:Name="UseRomanQueueLogic" Content="Use Roman queue logic" />
-                        <StackPanel Orientation="Horizontal">
-                            <CheckBox x:Name="CompleteImmediately" Content="Use complete immediately button if queue time longer than " />
-                            <TextBox x:Name="CompleteImmediatelyTime" Width="25" />
-                            <Label Content=" mins" />
+                    <Expander IsExpanded="False">
+                        <Expander.Header>
+                            <TextBlock Text="Village information" FontWeight="Bold" VerticalAlignment="Center" />
+                        </Expander.Header>
+                        <StackPanel Margin="24,4,0,4">
+                            <uc:TribeSelectorUc x:Name="Tribes" Text="Tribe" />
+                            <CheckBox x:Name="AutoClaimQuestEnable" Content="Auto claim the village's quests" />
                         </StackPanel>
-
-                        <CheckBox x:Name="UseSpecialUpgrade" Content="Use special upgrade method (the right upgrade button)" />
-                    </StackPanel>
-                </Border>
-                <Border Style="{DynamicResource Box}">
-                    <StackPanel>
-                        <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Auto refresh" VerticalAlignment="Center" FontWeight="Bold" />
-                        <CheckBox x:Name="AutoRefreshEnable" Content="Enable auto refresh" />
-                        <uc:RangeInputUc x:Name="AutoRefreshTime" Text="Refresh every" Unit="minutes" />
-                    </StackPanel>
-                </Border>
-                <Border Style="{DynamicResource Box}">
-                    <StackPanel>
-                        <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Oasis scout" VerticalAlignment="Center" FontWeight="Bold" />
-                        <CheckBox x:Name="EnableOasisScout" Content="Enable oasis scout" />
-                        <uc:AmountInputUc x:Name="OasisScoutMaxDistance" Text="Max distance" Unit="fields" />
-                        <uc:AmountInputUc x:Name="OasisScoutIntervalMin" Text="Scan every (min)" Unit="minutes" />
-                        <uc:AmountInputUc x:Name="OasisScoutIntervalMax" Text="Scan every (max)" Unit="minutes" />
-                        <uc:AmountInputUc x:Name="OasisScoutTroopSlot" Text="Troop slot for empty oases (1-10)" Unit="" />
-                        <uc:AmountInputUc x:Name="OasisScoutMinTroops" Text="Min troops" Unit="" />
-                        <uc:AmountInputUc x:Name="OasisScoutMaxTroops" Text="Max troops" Unit="" />
-                        <uc:AmountInputUc x:Name="OasisScoutHeroPowerThreshold" Text="Hero safety threshold" Unit="% of hero power" />
-                    </StackPanel>
-                </Border>
-                <Border Style="{DynamicResource Box}">
-                    <StackPanel>
-                        <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="NPC Crop exchange settings" VerticalAlignment="Center" FontWeight="Bold" />
-                        <CheckBox x:Name="AutoNPCEnable" Content="Enable NPC Crop exchange" />
-                        <CheckBox x:Name="AutoNPCOverflow" Content="Despite warehouse overflow" />
-                        <CheckBox x:Name="AutoNPCReverse" Content="Reverse trigger (run when granary is BELOW % instead of above)" />
-                        <uc:AmountInputUc x:Name="AutoNPCGranaryPercent" Text="Granary" Unit="%" />
-                        <uc:ResourceInputUc x:Name="AutoNPCRatio" Text="Ratio" />
-                    </StackPanel>
+                    </Expander>
                 </Border>
 
                 <Border Style="{DynamicResource Box}">
-                    <StackPanel>
-                        <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Auto send crop between villages" VerticalAlignment="Center" FontWeight="Bold" />
-                        <CheckBox x:Name="AutoSendCropEnable" Content="Receive crop from other villages when this village's granary drops below %" />
-                        <uc:AmountInputUc x:Name="AutoSendCropGranaryPercent" Text="Granary" Unit="%" />
-                        <CheckBox x:Name="AutoSendCropSourceEnable" Content="Allow this village to send crop to other villages that need it" />
-                        <uc:AmountInputUc x:Name="AutoSendCropReservePercent" Text="Keep at least" Unit="%" />
-                    </StackPanel>
-                </Border>
-
-                <Border Style="{DynamicResource Box}">
-                    <StackPanel>
-                        <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Auto balance resources (overflow prevention)" VerticalAlignment="Center" FontWeight="Bold" />
-                        <CheckBox x:Name="AutoBalanceEnable" Content="Enable auto balance for this village (sends away surplus, accepts spare room from others)" />
-                        <uc:AmountInputUc x:Name="AutoBalanceOverflowPercent" Text="Send away surplus once storage reaches" Unit="%" />
-                        <uc:AmountInputUc x:Name="AutoBalanceTargetPercent" Text="Drain down to" Unit="%" />
-                    </StackPanel>
-                </Border>
-
-                <Border Style="{DynamicResource Box}">
-                    <StackPanel>
-                        <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Dodge troops on attack" VerticalAlignment="Center" FontWeight="Bold" />
-                        <CheckBox x:Name="DodgeEnable" Content="When this village is attacked, send the checked troop types out as an attack to the target below, then cancel it before it lands" />
-                        <TextBlock Text="Troop types to dodge with" Margin="0,4,0,0" />
-                        <ItemsControl x:Name="DodgeTroopItems">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <WrapPanel />
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <CheckBox Content="{Binding TroopName}" IsChecked="{Binding IsChecked}" Margin="0,0,10,4" />
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                        <uc:AmountInputUc x:Name="DodgeTargetX" Text="Target X" Unit="" />
-                        <uc:AmountInputUc x:Name="DodgeTargetY" Text="Target Y" Unit="" />
-                        <uc:AmountInputUc x:Name="DodgeSendSecondsBeforeImpact" Text="Send this many seconds before the attack lands" Unit="s" />
-                        <uc:AmountInputUc x:Name="DodgeRecallSecondsAfterSend" Text="Cancel this many seconds after sending (must stay under 90s)" Unit="s" />
-                    </StackPanel>
-                </Border>
-
-                <Border Style="{DynamicResource Box}">
-                    <StackPanel>
-                        <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Defend on attack (train + send resources away)" VerticalAlignment="Center" FontWeight="Bold" />
-                        <CheckBox x:Name="DefendDonateEnable" Content="When this village is attacked (once per attack, as soon as it is seen): train the cheapest troop with the stock, then send ALL remaining resources (Cranny ignored) to another of your villages - random, preferring one with free storage. Skipped if there is no marketplace or merchant; never delays Dodge" />
-                    </StackPanel>
-                </Border>
-
-                <Border Style="{DynamicResource Box}">
-                    <StackPanel>
-                        <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Auto settle (train settlers + found new village)" VerticalAlignment="Center" FontWeight="Bold" />
-                        <CheckBox x:Name="AutoSettleEnable" Content="Train settlers/chieftains in this village's Residence/Palace and found a new village once 3 are ready" />
-                        <CheckBox x:Name="AutoApplyBuildTemplateEnable" Content="Automatically apply the default build template to villages founded by Auto Settle" />
-                        <uc:AmountInputUc x:Name="AutoSettleTargetX" Text="New village target X" Unit="" />
-                        <uc:AmountInputUc x:Name="AutoSettleTargetY" Text="New village target Y" Unit="" />
-                        <uc:AmountInputUc x:Name="AutoSettleSettlersReady" Text="Settlers/chieftains already trained and ready (bot won't recount these itself - fix here if it's out of sync, e.g. 3 already sitting in the village)" Unit="" />
-                        <uc:AmountInputUc x:Name="ExpansionSupplyReservePercent" Text="Keep this village's own storage above this % when helping another village settle" Unit="%" />
-                        <uc:AmountInputUc x:Name="ReviveSupplyReservePercent" Text="Keep this village's own storage above this % when helping revive another village's hero" Unit="%" />
-                    </StackPanel>
-                </Border>
-
-                <Border Style="{DynamicResource Box}">
-                    <StackPanel>
-                        <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Smithy upgrade" VerticalAlignment="Center" FontWeight="Bold" />
-                        <CheckBox x:Name="SmithyUpgradeEnable" Content="Keep improving one troop's weapon/armor in the smithy" />
-                        <uc:AmountInputUc x:Name="SmithyUpgradeTroopSlot" Text="Troop slot (1-10, order shown in barracks)" Unit="" />
-                    </StackPanel>
-                </Border>
-
-                <Border Style="{DynamicResource Box}">
-                    <StackPanel>
-                        <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Demolish and rebuild (one-time)" VerticalAlignment="Center" FontWeight="Bold" />
-                        <CheckBox x:Name="DemolishEnable" Content="Demolish the building below and rebuild it as the chosen type" />
-                        <uc:AmountInputUc x:Name="DemolishSourceLocation" Text="Building slot/location to demolish" Unit="" />
-                        <uc:AmountInputUc x:Name="DemolishTargetBuildingType" Text="Rebuild as (BuildingEnums number)" Unit="" />
-                    </StackPanel>
-                </Border>
-
-                <Border Style="{DynamicResource Box}">
-                    <StackPanel>
-                        <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Supply from hammer village" VerticalAlignment="Center" FontWeight="Bold" />
-                        <CheckBox x:Name="SupplyFromHammerEnable" Content="Request resource top-ups from the hammer village when short for a build job" />
-                        <uc:AmountInputUc x:Name="SupplyFromHammerTargetPercent" Text="Fill warehouse and granary up to" Unit="%" />
-                    </StackPanel>
-                </Border>
-
-                <Border Style="{DynamicResource Box}">
-                    <StackPanel>
-                        <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Small celebration" VerticalAlignment="Center" FontWeight="Bold" />
-                        <CheckBox x:Name="SmallCelebrationEnable" Content="Automatically hold a small celebration whenever resources allow" />
-                    </StackPanel>
-                </Border>
-
-                <Border Style="{DynamicResource Box}">
-                    <StackPanel>
-                        <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Send overflow to hammer village" VerticalAlignment="Center" FontWeight="Bold" />
-                        <CheckBox x:Name="OverflowToHammerEnable" Content="Send this village's overflow resources to the hammer village" />
-                        <uc:AmountInputUc x:Name="OverflowToHammerPercent" Text="Send away surplus once storage reaches" Unit="%" />
-                    </StackPanel>
-                </Border>
-
-                <Border Style="{DynamicResource Box}">
-                    <StackPanel>
-                        <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Village information" VerticalAlignment="Center" FontWeight="Bold" />
-                        <uc:TribeSelectorUc x:Name="Tribes" Text="Tribe" />
-                    </StackPanel>
-                </Border>
-                <Border Style="{DynamicResource Box}">
-                    <StackPanel>
-                        <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Feature settings" VerticalAlignment="Center" FontWeight="Bold" />
-                        <CheckBox x:Name="AutoClaimQuestEnable" Content="Enable auto claim village's quest" />
-                    </StackPanel>
-                </Border>
-                <Border Style="{DynamicResource Box}">
-                    <StackPanel>
-                        <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Troop training settings" VerticalAlignment="Center" FontWeight="Bold" />
-                        <CheckBox x:Name="TrainTroopEnable" Content="Enable train troop" />
-                        <uc:RangeInputUc x:Name="TrainTroopRepeatTime" Text="Next train troop execute after" Unit="mins" />
-                        <CheckBox x:Name="TrainWhenLowResource" Content="Train maximum number if low on resource" />
-                        <StackPanel Orientation="Horizontal">
-                            <uc:TroopSelectorUc x:Name="BarrackTroop" Text="Train in barrack" />
-                            <uc:RangeInputUc x:Name="BarrackAmount" Text="for" Unit="units" Margin="10,0,0,0" />
-                            <uc:TroopSelectorUc x:Name="GreatBarrackTroop" Text="Train in greatbarrack" Margin="10,0,0,0" />
-                            <uc:RangeInputUc x:Name="GreatBarrackAmount" Text="for" Unit="units" Margin="10,0,0,0" />
+                    <Expander IsExpanded="False">
+                        <Expander.Header>
+                            <TextBlock Text="Upgrade settings" FontWeight="Bold" VerticalAlignment="Center" />
+                        </Expander.Header>
+                        <StackPanel Margin="24,4,0,4">
+                            <CheckBox x:Name="UseHeroResForBuilding" Content="Use hero resources when lack of resources" />
+                            <CheckBox x:Name="UseRomanQueueLogic" Content="Use Roman queue logic" />
+                            <StackPanel Orientation="Horizontal">
+                                <CheckBox x:Name="CompleteImmediately" Content="Use complete immediately button if queue time longer than " />
+                                <TextBox x:Name="CompleteImmediatelyTime" Width="25" />
+                                <Label Content=" mins" />
+                            </StackPanel>
+                            <CheckBox x:Name="UseSpecialUpgrade" Content="Use special upgrade method (the right upgrade button)" />
                         </StackPanel>
-                        <StackPanel Orientation="Horizontal">
-                            <uc:TroopSelectorUc x:Name="StableTroop" Text="Train in stable" />
-                            <uc:RangeInputUc x:Name="StableAmount" Text="for" Unit="units" Margin="10,0,0,0" />
-                            <uc:TroopSelectorUc x:Name="GreatStableTroop" Text="Train in greatstable" Margin="10,0,0,0" />
-                            <uc:RangeInputUc x:Name="GreatStableAmount" Text="for" Unit="units" Margin="10,0,0,0" />
-                        </StackPanel>
-                        <StackPanel Orientation="Horizontal">
-                            <uc:TroopSelectorUc x:Name="WorkshopTroop" Text="Train in workshop" />
-                            <uc:RangeInputUc x:Name="WorkshopAmount" Text="for" Unit="units" Margin="10,0,0,0" />
-                        </StackPanel>
-                    </StackPanel>
+                    </Expander>
                 </Border>
+
                 <Border Style="{DynamicResource Box}">
-                    <StackPanel>
-                        <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Trap settings" VerticalAlignment="Center" FontWeight="Bold" />
-                        <CheckBox x:Name="TrapEnable" Content="Enable auto-build traps (Trapper, Gaul only)" />
-                        <uc:RangeInputUc x:Name="TrapRepeatTime" Text="Next trap build execute after" Unit="mins" />
-                        <uc:RangeInputUc x:Name="TrapAmount" Text="Build" Unit="traps" Margin="0,0,0,0" />
-                        <TextBlock TextWrapping="Wrap" Text="Never builds more traps than the Trapper's current level allows; also respects the 'Train maximum number if low on resource' setting above." FontStyle="Italic" Opacity="0.7" Margin="0,4,0,0" />
-                    </StackPanel>
+                    <Expander IsExpanded="False">
+                        <Expander.Header>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Auto refresh" FontWeight="Bold" VerticalAlignment="Center" />
+                                <TextBlock Style="{StaticResource OnBadge}" Visibility="{Binding IsChecked, ElementName=AutoRefreshEnable, Converter={StaticResource BoolToVis}}" />
+                            </StackPanel>
+                        </Expander.Header>
+                        <StackPanel Margin="24,4,0,4">
+                            <CheckBox x:Name="AutoRefreshEnable" Content="Enable auto refresh" />
+                            <uc:RangeInputUc x:Name="AutoRefreshTime" Text="Refresh every" Unit="minutes"
+                                             Visibility="{Binding IsChecked, ElementName=AutoRefreshEnable, Converter={StaticResource BoolToVis}}" />
+                        </StackPanel>
+                    </Expander>
                 </Border>
+
                 <Border Style="{DynamicResource Box}">
-                    <StackPanel>
-                        <TextBlock HorizontalAlignment="Left" TextWrapping="Wrap" Text="Crop oasis scan" VerticalAlignment="Center" FontWeight="Bold" />
-                        <CheckBox x:Name="CropScanEnable" Content="Start scan (one-shot - unticks itself once finished has no effect, save again to re-run)" />
-                        <uc:AmountInputUc x:Name="CropScanCenterX" Text="Center X" Unit="" />
-                        <uc:AmountInputUc x:Name="CropScanCenterY" Text="Center Y" Unit="" />
-                        <uc:AmountInputUc x:Name="CropScanMaxDistance" Text="Max distance" Unit="fields" />
-                        <uc:AmountInputUc x:Name="CropScanMinCroplands" Text="Minimum Croplands to log" Unit="" />
-                        <uc:RangeInputUc x:Name="CropScanGap" Text="Wait between tiles" Unit="secs" />
-                        <TextBlock TextWrapping="Wrap" Text="Checks one tile at a time, nearest-first, with a random wait between each - a full scan can take a long time. Results are appended live to a CSV file under the app folder's CropScans directory as they're found." FontStyle="Italic" Opacity="0.7" Margin="0,4,0,0" />
-                    </StackPanel>
+                    <Expander IsExpanded="False">
+                        <Expander.Header>
+                            <TextBlock Text="Small celebration" FontWeight="Bold" VerticalAlignment="Center" />
+                        </Expander.Header>
+                        <StackPanel Margin="24,4,0,4">
+                            <CheckBox x:Name="SmallCelebrationEnable" Content="Automatically hold a small celebration whenever resources allow" />
+                        </StackPanel>
+                    </Expander>
                 </Border>
+
+                <Border Style="{DynamicResource Box}">
+                    <Expander IsExpanded="False">
+                        <Expander.Header>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Demolish and rebuild (one-time)" FontWeight="Bold" VerticalAlignment="Center" />
+                                <TextBlock Style="{StaticResource OnBadge}" Visibility="{Binding IsChecked, ElementName=DemolishEnable, Converter={StaticResource BoolToVis}}" />
+                            </StackPanel>
+                        </Expander.Header>
+                        <StackPanel Margin="24,4,0,4">
+                            <CheckBox x:Name="DemolishEnable" Content="Demolish the building below and rebuild it as the chosen type" />
+                            <StackPanel Visibility="{Binding IsChecked, ElementName=DemolishEnable, Converter={StaticResource BoolToVis}}">
+                                <uc:AmountInputUc x:Name="DemolishSourceLocation" Text="Building slot/location to demolish" Unit="" />
+                                <uc:AmountInputUc x:Name="DemolishTargetBuildingType" Text="Rebuild as (BuildingEnums number)" Unit="" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Expander>
+                </Border>
+
+                <!-- ============================== TROOPS ============================== -->
+                <TextBlock Style="{StaticResource SectionTitle}" Text="Troops" />
+
+                <Border Style="{DynamicResource Box}">
+                    <Expander IsExpanded="False">
+                        <Expander.Header>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Troop training" FontWeight="Bold" VerticalAlignment="Center" />
+                                <TextBlock Style="{StaticResource OnBadge}" Visibility="{Binding IsChecked, ElementName=TrainTroopEnable, Converter={StaticResource BoolToVis}}" />
+                            </StackPanel>
+                        </Expander.Header>
+                        <StackPanel Margin="24,4,0,4">
+                            <CheckBox x:Name="TrainTroopEnable" Content="Enable train troop" />
+                            <CheckBox x:Name="ConstructionFirst" Content="Construction first: no troop training while a building waits for resources (off = troops first)" />
+                            <CheckBox x:Name="TrainWhenLowResource" Content="Train maximum number if low on resource" />
+                            <uc:AmountInputUc x:Name="ConstructionReservePercent" Text="Construction reserve: training never takes the stock below this (0 = off)" Unit="% of storage">
+                                <uc:AmountInputUc.ToolTip>
+                                    <TextBlock TextWrapping="Wrap" MaxWidth="420" Text="The reserve is per resource (Warehouse for wood/clay/iron, Granary for crop) and never lower than the cost of the next planned building. While the build queue still runs for more than 30 minutes only the percentage is kept. NPC trades for training are skipped while the reserve is on; the hero's inventory still counts as extra. Share-based training also needs this to be above 0." />
+                                </uc:AmountInputUc.ToolTip>
+                            </uc:AmountInputUc>
+
+                            <TextBlock Style="{StaticResource SubTitle}" Text="Queue horizon (0/0 = off)">
+                                <TextBlock.ToolTip>
+                                    <TextBlock TextWrapping="Wrap" MaxWidth="420" Text="Keeps the queue filled ahead of time. First box = come back when the queue has this many minutes left; second box = fill the queue up to this many minutes. With a horizon on, a troop's 'amount max' is the most units one visit may add (a big number = no limit). Shortly before the account's offline hours the queue is filled to last until the bot works again (see the offline cap in Account Setting). 0/0 = off: the building is trained after its queue ends." />
+                                </TextBlock.ToolTip>
+                            </TextBlock>
+                            <uc:RangeInputUc x:Name="BarrackHorizon" Text="Barracks: at least / fill up to" Unit="mins" />
+                            <uc:RangeInputUc x:Name="StableHorizon" Text="Stable: at least / fill up to" Unit="mins" />
+                            <uc:RangeInputUc x:Name="WorkshopHorizon" Text="Workshop: at least / fill up to" Unit="mins" />
+                            <uc:RangeInputUc x:Name="GreatBarrackHorizon" Text="Great barracks: at least / fill up to" Unit="mins" />
+                            <uc:RangeInputUc x:Name="GreatStableHorizon" Text="Great stable: at least / fill up to" Unit="mins" />
+                            <CheckBox x:Name="TrainUseNpc" Content="If a batch costs more than the village holds: NPC trade first (costs gold)" />
+                            <CheckBox x:Name="TrainUseHeroResource" Content="Then take the missing resources from the hero's inventory (keeps the hero reserve)" />
+
+                            <TextBlock Style="{StaticResource SubTitle}" Text="Barracks (infantry) - amount 0/0 = not trained; time 0/0 = default 2-3 h" />
+                            <ItemsControl x:Name="InfantryItems">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding Name}" Width="150" VerticalAlignment="Bottom" Margin="0,0,10,6" />
+                                            <uc:RangeInputUc ViewModel="{Binding Amount}" Text="amount" Unit="units" />
+                                            <uc:RangeInputUc ViewModel="{Binding Time}" Text="not again before" Unit="mins" Margin="10,0,0,0" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Style="{StaticResource SubTitle}" Text="Stable (cavalry)" />
+                            <ItemsControl x:Name="CavalryItems">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding Name}" Width="150" VerticalAlignment="Bottom" Margin="0,0,10,6" />
+                                            <uc:RangeInputUc ViewModel="{Binding Amount}" Text="amount" Unit="units" />
+                                            <uc:RangeInputUc ViewModel="{Binding Time}" Text="not again before" Unit="mins" Margin="10,0,0,0" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Style="{StaticResource SubTitle}" Text="Workshop (siege)" />
+                            <ItemsControl x:Name="SiegeItems">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding Name}" Width="150" VerticalAlignment="Bottom" Margin="0,0,10,6" />
+                                            <uc:RangeInputUc ViewModel="{Binding Amount}" Text="amount" Unit="units" />
+                                            <uc:RangeInputUc ViewModel="{Binding Time}" Text="not again before" Unit="mins" Margin="10,0,0,0" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Style="{StaticResource SubTitle}" Text="Great barracks / great stable (one troop each; 0 mins = 'not again before' unused)" />
+                            <StackPanel Orientation="Horizontal">
+                                <uc:TroopSelectorUc x:Name="GreatBarrackTroop" Text="Train in greatbarrack" />
+                                <uc:RangeInputUc x:Name="GreatBarrackAmount" Text="for" Unit="units" Margin="10,0,0,0" />
+                                <uc:RangeInputUc x:Name="GreatBarrackRepeatTime" Text="not again before" Unit="mins" Margin="10,0,0,0" />
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <uc:TroopSelectorUc x:Name="GreatStableTroop" Text="Train in greatstable" />
+                                <uc:RangeInputUc x:Name="GreatStableAmount" Text="for" Unit="units" Margin="10,0,0,0" />
+                                <uc:RangeInputUc x:Name="GreatStableRepeatTime" Text="not again before" Unit="mins" Margin="10,0,0,0" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Expander>
+                </Border>
+
+                <Border Style="{DynamicResource Box}">
+                    <Expander IsExpanded="False">
+                        <Expander.Header>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Share-based troop training (separate mode)" FontWeight="Bold" VerticalAlignment="Center" />
+                                <TextBlock Style="{StaticResource OnBadge}" Visibility="{Binding IsChecked, ElementName=TrainShareEnable, Converter={StaticResource BoolToVis}}" />
+                            </StackPanel>
+                        </Expander.Header>
+                        <StackPanel Margin="24,4,0,4">
+                            <CheckBox x:Name="TrainShareEnable" Content="Train by shares instead of 'Troop training' (that one is switched off for this village; its values are kept)">
+                                <CheckBox.ToolTip>
+                                    <TextBlock TextWrapping="Wrap" MaxWidth="420" Text="No visit times and no unit amounts: when the stock above the construction reserve (set it in 'Troop training', it must be above 0) reaches the trigger, ALL of it is split between the troops in proportion to their weights, per resource. What a troop cannot use (a unit does not fit, queue ceiling, not researched) flows on to the others by the same weights. Only the village's own stock is used (no NPC trade, no hero inventory). Great barracks / great stable are not part of this mode." />
+                                </CheckBox.ToolTip>
+                            </CheckBox>
+                            <StackPanel Visibility="{Binding IsChecked, ElementName=TrainShareEnable, Converter={StaticResource BoolToVis}}">
+                                <uc:AmountInputUc x:Name="TrainShareTriggerPercent" Text="Train when the stock above the reserve is worth at least" Unit="% of storage" />
+                                <uc:AmountInputUc x:Name="TrainShareQueueMaxMinutes" Text="Never fill a building's queue beyond (0 = no ceiling)" Unit="mins" />
+                                <TextBlock Style="{StaticResource SubTitle}" Text="Barracks (infantry) weights" />
+                                <ItemsControl x:Name="InfantryShareItems">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="{Binding Name}" Width="150" VerticalAlignment="Bottom" Margin="0,0,10,6" />
+                                                <uc:AmountInputUc ViewModel="{Binding Weight}" Text="weight" Unit="(0 = not trained)" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock Style="{StaticResource SubTitle}" Text="Stable (cavalry) weights" />
+                                <ItemsControl x:Name="CavalryShareItems">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="{Binding Name}" Width="150" VerticalAlignment="Bottom" Margin="0,0,10,6" />
+                                                <uc:AmountInputUc ViewModel="{Binding Weight}" Text="weight" Unit="(0 = not trained)" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock Style="{StaticResource SubTitle}" Text="Workshop (siege) weights" />
+                                <ItemsControl x:Name="SiegeShareItems">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="{Binding Name}" Width="150" VerticalAlignment="Bottom" Margin="0,0,10,6" />
+                                                <uc:AmountInputUc ViewModel="{Binding Weight}" Text="weight" Unit="(0 = not trained)" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </StackPanel>
+                    </Expander>
+                </Border>
+
+                <Border Style="{DynamicResource Box}">
+                    <Expander IsExpanded="False">
+                        <Expander.Header>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Smithy upgrade" FontWeight="Bold" VerticalAlignment="Center" />
+                                <TextBlock Style="{StaticResource OnBadge}" Visibility="{Binding IsChecked, ElementName=SmithyUpgradeEnable, Converter={StaticResource BoolToVis}}" />
+                            </StackPanel>
+                        </Expander.Header>
+                        <StackPanel Margin="24,4,0,4">
+                            <CheckBox x:Name="SmithyUpgradeEnable" Content="Keep improving one troop's weapon/armor in the smithy" />
+                            <uc:AmountInputUc x:Name="SmithyUpgradeTroopSlot" Text="Troop slot (1-10, order shown in barracks)" Unit=""
+                                              Visibility="{Binding IsChecked, ElementName=SmithyUpgradeEnable, Converter={StaticResource BoolToVis}}" />
+                        </StackPanel>
+                    </Expander>
+                </Border>
+
+                <Border Style="{DynamicResource Box}">
+                    <Expander IsExpanded="False">
+                        <Expander.Header>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Trap settings" FontWeight="Bold" VerticalAlignment="Center" />
+                                <TextBlock Style="{StaticResource OnBadge}" Visibility="{Binding IsChecked, ElementName=TrapEnable, Converter={StaticResource BoolToVis}}" />
+                            </StackPanel>
+                        </Expander.Header>
+                        <StackPanel Margin="24,4,0,4">
+                            <CheckBox x:Name="TrapEnable" Content="Enable auto-build traps (Trapper, Gaul only)">
+                                <CheckBox.ToolTip>
+                                    <TextBlock TextWrapping="Wrap" MaxWidth="420" Text="Never builds more traps than the Trapper's current level allows; also respects the 'Train maximum number if low on resource' setting in 'Troop training'." />
+                                </CheckBox.ToolTip>
+                            </CheckBox>
+                            <StackPanel Visibility="{Binding IsChecked, ElementName=TrapEnable, Converter={StaticResource BoolToVis}}">
+                                <uc:RangeInputUc x:Name="TrapRepeatTime" Text="Next trap build execute after" Unit="mins" />
+                                <uc:RangeInputUc x:Name="TrapAmount" Text="Build" Unit="traps" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Expander>
+                </Border>
+
+                <!-- ============================== RESOURCES &amp; LOGISTICS ============================== -->
+                <TextBlock Style="{StaticResource SectionTitle}" Text="Resources &amp; logistics" />
+
+                <Border Style="{DynamicResource Box}">
+                    <Expander IsExpanded="False">
+                        <Expander.Header>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Auto balance resources (overflow prevention)" FontWeight="Bold" VerticalAlignment="Center" />
+                                <TextBlock Style="{StaticResource OnBadge}" Visibility="{Binding IsChecked, ElementName=AutoBalanceEnable, Converter={StaticResource BoolToVis}}" />
+                            </StackPanel>
+                        </Expander.Header>
+                        <StackPanel Margin="24,4,0,4">
+                            <CheckBox x:Name="AutoBalanceEnable" Content="Enable auto balance for this village">
+                                <CheckBox.ToolTip>
+                                    <TextBlock TextWrapping="Wrap" MaxWidth="420" Text="Sends away surplus and accepts spare room from other villages." />
+                                </CheckBox.ToolTip>
+                            </CheckBox>
+                            <StackPanel Visibility="{Binding IsChecked, ElementName=AutoBalanceEnable, Converter={StaticResource BoolToVis}}">
+                                <uc:AmountInputUc x:Name="AutoBalanceOverflowPercent" Text="Send away surplus once storage reaches" Unit="%" />
+                                <uc:AmountInputUc x:Name="AutoBalanceTargetPercent" Text="Drain down to" Unit="%" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Expander>
+                </Border>
+
+                <Border Style="{DynamicResource Box}">
+                    <Expander IsExpanded="False">
+                        <Expander.Header>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Send overflow to hammer village" FontWeight="Bold" VerticalAlignment="Center" />
+                                <TextBlock Style="{StaticResource OnBadge}" Visibility="{Binding IsChecked, ElementName=OverflowToHammerEnable, Converter={StaticResource BoolToVis}}" />
+                            </StackPanel>
+                        </Expander.Header>
+                        <StackPanel Margin="24,4,0,4">
+                            <CheckBox x:Name="OverflowToHammerEnable" Content="Send this village's overflow resources to the hammer village" />
+                            <uc:AmountInputUc x:Name="OverflowToHammerPercent" Text="Send away surplus once storage reaches" Unit="%"
+                                              Visibility="{Binding IsChecked, ElementName=OverflowToHammerEnable, Converter={StaticResource BoolToVis}}" />
+                        </StackPanel>
+                    </Expander>
+                </Border>
+
+                <Border Style="{DynamicResource Box}">
+                    <Expander IsExpanded="False">
+                        <Expander.Header>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Supply from hammer village" FontWeight="Bold" VerticalAlignment="Center" />
+                                <TextBlock Style="{StaticResource OnBadge}" Visibility="{Binding IsChecked, ElementName=SupplyFromHammerEnable, Converter={StaticResource BoolToVis}}" />
+                            </StackPanel>
+                        </Expander.Header>
+                        <StackPanel Margin="24,4,0,4">
+                            <CheckBox x:Name="SupplyFromHammerEnable" Content="Request resource top-ups from the hammer village when short for a build job" />
+                            <uc:AmountInputUc x:Name="SupplyFromHammerTargetPercent" Text="Fill warehouse and granary up to" Unit="%"
+                                              Visibility="{Binding IsChecked, ElementName=SupplyFromHammerEnable, Converter={StaticResource BoolToVis}}" />
+                        </StackPanel>
+                    </Expander>
+                </Border>
+
+                <Border Style="{DynamicResource Box}">
+                    <Expander IsExpanded="False">
+                        <Expander.Header>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Auto send crop between villages" FontWeight="Bold" VerticalAlignment="Center" />
+                                <TextBlock Style="{StaticResource OnBadge}" Text="  ● RECEIVE" Visibility="{Binding IsChecked, ElementName=AutoSendCropEnable, Converter={StaticResource BoolToVis}}" />
+                                <TextBlock Style="{StaticResource OnBadge}" Text="  ● SEND" Visibility="{Binding IsChecked, ElementName=AutoSendCropSourceEnable, Converter={StaticResource BoolToVis}}" />
+                            </StackPanel>
+                        </Expander.Header>
+                        <StackPanel Margin="24,4,0,4">
+                            <CheckBox x:Name="AutoSendCropEnable" Content="Receive crop from other villages when this village's granary drops below %" />
+                            <uc:AmountInputUc x:Name="AutoSendCropGranaryPercent" Text="Granary" Unit="%"
+                                              Visibility="{Binding IsChecked, ElementName=AutoSendCropEnable, Converter={StaticResource BoolToVis}}" />
+                            <CheckBox x:Name="AutoSendCropSourceEnable" Content="Allow this village to send crop to other villages that need it" />
+                            <uc:AmountInputUc x:Name="AutoSendCropReservePercent" Text="Keep at least" Unit="%"
+                                              Visibility="{Binding IsChecked, ElementName=AutoSendCropSourceEnable, Converter={StaticResource BoolToVis}}" />
+                        </StackPanel>
+                    </Expander>
+                </Border>
+
+                <Border Style="{DynamicResource Box}">
+                    <Expander IsExpanded="False">
+                        <Expander.Header>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Buy crop on the Marketplace" FontWeight="Bold" VerticalAlignment="Center" />
+                                <TextBlock Style="{StaticResource OnBadge}" Visibility="{Binding IsChecked, ElementName=BuyCropEnable, Converter={StaticResource BoolToVis}}" />
+                            </StackPanel>
+                        </Expander.Header>
+                        <StackPanel Margin="24,4,0,4">
+                            <CheckBox x:Name="BuyCropEnable" Content="Enable buying crop (independent of the NPC exchange)">
+                                <CheckBox.ToolTip>
+                                    <TextBlock TextWrapping="Wrap" MaxWidth="420" Text="Accepts offers that give crop at 1:1 or better and are paid in wood, clay or iron (the construction reserve is ignored). Shortest trip first; with a negative crop balance an offer that would arrive after the crop runs out is only taken when no other offer can. Up to 3 offers per run; crop already on its way counts as stock." />
+                                </CheckBox.ToolTip>
+                            </CheckBox>
+                            <StackPanel Visibility="{Binding IsChecked, ElementName=BuyCropEnable, Converter={StaticResource BoolToVis}}">
+                                <uc:AmountInputUc x:Name="BuyCropGranaryPercent" Text="Buy when crop is BELOW" Unit="% of granary" />
+                                <uc:AmountInputUc x:Name="BuyCropTargetPercent" Text="Buy until about" Unit="% of granary" />
+                                <uc:AmountInputUc x:Name="BuyCropMaxMinutes" Text="Ignore offers further away than (0 = no limit)" Unit="mins" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Expander>
+                </Border>
+
+                <Border Style="{DynamicResource Box}">
+                    <Expander IsExpanded="False">
+                        <Expander.Header>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="NPC Crop exchange" FontWeight="Bold" VerticalAlignment="Center" />
+                                <TextBlock Style="{StaticResource OnBadge}" Visibility="{Binding IsChecked, ElementName=AutoNPCEnable, Converter={StaticResource BoolToVis}}" />
+                            </StackPanel>
+                        </Expander.Header>
+                        <StackPanel Margin="24,4,0,4">
+                            <CheckBox x:Name="AutoNPCEnable" Content="Enable NPC Crop exchange" />
+                            <StackPanel Visibility="{Binding IsChecked, ElementName=AutoNPCEnable, Converter={StaticResource BoolToVis}}">
+                                <CheckBox x:Name="AutoNPCOverflow" Content="Despite warehouse overflow" />
+                                <CheckBox x:Name="AutoNPCReverse" Content="Reverse trigger (run when granary is BELOW % instead of above)" />
+                                <uc:AmountInputUc x:Name="AutoNPCGranaryPercent" Text="Granary" Unit="%" />
+                                <uc:ResourceInputUc x:Name="AutoNPCRatio" Text="Ratio" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Expander>
+                </Border>
+
+                <!-- ============================== DEFENCE ============================== -->
+                <TextBlock Style="{StaticResource SectionTitle}" Text="Defence" />
+
+                <Border Style="{DynamicResource Box}">
+                    <Expander IsExpanded="False">
+                        <Expander.Header>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Dodge troops on attack" FontWeight="Bold" VerticalAlignment="Center" />
+                                <TextBlock Style="{StaticResource OnBadge}" Visibility="{Binding IsChecked, ElementName=DodgeEnable, Converter={StaticResource BoolToVis}}" />
+                            </StackPanel>
+                        </Expander.Header>
+                        <StackPanel Margin="24,4,0,4">
+                            <CheckBox x:Name="DodgeEnable" Content="Dodge: send the checked troop types away when this village is attacked">
+                                <CheckBox.ToolTip>
+                                    <TextBlock TextWrapping="Wrap" MaxWidth="420" Text="When this village is attacked, the checked troop types are sent out as an attack to the target below and the movement is cancelled before it lands." />
+                                </CheckBox.ToolTip>
+                            </CheckBox>
+                            <StackPanel Visibility="{Binding IsChecked, ElementName=DodgeEnable, Converter={StaticResource BoolToVis}}">
+                                <CheckBox x:Name="DodgeRaidEnable" Content="Also dodge when the village is only being RAIDED">
+                                    <CheckBox.ToolTip>
+                                        <TextBlock TextWrapping="Wrap" MaxWidth="420" Text="Off = only real attacks are dodged." />
+                                    </CheckBox.ToolTip>
+                                </CheckBox>
+                                <TextBlock Text="Troop types to dodge with" Margin="0,4,0,0" />
+                                <ItemsControl x:Name="DodgeTroopItems">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <CheckBox Content="{Binding TroopName}" IsChecked="{Binding IsChecked}" Margin="0,0,10,4" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <uc:AmountInputUc x:Name="DodgeTargetX" Text="Target X" Unit="" />
+                                <uc:AmountInputUc x:Name="DodgeTargetY" Text="Target Y" Unit="" />
+                                <uc:AmountInputUc x:Name="DodgeSendSecondsBeforeImpact" Text="Send this many seconds before the attack lands" Unit="s" />
+                                <uc:AmountInputUc x:Name="DodgeRecallSecondsAfterSend" Text="Cancel this many seconds after sending (must stay under 90s)" Unit="s" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Expander>
+                </Border>
+
+                <Border Style="{DynamicResource Box}">
+                    <Expander IsExpanded="False">
+                        <Expander.Header>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Defend on attack or raid" FontWeight="Bold" VerticalAlignment="Center" />
+                                <TextBlock Style="{StaticResource OnBadge}" Visibility="{Binding IsChecked, ElementName=DefendDonateEnable, Converter={StaticResource BoolToVis}}" />
+                            </StackPanel>
+                        </Expander.Header>
+                        <StackPanel Margin="24,4,0,4">
+                            <CheckBox x:Name="DefendDonateEnable" Content="Defend: train the cheapest troop, then donate the rest to the alliance">
+                                <CheckBox.ToolTip>
+                                    <TextBlock TextWrapping="Wrap" MaxWidth="420" Text="When this village is attacked (once per attack, as soon as it is seen): train the cheapest troop with the stock, then donate ALL remaining resources to the alliance Recruitment (troop production) bonus. Reacts to attacks and raids; the rest stays in the village if the daily donation limit is reached; never delays Dodge." />
+                                </CheckBox.ToolTip>
+                            </CheckBox>
+                        </StackPanel>
+                    </Expander>
+                </Border>
+
+                <!-- ============================== EXPANSION &amp; SCOUTING ============================== -->
+                <TextBlock Style="{StaticResource SectionTitle}" Text="Expansion &amp; scouting" />
+
+                <Border Style="{DynamicResource Box}">
+                    <Expander IsExpanded="False">
+                        <Expander.Header>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Oasis scout" FontWeight="Bold" VerticalAlignment="Center" />
+                                <TextBlock Style="{StaticResource OnBadge}" Visibility="{Binding IsChecked, ElementName=EnableOasisScout, Converter={StaticResource BoolToVis}}" />
+                            </StackPanel>
+                        </Expander.Header>
+                        <StackPanel Margin="24,4,0,4">
+                            <CheckBox x:Name="EnableOasisScout" Content="Enable oasis scout" />
+                            <StackPanel Visibility="{Binding IsChecked, ElementName=EnableOasisScout, Converter={StaticResource BoolToVis}}">
+                                <uc:AmountInputUc x:Name="OasisScoutMaxDistance" Text="Max distance" Unit="fields" />
+                                <uc:AmountInputUc x:Name="OasisScoutIntervalMin" Text="Scan every (min)" Unit="minutes" />
+                                <uc:AmountInputUc x:Name="OasisScoutIntervalMax" Text="Scan every (max)" Unit="minutes" />
+                                <uc:AmountInputUc x:Name="OasisScoutTroopSlot" Text="Troop slot for empty oases (1-10)" Unit="" />
+                                <uc:AmountInputUc x:Name="OasisScoutMinTroops" Text="Min troops" Unit="" />
+                                <uc:AmountInputUc x:Name="OasisScoutMaxTroops" Text="Max troops" Unit="" />
+                                <uc:AmountInputUc x:Name="OasisScoutHeroPowerThreshold" Text="Hero safety threshold" Unit="% of hero power" />
+                                <TextBlock Style="{StaticResource SubTitle}" Text="Oases with animals: troops when the hero is away or too weak (slot 0 = off)" />
+                                <uc:AmountInputUc x:Name="OasisScoutAnimalTroopSlot" Text="Troop slot for animal oases (1-10)" Unit="" />
+                                <uc:AmountInputUc x:Name="OasisScoutAnimalMinTroops" Text="Min troops" Unit="" />
+                                <uc:AmountInputUc x:Name="OasisScoutAnimalMaxTroops" Text="Max troops" Unit="" />
+                                <uc:AmountInputUc x:Name="OasisScoutAnimalMaxPower" Text="Skip animals above (estimated power, 0 = no limit)" Unit="" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Expander>
+                </Border>
+
+                <Border Style="{DynamicResource Box}">
+                    <Expander IsExpanded="False">
+                        <Expander.Header>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Auto settle" FontWeight="Bold" VerticalAlignment="Center" />
+                                <TextBlock Style="{StaticResource OnBadge}" Visibility="{Binding IsChecked, ElementName=AutoSettleEnable, Converter={StaticResource BoolToVis}}" />
+                            </StackPanel>
+                        </Expander.Header>
+                        <StackPanel Margin="24,4,0,4">
+                            <CheckBox x:Name="AutoSettleEnable" Content="Train settlers/chieftains here and found a new village once 3 are ready">
+                                <CheckBox.ToolTip>
+                                    <TextBlock TextWrapping="Wrap" MaxWidth="420" Text="Trains settlers/chieftains in this village's Residence/Palace and founds a new village once 3 are ready." />
+                                </CheckBox.ToolTip>
+                            </CheckBox>
+                            <CheckBox x:Name="AutoApplyBuildTemplateEnable" Content="Automatically apply the default build template to villages founded by Auto Settle" />
+                            <StackPanel Visibility="{Binding IsChecked, ElementName=AutoSettleEnable, Converter={StaticResource BoolToVis}}">
+                                <uc:AmountInputUc x:Name="AutoSettleTargetX" Text="New village target X" Unit="" />
+                                <uc:AmountInputUc x:Name="AutoSettleTargetY" Text="New village target Y" Unit="" />
+                                <uc:AmountInputUc x:Name="AutoSettleSettlersReady" Text="Settlers/chieftains already trained and ready" Unit="">
+                                    <uc:AmountInputUc.ToolTip>
+                                        <TextBlock TextWrapping="Wrap" MaxWidth="420" Text="The bot does not recount these itself - fix here if it is out of sync, e.g. 3 already sitting in the village." />
+                                    </uc:AmountInputUc.ToolTip>
+                                </uc:AmountInputUc>
+                            </StackPanel>
+                            <uc:AmountInputUc x:Name="ExpansionSupplyReservePercent" Text="Keep own storage above this % when helping another village settle" Unit="%" />
+                            <uc:AmountInputUc x:Name="ReviveSupplyReservePercent" Text="Keep own storage above this % when helping revive another village's hero" Unit="%" />
+                        </StackPanel>
+                    </Expander>
+                </Border>
+
+                <Border Style="{DynamicResource Box}">
+                    <Expander IsExpanded="False">
+                        <Expander.Header>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Crop oasis scan" FontWeight="Bold" VerticalAlignment="Center" />
+                                <TextBlock Style="{StaticResource OnBadge}" Visibility="{Binding IsChecked, ElementName=CropScanEnable, Converter={StaticResource BoolToVis}}" />
+                            </StackPanel>
+                        </Expander.Header>
+                        <StackPanel Margin="24,4,0,4">
+                            <CheckBox x:Name="CropScanEnable" Content="Start scan (one-shot - unticks itself once finished; save again to re-run)">
+                                <CheckBox.ToolTip>
+                                    <TextBlock TextWrapping="Wrap" MaxWidth="420" Text="Checks one tile at a time, nearest-first, with a random wait between each - a full scan can take a long time. Results are appended live to a CSV file under the app folder's CropScans directory as they're found." />
+                                </CheckBox.ToolTip>
+                            </CheckBox>
+                            <StackPanel Visibility="{Binding IsChecked, ElementName=CropScanEnable, Converter={StaticResource BoolToVis}}">
+                                <uc:AmountInputUc x:Name="CropScanCenterX" Text="Center X" Unit="" />
+                                <uc:AmountInputUc x:Name="CropScanCenterY" Text="Center Y" Unit="" />
+                                <uc:AmountInputUc x:Name="CropScanMaxDistance" Text="Max distance" Unit="fields" />
+                                <uc:AmountInputUc x:Name="CropScanMinCroplands" Text="Minimum Croplands to log" Unit="" />
+                                <uc:RangeInputUc x:Name="CropScanGap" Text="Wait between tiles" Unit="secs" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Expander>
+                </Border>
+
             </StackPanel>
         </ScrollViewer>
     </Grid>
