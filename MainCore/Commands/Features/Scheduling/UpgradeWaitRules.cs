@@ -18,6 +18,24 @@ namespace MainCore.Commands.Features.Scheduling
         public const int UnknownMinMinutes = 10;
         public const int UnknownMaxMinutes = 15;
 
+        // 2026-11-17 (live logs 2026-11-16/17): the build page had no Upgrade button (Cropland slot 9: 4 runs, Smithy slot 21:
+        // 1 run) and `GetElement` waited its full 180 s each time, 3-12 minutes of a blocked single queue. The button is now
+        // looked for ButtonWaitSeconds only; a missing one makes the task look again later, the wait growing with every
+        // miss in a row for the same village (ButtonMissingWait), never "now" (CLAUDE.md rule 16).
+        public const int ButtonWaitSeconds = 12;
+
+        public static TimeSpan ButtonMissingWait(int missesInARow, Random random)
+        {
+            var (min, max) = missesInARow switch
+            {
+                <= 1 => (4, 8),
+                2 => (8, 15),
+                3 => (15, 30),
+                _ => (30, 45),
+            };
+            return TimeSpan.FromMinutes(random.Next(min, max + 1));
+        }
+
         public static bool IsCropProductionBlocked(string? message)
         {
             return !string.IsNullOrEmpty(message)

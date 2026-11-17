@@ -15,6 +15,16 @@
         // Only set for SlotOccupied: the plan's slot holds a different building (see BuildPlanSlotRules).
         public bool IsSlotOccupied { get; private init; }
 
+        // Only set for UpgradeButtonMissing: the build/upgrade page had no button to click (2026-11-17).
+        public bool IsButtonMissing { get; private init; }
+
+        public static UpgradeBuildingError UpgradeButtonMissing(BuildingEnums building, int location, string pageHint)
+        {
+            var message = $"no upgrade button for {building} at location {location} on the page";
+            if (!string.IsNullOrWhiteSpace(pageHint)) message += $" (page says: {pageHint})";
+            return new UpgradeBuildingError(message) { IsButtonMissing = true };
+        }
+
         public static UpgradeBuildingError BuildingJobQueueEmpty
             => new("Building job queue is empty");
 

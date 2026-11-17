@@ -222,8 +222,21 @@ namespace MainCore.Services
                     var message = string.Join(Environment.NewLine, result.Reasons.Select(e => e.Message));
                     if (!string.IsNullOrEmpty(message))
                     {
-                        logger.Warning("Task {TaskName} failed", task.Description, message);
-                        logger.Warning("{Message}", message);
+                        // 2026-11-17: a Skip that only carries planned-wait reasons ("Construction queue is full", a prerequisite
+                        // in the queue) is a wait, not a failure (35 pairs of warnings in 10 h).
+                        var plannedWait = result.HasError<Skip>()
+                            && result.Errors.OfType<NextExecuteError>().Any()
+                            && result.Errors.All(e => e is Skip || e is NextExecuteError);
+                        if (plannedWait)
+                        {
+                            var reason = string.Join("; ", result.Errors.OfType<NextExecuteError>().Select(e => e.Message));
+                            logger.Information("Task {TaskName} waits: {Reason}", task.Description, reason);
+                        }
+                        else
+                        {
+                            logger.Warning("Task {TaskName} failed", task.Description, message);
+                            logger.Warning("{Message}", message);
+                        }
                     }
 
                     if (result.HasError<BrowserClosed>())

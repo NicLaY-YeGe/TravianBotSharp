@@ -1,4 +1,6 @@
-﻿namespace MainCore.Commands.Features.UpgradeBuilding
+﻿using MainCore.Commands.Features.Scheduling;
+
+namespace MainCore.Commands.Features.UpgradeBuilding
 {
     [Handler]
     public static partial class HandleUpgradeCommand
@@ -51,18 +53,18 @@
                 var isSpecialUpgradeable = context.IsSpecialUpgradeable(villageId, plan);
                 if (isSpecialUpgrade && isSpecialUpgradeable)
                 {
-                    result = await browser.SpecialUpgrade(cancellationToken);
+                    result = await browser.SpecialUpgrade(plan, logger, cancellationToken);
                     if (result.IsFailed) return result;
                 }
                 else
                 {
-                    result = await browser.Upgrade(cancellationToken);
+                    result = await browser.Upgrade(plan, logger, cancellationToken);
                     if (result.IsFailed) return result;
                 }
             }
             else
             {
-                result = await browser.Construct(plan.Type, cancellationToken);
+                result = await browser.Construct(plan, logger, cancellationToken);
                 if (result.IsFailed) return result;
             }
 
@@ -110,11 +112,64 @@
                 .Any();
         }
 
+        // 2026-11-17: the Upgrade / Construct button is looked for ButtonWaitSeconds only (it used to be GetElement's 180 s).
+        // A page without the button (nothing to click: other state of the building, overlay, slow page) is a Skip with
+        // UpgradeBuildingError.UpgradeButtonMissing - UpgradeBuildingTask sets the next look - plus a page dump of what the page held.
+        private static async Task<Result> WaitForButton(
+            IChromeBrowser browser,
+            NormalBuildPlan plan,
+            ILogger logger,
+            Func<HtmlDocument, HtmlNode?> finder,
+            CancellationToken cancellationToken)
+        {
+            var until = DateTime.Now.AddSeconds(UpgradeWaitRules.ButtonWaitSeconds);
+            while (true)
+            {
+                if (cancellationToken.IsCancellationRequested) return Cancel.Error;
+                try
+                {
+                    if (finder(browser.Html) is not null) return Result.Ok();
+                }
+                catch (BrowserException)
+                {
+                    // a navigation is in flight: look again
+                }
+
+                if (DateTime.Now >= until) break;
+                try
+                {
+                    await Task.Delay(500, cancellationToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    return Cancel.Error;
+                }
+            }
+
+            string hint;
+            try
+            {
+                hint = UpgradeParser.GetBlockedMessage(browser.Html, plan.Type);
+            }
+            catch (BrowserException)
+            {
+                hint = "";
+            }
+            logger.Warning("Upgrade: no button for {Type} at location {Location} after {Seconds}s (page says \"{Hint}\").", plan.Type, plan.Location, UpgradeWaitRules.ButtonWaitSeconds, hint);
+            await PageDump.SaveAsync(browser, logger, "upgrade-button-missing");
+            return Skip.Error.WithError(UpgradeBuildingError.UpgradeButtonMissing(plan.Type, plan.Location, hint));
+        }
+
         private static async Task<Result> SpecialUpgrade(
             this IChromeBrowser browser,
+            NormalBuildPlan plan,
+            ILogger logger,
             CancellationToken cancellationToken
         )
         {
+            var waited = await WaitForButton(browser, plan, logger, doc => UpgradeParser.GetSpecialUpgradeButton(doc), cancellationToken);
+            if (waited.IsFailed) return waited;
+
             var (_, isFailed, element, errors) = await browser.GetElement(doc => UpgradeParser.GetSpecialUpgradeButton(doc), cancellationToken);
             if (isFailed) return Result.Fail(errors);
 
@@ -218,8 +273,13 @@
 
         private static async Task<Result> Upgrade(
             this IChromeBrowser browser,
+            NormalBuildPlan plan,
+            ILogger logger,
             CancellationToken cancellationToken)
         {
+            var waited = await WaitForButton(browser, plan, logger, doc => UpgradeParser.GetUpgradeButton(doc), cancellationToken);
+            if (waited.IsFailed) return waited;
+
             var (_, isFailed, element, errors) = await browser.GetElement(doc => UpgradeParser.GetUpgradeButton(doc), cancellationToken);
             if (isFailed) return Result.Fail(errors);
 
@@ -234,10 +294,15 @@
 
         private static async Task<Result> Construct(
             this IChromeBrowser browser,
-            BuildingEnums building,
+            NormalBuildPlan plan,
+            ILogger logger,
             CancellationToken cancellationToken
         )
         {
+            var building = plan.Type;
+            var waited = await WaitForButton(browser, plan, logger, doc => UpgradeParser.GetConstructButton(doc, building), cancellationToken);
+            if (waited.IsFailed) return waited;
+
             var (_, isFailed, element, errors) = await browser.GetElement(doc => UpgradeParser.GetConstructButton(doc, building), cancellationToken);
             if (isFailed) return Result.Fail(errors);
 

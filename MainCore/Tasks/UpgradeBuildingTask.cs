@@ -186,8 +186,20 @@ namespace MainCore.Tasks
                 }
 
                 result = await handleUpgradeCommand.HandleAsync(new(task.VillageId, plan), cancellationToken);
-                if (result.IsFailed) return result;
+                if (result.IsFailed)
+                {
+                    // 2026-11-17: no button on the page - look again later, longer with every miss in a row (rule 16: a
+                    // Skip with ExecuteAt unchanged would drop the task from the queue).
+                    if (result.Errors.OfType<UpgradeBuildingError>().Any(x => x.IsButtonMissing))
+                    {
+                        var misses = UpgradeButtonMissingMemory.Add(task.VillageId);
+                        task.ExecuteAt = DateTime.Now.Add(UpgradeWaitRules.ButtonMissingWait(misses, Random.Shared));
+                        logger.Information("Upgrade building in {VillageId}: no upgrade button for {Type} at location {Location} ({Misses} time(s) in a row), looking again at {Time:HH:mm:ss}.", task.VillageId, plan.Type, plan.Location, misses, task.ExecuteAt);
+                    }
+                    return result;
+                }
 
+                UpgradeButtonMissingMemory.Reset(task.VillageId);
                 logger.Information("Upgrade for {Type} at location {Location} completed successfully.", plan.Type, plan.Location);
                 ConstructionHold.Clear(task.VillageId);
                 KickTrainTroop(task, context, taskManager, logger);
