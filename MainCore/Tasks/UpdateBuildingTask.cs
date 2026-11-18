@@ -26,7 +26,7 @@ namespace MainCore.Tasks
 
             bool isFailed;
             IReadOnlyList<IError> errors;
-            if (url.Contains("dorf1"))
+            if (TravianUrl.IsDorf1(url))
             {
                 (_, isFailed, errors) = await updateBuildingCommand.HandleAsync(new(task.VillageId), cancellationToken);
                 if (isFailed) return Result.Fail(errors);
@@ -37,7 +37,7 @@ namespace MainCore.Tasks
                 (_, isFailed, errors) = await updateBuildingCommand.HandleAsync(new(task.VillageId), cancellationToken);
                 if (isFailed) return Result.Fail(errors);
             }
-            else if (url.Contains("dorf2"))
+            else if (TravianUrl.IsDorf2(url))
             {
                 (_, isFailed, errors) = await updateBuildingCommand.HandleAsync(new(task.VillageId), cancellationToken);
                 if (isFailed) return Result.Fail(errors);

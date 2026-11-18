@@ -64,6 +64,8 @@ MainCore.Test/Services/BrowserErrorRulesTest.cs
 MainCore/Commands/Features/UseHeroItem/HeroResourceAmountRules.cs
 MainCore.Test/Commands/Features/UseHeroItem/HeroResourceAmountRulesTest.cs
 MainCore/Services/Browser/TransientStreak.cs
+MainCore/Services/Browser/TravianUrl.cs
+MainCore.Test/Services/TravianUrlTest.cs
 MainCore.Test/Services/TransientStreakTest.cs
 MainCore/Commands/Features/Scheduling/OnlineHoursRules.cs
 MainCore/Commands/Features/Scheduling/QueueHorizonRules.cs

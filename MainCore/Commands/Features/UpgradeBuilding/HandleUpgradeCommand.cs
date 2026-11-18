@@ -247,7 +247,7 @@ namespace MainCore.Commands.Features.UpgradeBuilding
             }
             while (true);
 
-            result = await browser.WaitPageChanged("dorf", cancellationToken);
+            result = await browser.WaitPageChanged(TravianUrl.IsDorf, "village overview", cancellationToken);
             if (result.IsFailed) return result;
 
             await Task.Delay(Random.Shared.Next(5_000, 10_000), CancellationToken.None);
@@ -286,7 +286,7 @@ namespace MainCore.Commands.Features.UpgradeBuilding
             var result = await browser.Click(element, cancellationToken);
             if (result.IsFailed) return result;
 
-            result = await browser.WaitPageChanged("dorf", cancellationToken);
+            result = await browser.WaitPageChanged(TravianUrl.IsDorf, "village overview", cancellationToken);
             if (result.IsFailed) return result;
 
             return Result.Ok();
@@ -309,7 +309,7 @@ namespace MainCore.Commands.Features.UpgradeBuilding
             var result = await browser.Click(element, cancellationToken);
             if (result.IsFailed) return result;
 
-            result = await browser.WaitPageChanged("dorf", cancellationToken);
+            result = await browser.WaitPageChanged(TravianUrl.IsDorf, "village overview", cancellationToken);
             if (result.IsFailed) return result;
             return Result.Ok();
         }

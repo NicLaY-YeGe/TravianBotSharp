@@ -10,7 +10,7 @@
     d:DesignHeight="450" d:DesignWidth="800">
     <Grid Margin="5">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="180" />
+            <ColumnDefinition Width="150" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
         <Grid Grid.Column="0">
@@ -52,6 +52,16 @@
         </Grid>
         <Border Style="{DynamicResource Box}" Grid.Column="1" Margin="10,0,0,5">
             <TabControl>
+                <!-- 2026-11-18: 13 tabs must fit a 1280x800 tablet. Material Design's tab header is wide (large padding,
+                     minimum width, 14 pt): compact padding + 12 pt gives every header, Debug included, about 70 px less. -->
+                <TabControl.Resources>
+                    <Style TargetType="TabItem" BasedOn="{StaticResource MaterialDesignTabItem}">
+                        <Setter Property="FontSize" Value="12" />
+                        <Setter Property="Padding" Value="6,4" />
+                        <Setter Property="MinWidth" Value="0" />
+                        <Setter Property="Height" Value="Auto" />
+                    </Style>
+                </TabControl.Resources>
                 <TabItem x:Name="NoAccountTab" Header="No account" IsSelected="True">
                     <v_tab:NoAccountTab x:Name="NoAccount" />
                 </TabItem>

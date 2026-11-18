@@ -48,7 +48,7 @@ namespace MainCore.Tasks
             // a page that is already open would show the village list as it was when it loaded -
             // so a page that is already dorf1 is reloaded explicitly. dorf pages are plain GET pages,
             // a reload cannot re-submit anything.
-            var wasOnDorf1 = browser.CurrentUrl.Contains("dorf1");
+            var wasOnDorf1 = TravianUrl.IsDorf1(browser.CurrentUrl);
 
             var result = await toDorfCommand.HandleAsync(new(1), cancellationToken);
             if (result.IsSuccess && wasOnDorf1)

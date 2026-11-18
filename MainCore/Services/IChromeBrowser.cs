@@ -42,5 +42,8 @@ namespace MainCore.Services
         Task<Result> Wait(Predicate<IWebDriver> condition, CancellationToken cancellationToken, [CallerArgumentExpression("condition")] string? expression = null);
 
         Task<Result> WaitPageChanged(string url, CancellationToken cancellationToken);
+
+        // URL-scheme-independent variant (see TravianUrl); description only appears in the error text.
+        Task<Result> WaitPageChanged(Func<string, bool> urlMatches, string description, CancellationToken cancellationToken);
     }
 }

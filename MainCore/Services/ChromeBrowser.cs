@@ -427,27 +427,38 @@ namespace MainCore.Services
             }
         }
 
-        public async Task<Result> WaitPageChanged(string url, CancellationToken cancellationToken)
-        {
-            var result = await Wait(driver => driver.Url.Contains(url), cancellationToken);
-            if (result.IsFailed) return result.WithError($"Failed to wait for URL change [{url}], current URL is [{CurrentUrl}]");
+        // Routine page switches (dorf1 <-> dorf2, a building page, the post-login overview) finish within seconds. Waiting the
+        // generic 3 minutes here meant one stall (live log 2026-11-17: URL scheme changed) cost 3 min x 3 Polly retries
+        // before the account was paused - CLAUDE.md rule 15.
+        private static readonly TimeSpan NavigationTimeout = TimeSpan.FromSeconds(45);
 
-            result = await Wait(driver =>
+        public Task<Result> WaitPageChanged(string url, CancellationToken cancellationToken)
+            => WaitPageChanged(current => current.Contains(url), url, cancellationToken);
+
+        public async Task<Result> WaitPageChanged(Func<string, bool> urlMatches, string description, CancellationToken cancellationToken)
+        {
+            var result = await WaitCore(driver => urlMatches(driver.Url), NavigationTimeout, cancellationToken, null);
+            if (result.IsFailed) return result.WithError($"Failed to wait for URL change [{description}], current URL is [{CurrentUrl}]");
+
+            result = await WaitCore(driver =>
             {
                 var logo = driver.FindElements(By.Id("logo"));
                 return logo.Count > 0 && logo[0].Displayed && logo[0].Enabled;
-            }, cancellationToken);
+            }, NavigationTimeout, cancellationToken, null);
 
             if (result.IsFailed) return result.WithError("Failed to wait for logo to be displayed");
             return Result.Ok();
         }
 
-        public async Task<Result> Wait(Predicate<IWebDriver> condition, CancellationToken cancellationToken, [CallerArgumentExpression("condition")] string? expression = null)
+        public Task<Result> Wait(Predicate<IWebDriver> condition, CancellationToken cancellationToken, [CallerArgumentExpression("condition")] string? expression = null)
+            => WaitCore(condition, WaitTimeout, cancellationToken, expression);
+
+        private async Task<Result> WaitCore(Predicate<IWebDriver> condition, TimeSpan timeout, CancellationToken cancellationToken, string? expression)
         {
             var driver = _driver;
             if (driver is null) return Stop.DriverNotReady;
 
-            var deadline = DateTime.UtcNow + WaitTimeout;
+            var deadline = DateTime.UtcNow + timeout;
             string? lastError = null;
 
             try
@@ -481,7 +492,7 @@ namespace MainCore.Services
                 return Cancel.Error;
             }
 
-            return TimedOut(lastError, expression);
+            return TimedOut(lastError, expression, timeout);
         }
 
         // Polls like the old WebDriverWait: every 250 ms for up to 3 minutes, an element counts only
@@ -525,12 +536,12 @@ namespace MainCore.Services
                 return Cancel.Error;
             }
 
-            return TimedOut(lastError, expression);
+            return TimedOut(lastError, expression, WaitTimeout);
         }
 
-        private static Result TimedOut(string? lastError, string? expression)
+        private static Result TimedOut(string? lastError, string? expression, TimeSpan timeout)
         {
-            var message = $"Timed out after {(int)WaitTimeout.TotalSeconds} seconds";
+            var message = $"Timed out after {(int)timeout.TotalSeconds} seconds";
             if (!string.IsNullOrEmpty(lastError)) message += $" (last browser error: {FirstLine(lastError)})";
 
             var error = Retry.Error.WithError(message);
