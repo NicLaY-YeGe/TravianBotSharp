@@ -45,7 +45,7 @@
             result = await browser.Click(element, cancellationToken);
             if (result.IsFailed) return result;
 
-            result = await browser.WaitPageChanged("dorf", cancellationToken);
+            result = await browser.WaitPageChanged(TravianUrl.IsDorf, "village overview", cancellationToken);
             if (result.IsFailed) return result;
 
             return Result.Ok();

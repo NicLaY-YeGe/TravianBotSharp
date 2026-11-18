@@ -1,4 +1,5 @@
 using MainCore.Commands.Features.Celebration;
+using MainCore.Commands.Features.Scheduling;
 using MainCore.Commands.UI.Misc;
 using MainCore.Tasks.Base;
 
@@ -57,20 +58,38 @@ namespace MainCore.Tasks
             var secondsRemaining = TownHallParser.GetOngoingCelebrationSecondsRemaining(browser.Html);
             if (secondsRemaining is not null)
             {
-                await SetBusyUntil(task, saveVillageSettingCommand, secondsRemaining.Value, cancellationToken);
-                logger.Information("Celebration already running in {VillageId}, {Seconds}s left - won't check again until then.", task.VillageId, secondsRemaining.Value);
+                // 2026-10-25: exact end plus a 30-60 s buffer (QueueDeferRules).
+                var waitSeconds = QueueDeferRules.BusySeconds(secondsRemaining, Random.Shared);
+                await SetBusyUntil(task, saveVillageSettingCommand, waitSeconds, cancellationToken);
+                logger.Information("Celebration already running in {VillageId}, {Seconds}s left - won't check again for {Wait}s (its end plus a small buffer).", task.VillageId, secondsRemaining.Value, waitSeconds);
                 return Result.Ok();
             }
 
             var result = await holdCelebrationCommand.HandleAsync(new(task.VillageId, HoldCelebrationCommand.SmallCelebration), cancellationToken);
             if (result.IsFailed) return Stop.Error.WithErrors(result.Errors);
 
-            // Safety net: whether we just started a celebration or the page said it isn't
-            // available for some reason we didn't specifically detect, don't come back to
-            // this page again for a while. Repeatedly hammering the same page every cycle
-            // is exactly the kind of pattern that looks bad, even if each visit is harmless.
-            const int minCooldownSeconds = 20 * 60;
-            await SetBusyUntil(task, saveVillageSettingCommand, minCooldownSeconds, cancellationToken);
+            // Never come back to this page before the game says something can have changed (repeatedly
+            // hammering the same page looks bad even when each visit is harmless):
+            //   - a celebration shows as running on the page we are on now: wait for its end + buffer;
+            //   - otherwise (not available - resources short / level too low - or just started and the
+            //     page we hold is not refreshed yet): 45-60 minutes, random. It used to be a fixed 20
+            //     minutes (a visit every 20-22 minutes per village in the 2026-10-24 log). A celebration
+            //     that was in fact just started is then found running at that visit and gets its exact
+            //     end from the branch above.
+            var runningAfter = TownHallParser.GetOngoingCelebrationSecondsRemaining(browser.Html);
+            var nextWaitSeconds = QueueDeferRules.BusySeconds(runningAfter, Random.Shared);
+            await SetBusyUntil(task, saveVillageSettingCommand, nextWaitSeconds, cancellationToken);
+
+            if (runningAfter is null)
+            {
+                logger.Information(
+                    "Town hall in {VillageId}: no celebration readable as running (queue table on the page: {HasTable}) - next visit in {Minutes} min.",
+                    task.VillageId, TrainQueueParser.HasQueueTable(browser.Html), nextWaitSeconds / 60);
+            }
+            else
+            {
+                logger.Information("Celebration in {VillageId} ends in {Seconds}s - next visit in {Wait}s.", task.VillageId, runningAfter.Value, nextWaitSeconds);
+            }
 
             return Result.Ok();
         }
