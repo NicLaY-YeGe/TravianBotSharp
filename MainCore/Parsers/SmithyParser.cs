@@ -77,10 +77,19 @@ namespace MainCore.Parsers
 
             var timer = table.Descendants("span")
                 .FirstOrDefault(x => x.GetAttributeValue("class", "") == "timer");
-            if (timer is null) return null;
+            if (timer is not null)
+            {
+                var seconds = timer.GetAttributeValue("data-value", "").ParseInt();
+                if (seconds > 0) return seconds;
+            }
 
-            var seconds = timer.GetAttributeValue("data-value", "").ParseInt();
-            return seconds > 0 ? seconds : null;
+            // 2026-10-25: the capture-verified read above is tried first and is unchanged; this only
+            // adds the wider read (class list that merely CONTAINS "timer", `value` as well as
+            // `data-value`) so a research that is running is not mistaken for "nothing running" just
+            // because the markup differs a little. Smithy visits every 20 minutes in the 2026-10-24
+            // log were all "not available right now" - whether a research was running in those
+            // villages is not known.
+            return TrainQueueParser.GetSecondsRemaining(doc);
         }
     }
 }

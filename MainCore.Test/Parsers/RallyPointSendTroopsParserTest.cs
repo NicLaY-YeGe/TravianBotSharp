@@ -34,5 +34,51 @@ namespace MainCore.Test.Parsers
 
             RallyPointSendTroopsParser.IsConfirmPage(doc).ShouldBeFalse();
         }
+
+        // 2026-11-08: the <select> is the part of the real confirmation screen the user captured
+        // (only the drop-down was provided, so the fixture holds just that, wrapped in a form).
+        [Fact]
+        public void GetCatapultTargetSelect_Capture_FindsTheDropDown()
+        {
+            var doc = new HtmlDocument();
+            doc.Load("Parsers/RallyPointSendTroopsParser_CatapultTarget.html");
+
+            RallyPointSendTroopsParser.GetCatapultTargetSelect(doc).ShouldNotBeNull();
+        }
+
+        [Theory]
+        [InlineData(15, true)]  // Main Building
+        [InlineData(10, true)]  // Warehouse
+        [InlineData(99, true)]  // Random
+        [InlineData(12, false)] // not offered (Cranny/Mason are not targetable)
+        [InlineData(0, false)]
+        public void HasCatapultTargetOption_Capture_MatchesTheOfferedValues(int value, bool expected)
+        {
+            var doc = new HtmlDocument();
+            doc.Load("Parsers/RallyPointSendTroopsParser_CatapultTarget.html");
+
+            RallyPointSendTroopsParser.HasCatapultTargetOption(doc, value).ShouldBe(expected);
+        }
+
+        [Fact]
+        public void HasCatapultTargetOption_PageWithoutDropDown_ReturnsFalse()
+        {
+            var doc = new HtmlDocument();
+            doc.Load("Parsers/RallyPointSendTroopsParser_NoVillageError.html");
+
+            RallyPointSendTroopsParser.HasCatapultTargetOption(doc, 15).ShouldBeFalse();
+        }
+
+        [Fact]
+        public void CatapultTargetEnum_ValuesMatchTheCapturedOptions()
+        {
+            var doc = new HtmlDocument();
+            doc.Load("Parsers/RallyPointSendTroopsParser_CatapultTarget.html");
+
+            foreach (var value in Enum.GetValues<MainCore.Enums.CatapultTargetEnums>().Where(x => x != MainCore.Enums.CatapultTargetEnums.NotSet))
+            {
+                RallyPointSendTroopsParser.HasCatapultTargetOption(doc, (int)value).ShouldBeTrue($"{value} = {(int)value}");
+            }
+        }
     }
 }
