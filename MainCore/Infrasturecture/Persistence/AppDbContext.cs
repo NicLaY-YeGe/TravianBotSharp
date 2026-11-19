@@ -281,6 +281,8 @@ namespace MainCore.Infrasturecture.Persistence
             {VillageSettingEnums.TrainShareSiege2, 0 },
             {VillageSettingEnums.TrainShareTriggerPercent, 20 },
             {VillageSettingEnums.TrainShareQueueMaxMinutes, 360 },
+            {VillageSettingEnums.FlexibleBuildOrderEnable, 0 },
+            {VillageSettingEnums.FlexibleBuildOrderWaitMinutes, 20 },
 
             {VillageSettingEnums.SmithyUpgradeEnable, 0 },
             {VillageSettingEnums.SmithyUpgradeTroopSlot, 1 },

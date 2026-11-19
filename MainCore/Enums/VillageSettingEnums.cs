@@ -409,5 +409,13 @@
         TrainShareSiege2,
         TrainShareTriggerPercent,
         TrainShareQueueMaxMinutes,
+
+        // 2026-11-19, user decision: FLEXIBLE build order. When the first job of the build list has to wait longer than
+        // FlexibleBuildOrderWaitMinutes for its resources, UpgradeBuildingTask looks at the jobs behind it and builds the first one
+        // the village can pay for right now (own stock plus the hero inventory when UseHeroResourceForBuilding is on). The lead
+        // job keeps its place in the list. Off by default; ignored while the Roman queue logic is on. Appended last on purpose
+        // (numbering).
+        FlexibleBuildOrderEnable,
+        FlexibleBuildOrderWaitMinutes,
     }
 }

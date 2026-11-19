@@ -52,6 +52,7 @@ namespace MainCore.Tasks
             AppDbContext context,
             ITaskManager taskManager,
             GetBuildPlanCommand.Handler getBuildPlanCommand,
+            FindAffordableBuildCommand.Handler findAffordableBuildCommand,
             ToBuildPageCommand.Handler toBuildPageCommand,
             HandleResourceCommand.Handler handleResourceCommand,
             ResolveMissingPrerequisiteCommand.Handler resolveMissingPrerequisiteCommand,
@@ -69,34 +70,53 @@ namespace MainCore.Tasks
             const int maxCropResolutions = 2;
             var cropResolutions = 0;
 
+            // 2026-11-19 (flexible build order, see FlexibleBuildRules): a plan taken from BEHIND the first job of the list while that
+            // job waits for resources. The first job keeps its place; when the out-of-order plan itself cannot be paid, the task
+            // waits for the first job (leadNextAt), not for the candidate.
+            NormalBuildPlan? bypassPlan = null;
+            DateTime? leadNextAt = null;
+            var bypassCount = 0;
+
             while (true)
             {
                 if (cancellationToken.IsCancellationRequested) return Cancel.Error;
 
-                var (_, isFailed, plan, errors) = await getBuildPlanCommand.HandleAsync(new(task.AccountId, task.VillageId), cancellationToken);
-                if (isFailed)
+                NormalBuildPlan plan;
+                var isBypass = bypassPlan is not null;
+                if (isBypass)
                 {
-                    var nextExecuteErrors = errors.OfType<NextExecuteError>().OrderBy(x => x.NextExecute).ToList();
-                    if (nextExecuteErrors.Count > 0)
+                    plan = bypassPlan!;
+                    bypassPlan = null;
+                }
+                else
+                {
+                    var (_, isFailed, builtPlan, errors) = await getBuildPlanCommand.HandleAsync(new(task.AccountId, task.VillageId), cancellationToken);
+                    if (isFailed)
                     {
-                        task.ExecuteAt = nextExecuteErrors.Select(x => x.NextExecute).Min();
+                        var nextExecuteErrors = errors.OfType<NextExecuteError>().OrderBy(x => x.NextExecute).ToList();
+                        if (nextExecuteErrors.Count > 0)
+                        {
+                            task.ExecuteAt = nextExecuteErrors.Select(x => x.NextExecute).Min();
+                        }
+
+                        // 2026-11-07 (construction reserve): a full build queue keeps the plan's cost known and notes
+                        // when the slot frees; any other reason (no jobs, ...) means nothing is waiting for resources.
+                        var queueFull = nextExecuteErrors.Where(x => x.PrerequisiteLevel == 0).ToList();
+                        if (queueFull.Count > 0)
+                        {
+                            ConstructionNeed.SetSlotBusyUntil(task.VillageId, queueFull.Min(x => x.NextExecute));
+                        }
+                        else
+                        {
+                            ConstructionNeed.Clear(task.VillageId);
+                        }
+
+                        // Nothing (buildable) is waiting for resources: troops may use them again.
+                        ConstructionHold.Clear(task.VillageId);
+                        return Skip.Error.WithErrors(errors);
                     }
 
-                    // 2026-11-07 (construction reserve): a full build queue keeps the plan's cost known and notes
-                    // when the slot frees; any other reason (no jobs, ...) means nothing is waiting for resources.
-                    var queueFull = nextExecuteErrors.Where(x => x.PrerequisiteLevel == 0).ToList();
-                    if (queueFull.Count > 0)
-                    {
-                        ConstructionNeed.SetSlotBusyUntil(task.VillageId, queueFull.Min(x => x.NextExecute));
-                    }
-                    else
-                    {
-                        ConstructionNeed.Clear(task.VillageId);
-                    }
-
-                    // Nothing (buildable) is waiting for resources: troops may use them again.
-                    ConstructionHold.Clear(task.VillageId);
-                    return Skip.Error.WithErrors(errors);
+                    plan = builtPlan;
                 }
 
                 logger.Information("Build {Type} to level {Level} at location {Location}", plan.Type, plan.Level, plan.Location);
@@ -166,7 +186,35 @@ namespace MainCore.Tasks
 
                         // 2026-10-26: the page shows no countdown when crop production is too low; the old code then
                         // read 0 s and retried every ~16 s (678 runs in 3 h). See UpgradeWaitRules.
-                        task.ExecuteAt = DateTime.Now.Add(UpgradeWaitRules.NextWait(time, cropBlocked, Random.Shared));
+                        var nextWait = DateTime.Now.Add(UpgradeWaitRules.NextWait(time, cropBlocked, Random.Shared));
+
+                        // 2026-11-19 (flexible build order): the FIRST job waits longer than the village setting allows - build the
+                        // first job behind it that can be paid for right now instead of leaving the build slot idle. The first job
+                        // keeps its place; it is looked at again after the out-of-order build.
+                        if (!isBypass
+                            && !cropBlocked
+                            && bypassCount < FlexibleBuildRules.MaxBypassPerRun
+                            && FlexibleBuildRules.ShouldLookBehind(
+                                context.BooleanByName(task.VillageId, VillageSettingEnums.FlexibleBuildOrderEnable),
+                                context.BooleanByName(task.VillageId, VillageSettingEnums.ApplyRomanQueueLogicWhenBuilding),
+                                time,
+                                context.ByName(task.VillageId, VillageSettingEnums.FlexibleBuildOrderWaitMinutes)))
+                        {
+                            var (_, noCandidate, candidate, _) = await findAffordableBuildCommand.HandleAsync(new(task.AccountId, task.VillageId), cancellationToken);
+                            if (!noCandidate)
+                            {
+                                bypassCount++;
+                                bypassPlan = candidate;
+                                leadNextAt = nextWait;
+                                logger.Information(
+                                    "Upgrade building in {VillageId}: {Plan} has to wait {Wait} for resources (more than the {Limit} min allowed) - building {Candidate} instead, the first job keeps its place.",
+                                    task.VillageId, plan, time, context.ByName(task.VillageId, VillageSettingEnums.FlexibleBuildOrderWaitMinutes), candidate);
+                                continue;
+                            }
+                        }
+
+                        // An out-of-order plan that could not be paid after all (the cost was an estimate): wait for the first job.
+                        task.ExecuteAt = isBypass && leadNextAt is not null ? leadNextAt.Value : nextWait;
                         if (time <= TimeSpan.Zero)
                         {
                             logger.Warning(

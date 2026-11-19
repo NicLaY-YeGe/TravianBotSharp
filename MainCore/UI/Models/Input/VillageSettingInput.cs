@@ -15,6 +15,11 @@ namespace MainCore.UI.Models.Input
         private bool _useSpecialUpgrade;
 
         [Reactive]
+        private bool _flexibleBuildOrderEnable;
+
+        public AmountInputViewModel FlexibleBuildOrderWaitMinutes { get; } = new();
+
+        [Reactive]
         private bool _completeImmediately;
 
         public TribeSelectorViewModel Tribe { get; } = new();
@@ -217,6 +222,8 @@ namespace MainCore.UI.Models.Input
             ApplyRomanQueueLogicWhenBuilding = settings.GetValueOrDefault(VillageSettingEnums.ApplyRomanQueueLogicWhenBuilding) == 1;
             CompleteImmediately = settings.GetValueOrDefault(VillageSettingEnums.CompleteImmediately) == 1;
             UseSpecialUpgrade = settings.GetValueOrDefault(VillageSettingEnums.UseSpecialUpgrade) == 1;
+            FlexibleBuildOrderEnable = settings.GetValueOrDefault(VillageSettingEnums.FlexibleBuildOrderEnable) == 1;
+            FlexibleBuildOrderWaitMinutes.Set(settings.GetValueOrDefault(VillageSettingEnums.FlexibleBuildOrderWaitMinutes));
 
             TrainTroopEnable = settings.GetValueOrDefault(VillageSettingEnums.TrainTroopEnable) == 1;
             TrainWhenLowResource = settings.GetValueOrDefault(VillageSettingEnums.TrainWhenLowResource) == 1;
@@ -376,6 +383,8 @@ namespace MainCore.UI.Models.Input
             var applyRomanQueueLogicWhenBuilding = ApplyRomanQueueLogicWhenBuilding ? 1 : 0;
             var useSpecialUpgrade = UseSpecialUpgrade ? 1 : 0;
             var completeImmediately = CompleteImmediately ? 1 : 0;
+            var flexibleBuildOrderEnable = FlexibleBuildOrderEnable ? 1 : 0;
+            var flexibleBuildOrderWaitMinutes = Math.Max(FlexibleBuildOrderWaitMinutes.Get(), 0);
 
             var tribe = (int)Tribe.Get();
 
@@ -494,6 +503,8 @@ namespace MainCore.UI.Models.Input
                 { VillageSettingEnums.ApplyRomanQueueLogicWhenBuilding, applyRomanQueueLogicWhenBuilding },
                 { VillageSettingEnums.UseSpecialUpgrade, useSpecialUpgrade },
                 { VillageSettingEnums.CompleteImmediately, completeImmediately },
+                { VillageSettingEnums.FlexibleBuildOrderEnable, flexibleBuildOrderEnable },
+                { VillageSettingEnums.FlexibleBuildOrderWaitMinutes, flexibleBuildOrderWaitMinutes },
                 { VillageSettingEnums.Tribe, tribe },
                 { VillageSettingEnums.TrainTroopEnable, trainTroopEnable },
                 { VillageSettingEnums.TrainWhenLowResource, trainWhenLowResource },

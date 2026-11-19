@@ -105,3 +105,7 @@ MainCore/Commands/Features/SendResource/ReceiveRoomRules.cs
 MainCore.Test/Commands/Features/SendResource/ReceiveRoomRulesTest.cs
 MainCore/Commands/Features/SendResource/OverflowDrainRules.cs
 MainCore.Test/Commands/Features/SendResource/OverflowDrainRulesTest.cs
+MainCore/Commands/Features/UpgradeBuilding/ResourceFieldMapRules.cs
+MainCore/Commands/Features/UpgradeBuilding/FlexibleBuildRules.cs
+MainCore.Test/Commands/Features/UpgradeBuilding/ResourceFieldMapRulesTest.cs
+MainCore.Test/Commands/Features/UpgradeBuilding/FlexibleBuildRulesTest.cs

@@ -1,4 +1,5 @@
 ﻿using System.Text.Json;
+using MainCore.Commands.Features.UpgradeBuilding;
 
 namespace MainCore.Commands.UI.Villages.BuildViewModel
 {
@@ -9,13 +10,64 @@ namespace MainCore.Commands.UI.Villages.BuildViewModel
 
         private static async ValueTask<List<JobDto>> HandleAsync(
             Command command,
-            GetLayoutBuildingsCommand.Handler getLayoutBuildingsQuery
+            GetLayoutBuildingsCommand.Handler getLayoutBuildingsQuery,
+            ILogger logger
             )
         {
             var (villageId, jobs, shuffle) = command;
             var buildings = await getLayoutBuildingsQuery.HandleAsync(new(villageId));
-            var modifiedJobs = GetModifiedJobs(buildings, jobs, shuffle);
+
+            // 2026-11-19: resource-field plans are paired with this village's fields by TYPE and ordinal instead of being
+            // dropped when the slot of the list holds another resource (see ResourceFieldMapRules).
+            var fieldMap = BuildFieldMap(buildings, jobs);
+            LogFieldMap(logger, villageId, fieldMap);
+
+            var modifiedJobs = GetModifiedJobs(buildings, jobs, shuffle, fieldMap);
             return [.. modifiedJobs];
+        }
+
+        private static Dictionary<(int Type, int Location), int> BuildFieldMap(List<BuildingItem> buildings, List<JobDto> jobs)
+        {
+            var listUses = new List<(int Type, int Location)>();
+            foreach (var job in jobs)
+            {
+                if (job.Type != JobTypeEnums.NormalBuild) continue;
+                NormalBuildPlan? plan;
+                try
+                {
+                    plan = JsonSerializer.Deserialize<NormalBuildPlan>(job.Content);
+                }
+                catch (JsonException)
+                {
+                    continue;
+                }
+                if (plan is null || !plan.Type.IsResourceField()) continue;
+                listUses.Add(((int)plan.Type, plan.Location));
+            }
+
+            var villageFields = buildings
+                .Where(x => x.Type.IsResourceField())
+                .Select(x => (x.Location, (int)x.Type));
+            return ResourceFieldMapRules.Build(listUses, villageFields);
+        }
+
+        private static void LogFieldMap(ILogger logger, VillageId villageId, Dictionary<(int Type, int Location), int> fieldMap)
+        {
+            var moved = fieldMap.Where(x => x.Value != ResourceFieldMapRules.NoField && x.Value != x.Key.Location).ToList();
+            if (moved.Count > 0)
+            {
+                logger.Information(
+                    "Build list for village {VillageId}: resource fields of the list were paired with this village's fields by type ({Pairs}).",
+                    villageId, string.Join(", ", moved.OrderBy(x => x.Key.Type).ThenBy(x => x.Key.Location).Select(x => $"{(BuildingEnums)x.Key.Type} {x.Key.Location} -> {x.Value}")));
+            }
+
+            var dropped = fieldMap.Where(x => x.Value == ResourceFieldMapRules.NoField).ToList();
+            if (dropped.Count > 0)
+            {
+                logger.Warning(
+                    "Build list for village {VillageId}: the village has fewer fields of some types than the list uses - jobs for {Fields} were left out.",
+                    villageId, string.Join(", ", dropped.OrderBy(x => x.Key.Type).ThenBy(x => x.Key.Location).Select(x => $"{(BuildingEnums)x.Key.Type} (list location {x.Key.Location})")));
+            }
         }
 
         private static readonly List<int> _excludedLocations = new() { 26, 39, 40 }; //main building, rallypoint and wall
@@ -35,7 +87,7 @@ namespace MainCore.Commands.UI.Villages.BuildViewModel
                 BuildingEnums.Cropland,}},
         };
 
-        private static IEnumerable<JobDto> GetModifiedJobs(List<BuildingItem> buildings, List<JobDto> jobs, bool shuffle)
+        private static IEnumerable<JobDto> GetModifiedJobs(List<BuildingItem> buildings, List<JobDto> jobs, bool shuffle, Dictionary<(int Type, int Location), int> fieldMap)
         {
             var changedLocations = new Dictionary<int, int>();
             foreach (var job in jobs)
@@ -46,7 +98,15 @@ namespace MainCore.Commands.UI.Villages.BuildViewModel
                         {
                             var plan = JsonSerializer.Deserialize<NormalBuildPlan>(job.Content)!;
 
-                            Modify(buildings, plan, changedLocations, shuffle);
+                            if (plan.Type.IsResourceField())
+                            {
+                                // -1 (no counterpart) finds no building in IsValidPlan, so the job is left out.
+                                plan.Location = ResourceFieldMapRules.Resolve(fieldMap, (int)plan.Type, plan.Location);
+                            }
+                            else
+                            {
+                                Modify(buildings, plan, changedLocations, shuffle);
+                            }
                             job.Content = GetContent(plan);
 
                             if (IsValidPlan(buildings, plan)) yield return job;

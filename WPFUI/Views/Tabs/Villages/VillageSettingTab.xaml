@@ -85,6 +85,14 @@
                                 <Label Content=" mins" />
                             </StackPanel>
                             <CheckBox x:Name="UseSpecialUpgrade" Content="Use special upgrade method (the right upgrade button)" />
+                            <CheckBox x:Name="FlexibleBuildOrderEnable" Content="Flexible build order: build what can be paid now when the first job has to wait long">
+                                <CheckBox.ToolTip>
+                                    <TextBlock TextWrapping="Wrap" MaxWidth="420" Text="When the first job of the build list has to wait longer than the time below for its resources, the next job in the list that the village can pay for right now (own stock plus the hero inventory, if hero resources are allowed above) is built instead. The first job keeps its place and is tried again afterwards. Ignored while the Roman queue logic is on." />
+                                </CheckBox.ToolTip>
+                            </CheckBox>
+                            <StackPanel Visibility="{Binding IsChecked, ElementName=FlexibleBuildOrderEnable, Converter={StaticResource BoolToVis}}">
+                                <uc:AmountInputUc x:Name="FlexibleBuildOrderWaitMinutes" Text="Look at the jobs behind when the first one waits longer than" Unit="mins" />
+                            </StackPanel>
                         </StackPanel>
                     </Expander>
                 </Border>
