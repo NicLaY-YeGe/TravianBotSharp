@@ -458,7 +458,7 @@ namespace MainCore.UI.ViewModels.Tabs.Villages
                 return;
             }
 
-            var confirm = await _dialogService.ConfirmBox.Handle(new MessageBoxData("Warning", "TBS will remove resource field build job if its position doesn't match with current village."));
+            var confirm = await _dialogService.ConfirmBox.Handle(new MessageBoxData("Warning", "TBS pairs the resource field jobs with this village's fields by resource type (it does not matter which slot the list used). A job is left out only when the village has fewer fields of that type than the list uses."));
             if (!confirm) return;
 
             var shuffle = await _dialogService.ConfirmBox.Handle(new MessageBoxData("Warning", "Do you want to random building location?"));
