@@ -1,4 +1,5 @@
-﻿using MainCore.Commands.Features.UpgradeBuilding;
+﻿using MainCore.Commands.Features.Scheduling;
+using MainCore.Commands.Features.UpgradeBuilding;
 using MainCore.Tasks.Base;
 
 namespace MainCore.Tasks
@@ -15,12 +16,45 @@ namespace MainCore.Tasks
             protected override string TaskName => "Upgrade building";
         }
 
+        // 2026-11-07 (user decision): a building was just started - let the village's troop training look at what is left
+        // 10-20 s from now instead of at its own (possibly hours away) time. Only moves the task earlier, never forces a
+        // batch (intervals, busy queue, horizon and construction reserve still decide). See TrainKickRules.
+        private static void KickTrainTroop(Task task, AppDbContext context, ITaskManager taskManager, ILogger logger)
+        {
+            try
+            {
+                if (!context.BooleanByName(task.VillageId, VillageSettingEnums.TrainTroopEnable)) return;
+                // 2026-11-13: the share mode has no visit times to bring forward (it reacts to the stock itself).
+                if (context.BooleanByName(task.VillageId, VillageSettingEnums.TrainShareEnable)) return;
+
+                var current = taskManager.GetTaskList(task.AccountId)
+                    .OfType<TrainTroopTask.Task>()
+                    .FirstOrDefault(x => x.VillageId == task.VillageId);
+
+                var kick = TrainKickRules.KickTime(DateTime.Now, current?.ExecuteAt, Random.Shared);
+                if (kick is null) return;
+
+                var kickTask = new TrainTroopTask.Task(task.AccountId, task.VillageId) { ExecuteAt = kick.Value };
+                taskManager.AddOrUpdate<TrainTroopTask.Task>(kickTask);
+                logger.Information("Upgrade building in {VillageId}: a building was started, troop training looks at the rest at {Time:HH:mm:ss}.", task.VillageId, kick.Value);
+            }
+            catch (Exception ex)
+            {
+                // A helper must never fail the build task.
+                logger.Warning("Upgrade building in {VillageId}: could not bring the troop training forward ({Reason}).", task.VillageId, ex.Message);
+            }
+        }
+
         private static async ValueTask<Result> HandleAsync(
             Task task,
             ILogger logger,
             IChromeBrowser browser,
+            AppDbContext context,
+            ITaskManager taskManager,
             GetBuildPlanCommand.Handler getBuildPlanCommand,
+            FindAffordableBuildCommand.Handler findAffordableBuildCommand,
             ToBuildPageCommand.Handler toBuildPageCommand,
+            ToDorfCommand.Handler toDorfCommand,
             HandleResourceCommand.Handler handleResourceCommand,
             ResolveMissingPrerequisiteCommand.Handler resolveMissingPrerequisiteCommand,
             AddCroplandCommand.Handler addCroplandCommand,
@@ -34,24 +68,69 @@ namespace MainCore.Tasks
             // (one for each side is the realistic worst case) before falling back to the old Stop.
             const int maxStorageResolutions = 2;
             var storageResolutions = 0;
+            const int maxCropResolutions = 2;
+            var cropResolutions = 0;
+
+            // 2026-11-19 (flexible build order, see FlexibleBuildRules): a plan taken from BEHIND the first job of the list while that
+            // job waits for resources. The first job keeps its place; when the out-of-order plan itself cannot be paid, the task
+            // waits for the first job (leadNextAt), not for the candidate.
+            NormalBuildPlan? bypassPlan = null;
+            DateTime? leadNextAt = null;
+            var bypassCount = 0;
 
             while (true)
             {
                 if (cancellationToken.IsCancellationRequested) return Cancel.Error;
 
-                var (_, isFailed, plan, errors) = await getBuildPlanCommand.HandleAsync(new(task.AccountId, task.VillageId), cancellationToken);
-                if (isFailed)
+                NormalBuildPlan plan;
+                var isBypass = bypassPlan is not null;
+                if (isBypass)
                 {
-                    var nextExecuteErrors = errors.OfType<NextExecuteError>().OrderBy(x => x.NextExecute).ToList();
-                    if (nextExecuteErrors.Count > 0)
+                    plan = bypassPlan!;
+                    bypassPlan = null;
+                }
+                else
+                {
+                    var (_, isFailed, builtPlan, errors) = await getBuildPlanCommand.HandleAsync(new(task.AccountId, task.VillageId), cancellationToken);
+                    if (isFailed)
                     {
-                        task.ExecuteAt = nextExecuteErrors.Select(x => x.NextExecute).Min();
+                        var nextExecuteErrors = errors.OfType<NextExecuteError>().OrderBy(x => x.NextExecute).ToList();
+                        if (nextExecuteErrors.Count > 0)
+                        {
+                            task.ExecuteAt = nextExecuteErrors.Select(x => x.NextExecute).Min();
+                        }
+
+                        // 2026-11-07 (construction reserve): a full build queue keeps the plan's cost known and notes
+                        // when the slot frees; any other reason (no jobs, ...) means nothing is waiting for resources.
+                        var queueFull = nextExecuteErrors.Where(x => x.PrerequisiteLevel == 0).ToList();
+                        if (queueFull.Count > 0)
+                        {
+                            ConstructionNeed.SetSlotBusyUntil(task.VillageId, queueFull.Min(x => x.NextExecute));
+                        }
+                        else
+                        {
+                            ConstructionNeed.Clear(task.VillageId);
+                        }
+
+                        // Nothing (buildable) is waiting for resources: troops may use them again.
+                        ConstructionHold.Clear(task.VillageId);
+                        return Skip.Error.WithErrors(errors);
                     }
 
-                    return Skip.Error.WithErrors(errors);
+                    plan = builtPlan;
                 }
 
                 logger.Information("Build {Type} to level {Level} at location {Location}", plan.Type, plan.Level, plan.Location);
+                ConstructionNeed.ClearSlotBusy(task.VillageId);
+
+                // 2026-11-21: a plan taken from behind the first job did not pass GetBuildPlanCommand, which is what brings the browser to
+                // the village page. The browser still stood on the first job's build page, ToBuildingByLocation found no link for the
+                // candidate's slot and timed out after 180 s (live log 2026-11-20 18:05). Go to the right village page first.
+                if (isBypass)
+                {
+                    result = await toDorfCommand.HandleAsync(new(plan.Location <= 18 ? 1 : 2), cancellationToken);
+                    if (result.IsFailed) return result;
+                }
 
                 result = await toBuildPageCommand.HandleAsync(new(task.VillageId, plan), cancellationToken);
                 if (result.IsFailed) return result;
@@ -61,7 +140,12 @@ namespace MainCore.Tasks
                 {
                     if (result.HasError<LackOfFreeCrop>())
                     {
-                        await addCroplandCommand.HandleAsync(new(task.VillageId), cancellationToken);
+                        if (!await addCroplandCommand.HandleAsync(new(task.VillageId), cancellationToken))
+                        {
+                            task.ExecuteAt = DateTime.Now.AddHours(UpgradeWaitRules.NoCroplandSuspendHours);
+                            logger.Warning("Upgrade building in {VillageId}: not enough free crop and no cropland left to upgrade - building tasks suspended until {Time:HH:mm}.", task.VillageId, task.ExecuteAt);
+                            return Skip.Error.WithErrors(result.Errors);
+                        }
                         continue;
                     }
 
@@ -88,7 +172,71 @@ namespace MainCore.Tasks
                     if (result.HasError<MissingResource>())
                     {
                         var time = UpgradeParser.GetTimeWhenEnoughResource(browser.Html, plan.Type);
-                        task.ExecuteAt = DateTime.Now.Add(time);
+                        var blockedMessage = UpgradeParser.GetBlockedMessage(browser.Html, plan.Type);
+                        var cropBlocked = UpgradeWaitRules.IsCropProductionBlocked(blockedMessage);
+                        // 2026-10-27: crop production is negative - queue a cropland upgrade as the FIRST job
+                        // (any other plan, e.g. Grain Mill, can never be built before crop production rises).
+                        if (cropBlocked && plan.Type != BuildingEnums.Cropland)
+                        {
+                            if (cropResolutions < maxCropResolutions)
+                            {
+                                cropResolutions++;
+                                if (await addCroplandCommand.HandleAsync(new(task.VillageId), cancellationToken))
+                                {
+                                    logger.Information("Crop production is too low for {Type} level {Level}: queued a cropland upgrade as the first job.", plan.Type, plan.Level);
+                                    continue;
+                                }
+                            }
+
+                            // No cropland left to upgrade: suspend this village's building tasks for a while.
+                            task.ExecuteAt = DateTime.Now.AddHours(UpgradeWaitRules.NoCroplandSuspendHours);
+                            logger.Warning("Upgrade building in {VillageId}: crop production is too low for {Type} level {Level} and there is no cropland left to upgrade - building tasks suspended until {Time:HH:mm}.", task.VillageId, plan.Type, plan.Level, task.ExecuteAt);
+                            return Skip.Error.WithErrors(result.Errors);
+                        }
+
+                        // 2026-10-26: the page shows no countdown when crop production is too low; the old code then
+                        // read 0 s and retried every ~16 s (678 runs in 3 h). See UpgradeWaitRules.
+                        var nextWait = DateTime.Now.Add(UpgradeWaitRules.NextWait(time, cropBlocked, Random.Shared));
+
+                        // 2026-11-19 (flexible build order): the FIRST job waits longer than the village setting allows - build the
+                        // first job behind it that can be paid for right now instead of leaving the build slot idle. The first job
+                        // keeps its place; it is looked at again after the out-of-order build.
+                        if (!isBypass
+                            && !cropBlocked
+                            && bypassCount < FlexibleBuildRules.MaxBypassPerRun
+                            && FlexibleBuildRules.ShouldLookBehind(
+                                context.BooleanByName(task.VillageId, VillageSettingEnums.FlexibleBuildOrderEnable),
+                                context.BooleanByName(task.VillageId, VillageSettingEnums.ApplyRomanQueueLogicWhenBuilding),
+                                time,
+                                context.ByName(task.VillageId, VillageSettingEnums.FlexibleBuildOrderWaitMinutes)))
+                        {
+                            var (_, noCandidate, candidate, _) = await findAffordableBuildCommand.HandleAsync(new(task.AccountId, task.VillageId), cancellationToken);
+                            if (!noCandidate)
+                            {
+                                bypassCount++;
+                                bypassPlan = candidate;
+                                leadNextAt = nextWait;
+                                logger.Information(
+                                    "Upgrade building in {VillageId}: {Plan} has to wait {Wait} for resources (more than the {Limit} min allowed) - building {Candidate} instead, the first job keeps its place.",
+                                    task.VillageId, plan, time, context.ByName(task.VillageId, VillageSettingEnums.FlexibleBuildOrderWaitMinutes), candidate);
+                                continue;
+                            }
+                        }
+
+                        // An out-of-order plan that could not be paid after all (the cost was an estimate): wait for the first job.
+                        task.ExecuteAt = isBypass && leadNextAt is not null ? leadNextAt.Value : nextWait;
+                        if (time <= TimeSpan.Zero)
+                        {
+                            logger.Warning(
+                                cropBlocked
+                                    ? "Upgrade building in {VillageId}: {Type} level {Level} is blocked by the game (\"{Message}\") - crop production is too low, nothing can be built here until it rises. Looking again at {Time:HH:mm}."
+                                    : "Upgrade building in {VillageId}: could not read the time until enough resources (page says \"{Message}\"). Looking again at {Time:HH:mm}.",
+                                task.VillageId, plan.Type, plan.Level, blockedMessage, task.ExecuteAt);
+                        }
+
+                        // "Construction first" village setting: troops of this village wait until then - not for a
+                        // crop-blocked plan, which resources cannot unblock.
+                        if (!cropBlocked) ConstructionHold.Set(task.VillageId, task.ExecuteAt);
                         return Skip.Error.WithErrors(result.Errors);
                     }
 
@@ -96,9 +244,26 @@ namespace MainCore.Tasks
                 }
 
                 result = await handleUpgradeCommand.HandleAsync(new(task.VillageId, plan), cancellationToken);
-                if (result.IsFailed) return result;
+                if (result.IsFailed)
+                {
+                    // 2026-11-17: no button on the page - look again later, longer with every miss in a row (rule 16: a
+                    // Skip with ExecuteAt unchanged would drop the task from the queue).
+                    if (result.Errors.OfType<UpgradeBuildingError>().Any(x => x.IsButtonMissing))
+                    {
+                        var misses = UpgradeButtonMissingMemory.Add(task.VillageId);
+                        task.ExecuteAt = DateTime.Now.Add(UpgradeWaitRules.ButtonMissingWait(misses, Random.Shared));
+                        logger.Information("Upgrade building in {VillageId}: no upgrade button for {Type} at location {Location} ({Misses} time(s) in a row), looking again at {Time:HH:mm:ss}.", task.VillageId, plan.Type, plan.Location, misses, task.ExecuteAt);
+                    }
+                    return result;
+                }
 
+                UpgradeButtonMissingMemory.Reset(task.VillageId);
                 logger.Information("Upgrade for {Type} at location {Location} completed successfully.", plan.Type, plan.Location);
+                ConstructionHold.Clear(task.VillageId);
+                KickTrainTroop(task, context, taskManager, logger);
+
+                // The cost of the plan just built stays as the best estimate for the next one (the build queue is busy
+                // now); HandleResourceCommand replaces it as soon as the next plan is read, the no-jobs path clears it.
 
                 result = await updateBuildingCommand.HandleAsync(new(task.VillageId), cancellationToken);
                 if (result.IsFailed) return result;

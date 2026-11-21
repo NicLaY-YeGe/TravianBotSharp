@@ -22,6 +22,14 @@ namespace WPFUI
     {
         public App()
         {
+            // 2026-11-14: a crash used to leave nothing in the log (see CrashLog).
+            CrashLog.Install();
+            DispatcherUnhandledException += (_, e) =>
+            {
+                CrashLog.Write("UI thread exception", e.Exception);
+                e.Handled = true;
+            };
+
             Splat.ModeDetector.OverrideModeDetector(Mode.Run);
             var host = AppMixins.GetHostBuilder()
                 .ConfigureWpf(wpfBuilder => wpfBuilder.UseCurrentApplication(this).UseWindow<MainWindow>())
