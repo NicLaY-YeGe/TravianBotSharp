@@ -54,6 +54,7 @@ namespace MainCore.Tasks
             GetBuildPlanCommand.Handler getBuildPlanCommand,
             FindAffordableBuildCommand.Handler findAffordableBuildCommand,
             ToBuildPageCommand.Handler toBuildPageCommand,
+            ToDorfCommand.Handler toDorfCommand,
             HandleResourceCommand.Handler handleResourceCommand,
             ResolveMissingPrerequisiteCommand.Handler resolveMissingPrerequisiteCommand,
             AddCroplandCommand.Handler addCroplandCommand,
@@ -121,6 +122,15 @@ namespace MainCore.Tasks
 
                 logger.Information("Build {Type} to level {Level} at location {Location}", plan.Type, plan.Level, plan.Location);
                 ConstructionNeed.ClearSlotBusy(task.VillageId);
+
+                // 2026-11-21: a plan taken from behind the first job did not pass GetBuildPlanCommand, which is what brings the browser to
+                // the village page. The browser still stood on the first job's build page, ToBuildingByLocation found no link for the
+                // candidate's slot and timed out after 180 s (live log 2026-11-20 18:05). Go to the right village page first.
+                if (isBypass)
+                {
+                    result = await toDorfCommand.HandleAsync(new(plan.Location <= 18 ? 1 : 2), cancellationToken);
+                    if (result.IsFailed) return result;
+                }
 
                 result = await toBuildPageCommand.HandleAsync(new(task.VillageId, plan), cancellationToken);
                 if (result.IsFailed) return result;

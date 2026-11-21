@@ -109,3 +109,5 @@ MainCore/Commands/Features/UpgradeBuilding/ResourceFieldMapRules.cs
 MainCore/Commands/Features/UpgradeBuilding/FlexibleBuildRules.cs
 MainCore.Test/Commands/Features/UpgradeBuilding/ResourceFieldMapRulesTest.cs
 MainCore.Test/Commands/Features/UpgradeBuilding/FlexibleBuildRulesTest.cs
+MainCore/Commands/Features/UpgradeBuilding/TemplateApplyRules.cs
+MainCore.Test/Commands/Features/UpgradeBuilding/TemplateApplyRulesTest.cs
