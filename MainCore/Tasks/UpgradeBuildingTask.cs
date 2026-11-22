@@ -237,7 +237,12 @@ namespace MainCore.Tasks
                         // "Construction first" village setting: troops of this village wait until then - not for a
                         // crop-blocked plan, which resources cannot unblock.
                         if (!cropBlocked) ConstructionHold.Set(task.VillageId, task.ExecuteAt);
-                        return Skip.Error.WithErrors(result.Errors);
+
+                        // 2026-11-22: a known shortage with a set next look is a planned wait (TimerManager logs it as Information
+                        // "Task X waits: ..."). A crop-blocked plan keeps the Warning path above.
+                        if (cropBlocked) return Skip.Error.WithErrors(result.Errors);
+                        var shortage = string.Join("; ", result.Errors.OfType<MissingResource>().Select(e => e.Message));
+                        return Skip.Error.WithError(NextExecuteError.ResourcesMissing(task.ExecuteAt, $"{shortage} - looking again at {task.ExecuteAt:HH:mm}"));
                     }
 
                     return result;

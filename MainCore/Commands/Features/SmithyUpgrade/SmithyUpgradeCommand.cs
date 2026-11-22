@@ -10,6 +10,7 @@ namespace MainCore.Commands.Features.SmithyUpgrade
         // not there yet (the same village and slot had been found 10 times before), and the old code answered with Stop -
         // the whole account was paused. Give the page a few seconds to show the block before calling it missing.
         private const int ResearchBlockWaitSeconds = 8;
+        private const int ResearchStartWaitSeconds = 10;
 
         private static async ValueTask<Result> HandleAsync(
             Command command,
@@ -66,20 +67,24 @@ namespace MainCore.Commands.Features.SmithyUpgrade
             var result = await browser.Click(element, cancellationToken);
             if (result.IsFailed) return Skip.Error.WithErrors(result.Errors);
 
-            // The Improve button's onclick navigates to the same build.php page with
-            // "&action=research&..." appended - a browser.Click() that returns Ok only means
-            // WebDriver executed the click without throwing, not that the game server actually
-            // accepted the request (e.g. a stale checksum token gets silently rejected). Wait
-            // for that specific query param to show up in the URL before believing it worked,
-            // the same way HandleUpgradeCommand does for regular building upgrades.
-            result = await browser.WaitPageChanged("action=research", cancellationToken);
-            if (result.IsFailed) return Skip.Error.WithErrors(result.Errors).WithError($"Clicked Improve for troop slot {troopSlot} but the page never navigated to the research action - the request likely wasn't accepted.");
-
-            // Confirm the click didn't just reload the same idle page silently: a research
-            // should now actually be running.
-            if (SmithyParser.GetOngoingResearchSecondsRemaining(browser.Html) is null)
+            // 2026-11-22 (live log 01:29-01:57, ts50): the click DID start the research (a timer of 14377 s was running
+            // at the next visit), but the old code waited for "action=research" in the URL; the game stays on
+            // /building?id=N, so every run ended as a false failure after 45 s. A URL fragment is not proof
+            // (CLAUDE.md rule 23); the page's own proof is the research timer, so poll for that instead.
+            using var startWait = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            startWait.CancelAfter(TimeSpan.FromSeconds(ResearchStartWaitSeconds));
+            var started = await browser.Wait(driver =>
             {
-                return Skip.Error.WithError($"Clicked Improve for troop slot {troopSlot} but no research appears to be running afterwards.");
+                var doc = new HtmlDocument();
+                doc.LoadHtml(driver.PageSource);
+                return SmithyParser.GetOngoingResearchSecondsRemaining(doc) is not null;
+            }, startWait.Token);
+
+            // A user pause (outer token) is a pause, not a failed start.
+            if (cancellationToken.IsCancellationRequested) return Cancel.Error;
+            if (started.IsFailed)
+            {
+                return Skip.Error.WithError($"Clicked Improve for troop slot {troopSlot} but no research timer appeared within {ResearchStartWaitSeconds}s - the request likely wasn't accepted.");
             }
 
             logger.Information("Started smithy upgrade for troop slot {TroopSlot} in {VillageId}.", troopSlot, villageId);
