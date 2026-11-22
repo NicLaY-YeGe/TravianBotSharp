@@ -1,4 +1,6 @@
-﻿namespace MainCore.Parsers
+﻿using System.Net;
+
+namespace MainCore.Parsers
 {
     public static class UpgradeParser
     {
@@ -40,6 +42,17 @@
             if (timer is null) return TimeSpan.Zero;
             var time = timer.GetAttributeValue("value", 0);
             return TimeSpan.FromSeconds(time);
+        }
+
+        // 2026-10-26: the text of the red "upgrade blocked" line of the contract ("Increase crop production.",
+        // real capture of a Grain Mill with negative crop production). Empty when there is none.
+        public static string GetBlockedMessage(HtmlDocument doc, BuildingEnums building)
+        {
+            var node = GetContractNode(doc, building);
+            if (node is null) return "";
+            var errorMessage = node.Descendants("div")
+                .FirstOrDefault(x => x.HasClass("errorMessage"));
+            return errorMessage is null ? "" : WebUtility.HtmlDecode(errorMessage.InnerText).Trim();
         }
 
         public static HtmlNode? GetConstructButton(HtmlDocument doc, BuildingEnums building)

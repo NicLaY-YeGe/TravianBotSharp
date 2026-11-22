@@ -31,10 +31,10 @@
 
         private static IEnumerable<BuildingDto> GetBuildings(string url, HtmlDocument html)
         {
-            if (url.Contains("dorf1"))
+            if (TravianUrl.IsDorf1(url))
                 return BuildingLayoutParser.GetFields(html);
 
-            if (url.Contains("dorf2"))
+            if (TravianUrl.IsDorf2(url))
                 return BuildingLayoutParser.GetInfrastructures(html);
 
             return [];

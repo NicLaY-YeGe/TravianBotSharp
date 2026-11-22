@@ -84,6 +84,23 @@ namespace MainCore.Parsers
             return true;
         }
 
+        // True once the page shows the "Merchants: free/total" line. The marketplace content is
+        // rendered by the page's script AFTER the tab bar is there, so right after a tab switch the
+        // line can be missing for a moment - GetFreeMerchants then returns 0, which looks exactly
+        // like "no free merchants" (live log 2026-10-25: the same village said "no free merchants"
+        // 11 s after it had sent 4 of 7 merchants' worth). Callers that must tell the two apart wait for this.
+        public static bool HasMerchantInfo(HtmlDocument doc)
+        {
+            var node = doc.DocumentNode
+                .Descendants("div")
+                .FirstOrDefault(x => x.HasClass("merchantsInformation"))
+                ?.Descendants("div")
+                .FirstOrDefault(x => x.HasClass("available"))
+                ?.Descendants("span")
+                .FirstOrDefault(x => x.HasClass("value"));
+            return node is not null && node.InnerText.Contains('/');
+        }
+
         // Free merchants currently available in THIS village, out of the total merchant slots.
         // Shown near the top of the page as "Satici: <free>/<total>" (label text is localized).
         public static int GetFreeMerchants(HtmlDocument doc)
@@ -103,6 +120,28 @@ namespace MainCore.Parsers
 
             var free = parts[0].ParseInt();
             return free < 0 ? 0 : free;
+        }
+
+        // 2026-11-11 (village overview): free AND total merchants of the "free/total" line, null when the line is missing or
+        // unreadable - unlike GetFreeMerchants (0 = "none free" and "not found" look the same) the caller can tell them apart.
+        public static (int Free, int Total)? GetMerchantCounts(HtmlDocument doc)
+        {
+            var node = doc.DocumentNode
+                .Descendants("div")
+                .FirstOrDefault(x => x.HasClass("merchantsInformation"))
+                ?.Descendants("div")
+                .FirstOrDefault(x => x.HasClass("available"))
+                ?.Descendants("span")
+                .FirstOrDefault(x => x.HasClass("value"));
+            if (node is null) return null;
+
+            var parts = node.InnerText.Split('/');
+            if (parts.Length != 2) return null;
+
+            var free = parts[0].ParseInt();
+            var total = parts[1].ParseInt();
+            if (free < 0 || total < 0 || free > total) return null;
+            return (free, total);
         }
 
         // How much resource a single merchant can carry.

@@ -1,4 +1,5 @@
-﻿using MainCore.Commands.Features.UseHeroItem;
+﻿using MainCore.Commands.Features.Scheduling;
+using MainCore.Commands.Features.UseHeroItem;
 
 namespace MainCore.Commands.Features.UpgradeBuilding
 {
@@ -28,6 +29,9 @@ namespace MainCore.Commands.Features.UpgradeBuilding
             await updateStorageCommand.HandleAsync(new(accountId, villageId), cancellationToken);
 
             var requiredResource = GetRequiredResource(browser, plan.Type);
+
+            // 2026-11-07: troop training reads this to keep the construction reserve (ConstructionReserveRules).
+            if (requiredResource.Take(4).Any(x => x > 0)) ConstructionNeed.SetCost(villageId, requiredResource);
 
             var result = await validateEnoughResourceCommand.HandleAsync(new(villageId, requiredResource), cancellationToken);
             if (!result.IsFailed) return Result.Ok();

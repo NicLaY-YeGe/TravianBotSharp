@@ -1,0 +1,69 @@
+<v:VillageOverviewTabBase
+    x:Class="WPFUI.Views.Tabs.VillageOverviewTab"
+    xmlns:v="clr-namespace:WPFUI.Views.Tabs"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    mc:Ignorable="d"
+    d:DesignHeight="650" d:DesignWidth="1200">
+    <Grid Background="#FFE5E5E5" Margin="5">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Buttons + status -->
+        <Border Style="{DynamicResource Box}" Grid.Row="0" Padding="10">
+            <StackPanel Orientation="Horizontal">
+                <Button x:Name="ReadButton" Content="Read from game" ToolTip="Opens the Rally Point, Marketplace and the training buildings of every village (the account has to be online)." />
+                <Button x:Name="ReloadButton" Content="Reload table" Margin="10,0,0,0" />
+                <TextBlock x:Name="StatusText" VerticalAlignment="Center" Margin="15,0,0,0" FontStyle="Italic" />
+            </StackPanel>
+        </Border>
+
+        <!-- One row per village. Resources, Smithy and Celebration are always current; troops, merchants and the
+             training queues show what the bot saw last ("?" = not read since the app started). -->
+        <Border Style="{DynamicResource Box}" Grid.Row="1" Margin="0,5,0,0" Padding="10">
+            <DataGrid x:Name="RowsGrid"
+                      AutoGenerateColumns="False"
+                      IsReadOnly="True"
+                      CanUserAddRows="False"
+                      CanUserDeleteRows="False"
+                      HeadersVisibility="Column"
+                      GridLinesVisibility="Horizontal"
+                      SelectionMode="Single"
+                      SelectionUnit="FullRow"
+                      Foreground="Black"
+                      Background="White"
+                      HorizontalScrollBarVisibility="Auto"
+                      VerticalScrollBarVisibility="Auto">
+                <DataGrid.Resources>
+                    <Style x:Key="WrapText" TargetType="TextBlock">
+                        <Setter Property="TextWrapping" Value="Wrap" />
+                        <Setter Property="Margin" Value="4,2" />
+                    </Style>
+                </DataGrid.Resources>
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Village" Binding="{Binding Name}" ElementStyle="{StaticResource WrapText}" Width="130" />
+                    <DataGridTextColumn Header="Wood" Binding="{Binding Wood}" ElementStyle="{StaticResource WrapText}" Width="100" />
+                    <DataGridTextColumn Header="Clay" Binding="{Binding Clay}" ElementStyle="{StaticResource WrapText}" Width="100" />
+                    <DataGridTextColumn Header="Iron" Binding="{Binding Iron}" ElementStyle="{StaticResource WrapText}" Width="100" />
+                    <DataGridTextColumn Header="Crop" Binding="{Binding Crop}" ElementStyle="{StaticResource WrapText}" Width="100" />
+                    <DataGridTextColumn Header="Crop /h" Binding="{Binding CropBalance}" ElementStyle="{StaticResource WrapText}" Width="70" />
+                    <DataGridTextColumn Header="Construction" Binding="{Binding Construction}" ElementStyle="{StaticResource WrapText}" Width="190" />
+                    <DataGridTextColumn Header="Troops at home" Binding="{Binding Troops}" ElementStyle="{StaticResource WrapText}" Width="220" />
+                    <DataGridTextColumn Header="Reinforcements here (own villages)" Binding="{Binding Reinforcements}" ElementStyle="{StaticResource WrapText}" Width="150" />
+                    <DataGridTextColumn Header="Troops outside (away, returning, stationed)" Binding="{Binding Outside}" ElementStyle="{StaticResource WrapText}" Width="220" />
+                    <DataGridTextColumn Header="Troops read" Binding="{Binding TroopsRead}" ElementStyle="{StaticResource WrapText}" Width="80" />
+                    <DataGridTextColumn Header="Merchants" Binding="{Binding Merchants}" ElementStyle="{StaticResource WrapText}" Width="150" />
+                    <DataGridTextColumn Header="Barracks" Binding="{Binding Barracks}" ElementStyle="{StaticResource WrapText}" Width="130" />
+                    <DataGridTextColumn Header="Stable" Binding="{Binding Stable}" ElementStyle="{StaticResource WrapText}" Width="130" />
+                    <DataGridTextColumn Header="Workshop" Binding="{Binding Workshop}" ElementStyle="{StaticResource WrapText}" Width="130" />
+                    <DataGridTextColumn Header="Smithy" Binding="{Binding Smithy}" ElementStyle="{StaticResource WrapText}" Width="130" />
+                    <DataGridTextColumn Header="Celebration" Binding="{Binding Celebration}" ElementStyle="{StaticResource WrapText}" Width="130" />
+                </DataGrid.Columns>
+            </DataGrid>
+        </Border>
+    </Grid>
+</v:VillageOverviewTabBase>
