@@ -113,7 +113,7 @@ namespace MainCore.Commands.Features.UpgradeBuilding
                 return plan;
             }
 
-            return Result.Fail("No job behind the first one can be paid for right now.");
+            return Result.Fail(new NoAffordableBuildError());
         }
 
         private static bool IsEligibleField(ResourcePlanEnums plan, BuildingEnums type) => plan switch

@@ -25,7 +25,7 @@
                     // problems; they were logged twice as warnings after every upgrade (86 lines in 11 h).
                     // 2026-11-22: a plain "Don't have enough <resource>" (MissingResource, 127 warnings in 6 h) is the same kind of
                     // expected wait; the owning task decides what happens next.
-                    if (response.Errors.Count > 0 && response.Errors.All(e => e is MainCore.Errors.NextExecuteError || e is MainCore.Errors.MissingResource))
+                    if (response.Errors.Count > 0 && response.Errors.All(e => e is MainCore.Errors.NextExecuteError || e is MainCore.Errors.MissingResource || e is MainCore.Errors.NoAffordableBuildError))
                     {
                         _logger.Information("{Message}", message);
                     }

@@ -41,6 +41,9 @@ namespace MainCore.Tasks
     // 2026-11-20 / 2026-11-21). The handler now decides itself (TemplateApplyRules): not scanned yet -> queue the building scan,
     // look again in 45 s (at most 40 times), then apply; setting off / village already has jobs -> nothing to do.
     //
+    // 2026-11-23: the same guard also has to wait for the resource fields (dorf1, locations 1-18): village 47823 had its centre scanned
+    // but 0 field rows, so 39 of 66 jobs (every field job) were left out. TemplateApplyRules.Decide takes both flags now.
+    //
     // Was hardcoded always-on with no enable/disable setting by design (2026-08-15 decision).
     // 2026-09-12: made opt-out via VillageSettingEnums.AutoApplyBuildTemplateEnable (default
     // ON, so existing behavior is unchanged unless someone explicitly turns it off).
@@ -81,7 +84,9 @@ namespace MainCore.Tasks
 
             var alreadyHasJobs = context.Jobs.Any(x => x.VillageId == villageId.Value);
             var wallLocationScanned = context.Buildings.Any(x => x.VillageId == villageId.Value && x.Location == 40);
-            return TemplateApplyRules.Decide(enabled, alreadyHasJobs, wallLocationScanned, waitsSoFar);
+            // 2026-11-23: dorf1 is scanned separately from dorf2 - the field rows (1-18) must be there too, or every field job is dropped.
+            var fieldRows = context.Buildings.Count(x => x.VillageId == villageId.Value && x.Location >= 1 && x.Location <= 18);
+            return TemplateApplyRules.Decide(enabled, alreadyHasJobs, wallLocationScanned, TemplateApplyRules.FieldsScanned(fieldRows), waitsSoFar);
         }
 
         private static async ValueTask<Result> HandleAsync(
@@ -100,7 +105,7 @@ namespace MainCore.Tasks
 
                 case TemplateApplyRules.Decision.GiveUp:
                     logger.Warning(
-                        "Default build template for village {VillageId}: the village centre was still not scanned after {Waits} looks - the template was NOT applied (import it by hand).",
+                        "Default build template for village {VillageId}: the village (centre or resource fields) was still not scanned after {Waits} looks - the template was NOT applied (import it by hand).",
                         task.VillageId, task.Waits);
                     return Result.Ok();
 
@@ -113,7 +118,7 @@ namespace MainCore.Tasks
                     task.ExecuteAt = DateTime.Now.Add(TemplateApplyRules.WaitInterval);
                     if (task.Waits == 1)
                     {
-                        logger.Information("Default build template for village {VillageId}: the village centre is not scanned yet - scanning it and looking again.", task.VillageId);
+                        logger.Information("Default build template for village {VillageId}: the village centre or its resource fields are not scanned yet - scanning them and looking again.", task.VillageId);
                     }
                     // ExecuteAt moved, so the task stays in the queue (an unchanged ExecuteAt would drop it).
                     return Skip.Error;
