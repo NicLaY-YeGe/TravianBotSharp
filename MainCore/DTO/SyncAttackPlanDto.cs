@@ -21,5 +21,8 @@ namespace MainCore.DTO
         SyncAttackArrivalModeEnums ArrivalMode,
         DateTime? DesiredArrivalTime,
         IReadOnlyList<SyncAttackVillageOrder> Villages,
-        WakeWindowOptions? Wake = null);
+        WakeWindowOptions? Wake = null,
+        // 2026-11-08: catapult target (CatapultTargetEnums value, 0 = game default/Random), applied
+        // to every village's send; a village that sends no catapults simply has no drop-down.
+        int CatapultTarget = 0);
 }

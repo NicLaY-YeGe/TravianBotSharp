@@ -1,3 +1,4 @@
+using MainCore.Commands.Features.UpgradeBuilding;
 using MainCore.Commands.UI.Villages.BuildViewModel;
 using MainCore.Tasks.Base;
 
@@ -35,6 +36,14 @@ namespace MainCore.Tasks
     // location 40 for every wall-type job in the template, so we wait for that specific
     // location rather than "any row at all" (2026-08-25 fix - see CHANGELOG).
     //
+    // 2026-11-21: the wait described above did NOT happen: CanStart was never called for this task (the task is queued with
+    // AddOrUpdate and runs at once), so it ran with 18 field rows and no centre row and left out all 28 centre jobs (live logs
+    // 2026-11-20 / 2026-11-21). The handler now decides itself (TemplateApplyRules): not scanned yet -> queue the building scan,
+    // look again in 45 s (at most 40 times), then apply; setting off / village already has jobs -> nothing to do.
+    //
+    // 2026-11-23: the same guard also has to wait for the resource fields (dorf1, locations 1-18): village 47823 had its centre scanned
+    // but 0 field rows, so 39 of 66 jobs (every field job) were left out. TemplateApplyRules.Decide takes both flags now.
+    //
     // Was hardcoded always-on with no enable/disable setting by design (2026-08-15 decision).
     // 2026-09-12: made opt-out via VillageSettingEnums.AutoApplyBuildTemplateEnable (default
     // ON, so existing behavior is unchanged unless someone explicitly turns it off).
@@ -52,36 +61,69 @@ namespace MainCore.Tasks
 
             protected override string TaskName => "Apply default build template";
 
-            public override bool CanStart(AppDbContext context)
+            // How often this run has already waited for the village centre to be scanned (see TemplateApplyRules).
+            public int Waits { get; set; }
+
+            public override bool CanStart(AppDbContext context) => Decide(context, VillageId, 0) == TemplateApplyRules.Decision.Apply;
+        }
+
+        private static TemplateApplyRules.Decision Decide(AppDbContext context, VillageId villageId, int waitsSoFar)
+        {
+            // A village that has never explicitly saved this setting has no row for it at
+            // all - GetValueOrDefault/BooleanByName would silently read that as "disabled",
+            // which is backwards for an opt-OUT toggle meant to leave every existing
+            // village's behavior unchanged. Only treat it as disabled when a row genuinely
+            // says so.
+            var enabled = true;
+            var hasExplicitSetting = context.VillagesSetting.Any(x =>
+                x.VillageId == villageId.Value && x.Setting == VillageSettingEnums.AutoApplyBuildTemplateEnable);
+            if (hasExplicitSetting)
             {
-                // A village that has never explicitly saved this setting has no row for it at
-                // all - GetValueOrDefault/BooleanByName would silently read that as "disabled",
-                // which is backwards for an opt-OUT toggle meant to leave every existing
-                // village's behavior unchanged. Only treat it as disabled when a row genuinely
-                // says so.
-                var hasExplicitSetting = context.VillagesSetting.Any(x =>
-                    x.VillageId == VillageId.Value && x.Setting == VillageSettingEnums.AutoApplyBuildTemplateEnable);
-                if (hasExplicitSetting)
-                {
-                    var enabled = context.BooleanByName(VillageId, VillageSettingEnums.AutoApplyBuildTemplateEnable);
-                    if (!enabled) return false;
-                }
-
-                var alreadyHasJobs = context.Jobs.Any(x => x.VillageId == VillageId.Value);
-                if (alreadyHasJobs) return false;
-
-                var wallLocationScanned = context.Buildings.Any(x => x.VillageId == VillageId.Value && x.Location == 40);
-                return wallLocationScanned;
+                enabled = context.BooleanByName(villageId, VillageSettingEnums.AutoApplyBuildTemplateEnable);
             }
+
+            var alreadyHasJobs = context.Jobs.Any(x => x.VillageId == villageId.Value);
+            var wallLocationScanned = context.Buildings.Any(x => x.VillageId == villageId.Value && x.Location == 40);
+            // 2026-11-23: dorf1 is scanned separately from dorf2 - the field rows (1-18) must be there too, or every field job is dropped.
+            var fieldRows = context.Buildings.Count(x => x.VillageId == villageId.Value && x.Location >= 1 && x.Location <= 18);
+            return TemplateApplyRules.Decide(enabled, alreadyHasJobs, wallLocationScanned, TemplateApplyRules.FieldsScanned(fieldRows), waitsSoFar);
         }
 
         private static async ValueTask<Result> HandleAsync(
             Task task,
             AppDbContext context,
             FixJobsCommand.Handler fixJobsCommand,
+            ITaskManager taskManager,
+            IRxQueue rxQueue,
             ILogger logger,
             CancellationToken cancellationToken)
         {
+            switch (Decide(context, task.VillageId, task.Waits))
+            {
+                case TemplateApplyRules.Decision.Done:
+                    return Result.Ok();
+
+                case TemplateApplyRules.Decision.GiveUp:
+                    logger.Warning(
+                        "Default build template for village {VillageId}: the village (centre or resource fields) was still not scanned after {Waits} looks - the template was NOT applied (import it by hand).",
+                        task.VillageId, task.Waits);
+                    return Result.Ok();
+
+                case TemplateApplyRules.Decision.WaitForScan:
+                    task.Waits++;
+                    if (!taskManager.IsExist<UpdateBuildingTask.Task>(task.AccountId, task.VillageId))
+                    {
+                        taskManager.AddOrUpdate<UpdateBuildingTask.Task>(new(task.AccountId, task.VillageId));
+                    }
+                    task.ExecuteAt = DateTime.Now.Add(TemplateApplyRules.WaitInterval);
+                    if (task.Waits == 1)
+                    {
+                        logger.Information("Default build template for village {VillageId}: the village centre or its resource fields are not scanned yet - scanning them and looking again.", task.VillageId);
+                    }
+                    // ExecuteAt moved, so the task stays in the queue (an unchanged ExecuteAt would drop it).
+                    return Skip.Error;
+            }
+
             var template = DefaultBuildTemplate.Get();
             if (template.Count == 0)
             {
@@ -113,6 +155,15 @@ namespace MainCore.Tasks
             logger.Information(
                 "Applied default build template to newly founded village {VillageId}: {Count}/{Total} jobs matched the village's layout.",
                 task.VillageId, additionJobs.Count, template.Count);
+
+            // 2026-11-07: the jobs above go straight into the database. Nothing queued Upgrade building for this village
+            // (the account-init scan only sees villages that already had jobs at login; JobsModified is handled by a view
+            // model), so a village founded during a session kept its whole template waiting until the next login/Restart.
+            if (additionJobs.Count > 0)
+            {
+                taskManager.AddOrUpdate<UpgradeBuildingTask.Task>(new(task.AccountId, task.VillageId));
+                rxQueue.Enqueue(new JobsModified(task.VillageId));
+            }
 
             return Result.Ok();
         }

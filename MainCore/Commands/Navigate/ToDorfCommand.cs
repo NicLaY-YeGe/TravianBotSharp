@@ -33,7 +33,7 @@
             result = await browser.Click(element, cancellationToken);
             if (result.IsFailed) return result;
 
-            result = await browser.WaitPageChanged($"dorf{dorf}.php", cancellationToken);
+            result = await browser.WaitPageChanged(url => dorf == 1 ? TravianUrl.IsDorf1(url) : TravianUrl.IsDorf2(url), $"dorf{dorf}", cancellationToken);
             if (result.IsFailed) return result;
 
             return Result.Ok();
@@ -41,8 +41,8 @@
 
         private static int GetCurrentDorf(string url)
         {
-            if (url.Contains("dorf1")) return 1;
-            if (url.Contains("dorf2")) return 2;
+            if (TravianUrl.IsDorf1(url)) return 1;
+            if (TravianUrl.IsDorf2(url)) return 2;
             return 0;
         }
     }

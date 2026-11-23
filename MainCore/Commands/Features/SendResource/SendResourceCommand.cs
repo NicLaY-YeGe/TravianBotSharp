@@ -45,9 +45,22 @@ namespace MainCore.Commands.Features.SendResource
             return Skip.Error.WithError(message);
         }
 
+        // 2026-11-04 (live log 02:48:28, CLAUDE.md rule 2 / TODO P0): every element used to be found through the raw,
+        // purely positional HtmlNode.XPath ("/html[1]/body[1]/div[3]/..."). Live: ClearAllResourceInputs waited 30 s on
+        // such a locator and threw, because the page had changed under it. The inputs carry stable `name` attributes
+        // (lumber/clay/iron/crop/x/y), so they and the send button are found by CSS, scoped to the marketplace
+        // container when the page has it (the parser falls back to any form with x and y inputs otherwise).
+        private static string Scope(HtmlDocument doc) => SendResourceParser.GetContainer(doc) is null ? "" : "#marketplaceSendResources ";
+
+        private static By InputByName(HtmlDocument doc, string name) => By.CssSelector($"{Scope(doc)}form input[name=\"{name}\"]");
+
+        private static By ResourceInput(HtmlDocument doc, string resourceType) => InputByName(doc, resourceType == "wood" ? "lumber" : resourceType);
+
+        private static string SendButtonCss(HtmlDocument doc) => $"{Scope(doc)}form button[type=\"submit\"].send";
+
         // Polls for an element without the browser-wide 3 minute wait. requireInteractable=false
         // is for read-only checks (an input that is hidden/disabled still has a readable value).
-        private static async Task<IWebElement?> FindElement(IChromeBrowser browser, string xpath, int seconds, bool requireInteractable, CancellationToken cancellationToken)
+        private static async Task<IWebElement?> FindElement(IChromeBrowser browser, By by, int seconds, bool requireInteractable, CancellationToken cancellationToken)
         {
             var driver = browser.Driver;
             if (driver is null) return null;
@@ -58,14 +71,14 @@ namespace MainCore.Commands.Features.SendResource
                 cancellationToken.ThrowIfCancellationRequested();
                 try
                 {
-                    var elements = driver.FindElements(By.XPath(xpath));
+                    var elements = driver.FindElements(by);
                     if (elements.Count > 0)
                     {
                         var element = elements[0];
                         if (!requireInteractable || (element.Displayed && element.Enabled)) return element;
                     }
                 }
-                catch (StaleElementReferenceException)
+                catch (BrowserException)
                 {
                     // page re-rendered between lookup and check - just look again
                 }
@@ -200,7 +213,8 @@ namespace MainCore.Commands.Features.SendResource
                 // Don't require the input to be usable: Travian can render a resource's input
                 // hidden/disabled (e.g. nothing of it to send), and waiting for that to become
                 // interactable is what stalled the bot for 3 minutes. Nothing to clear there.
-                var element = await FindElement(browser, node.XPath, 0, requireInteractable: false, cancellationToken);
+                var by = ResourceInput(browser.Html, resourceType);
+                var element = await FindElement(browser, by, 0, requireInteractable: false, cancellationToken);
                 if (element is null) continue;
 
                 var current = (element.GetAttribute("value") ?? "0").ParseLong();
@@ -208,11 +222,11 @@ namespace MainCore.Commands.Features.SendResource
 
                 if (!element.Displayed || !element.Enabled)
                 {
-                    return FormFailure(logger, command, $"clear {resourceType}", $"input holds {current} but is not interactable ({node.XPath})");
+                    return FormFailure(logger, command, $"clear {resourceType}", $"input holds {current} but is not interactable ({by})");
                 }
 
                 var result = await browser.Input(element, "0", cancellationToken);
-                if (result.IsFailed) return FormFailure(logger, command, $"clear {resourceType}", $"typing failed ({node.XPath})");
+                if (result.IsFailed) return FormFailure(logger, command, $"clear {resourceType}", $"typing failed ({by})");
             }
 
             return Result.Ok();
@@ -227,11 +241,12 @@ namespace MainCore.Commands.Features.SendResource
 
                 var intended = amounts.GetValueOrDefault(resourceType, 0);
 
-                var element = await FindElement(browser, node.XPath, 0, requireInteractable: false, cancellationToken);
+                var by = ResourceInput(browser.Html, resourceType);
+                var element = await FindElement(browser, by, 0, requireInteractable: false, cancellationToken);
                 if (element is null)
                 {
                     // An input we meant to fill must exist; one we didn't touch just isn't there to hold a value.
-                    if (intended > 0) return FormFailure(logger, command, $"verify {resourceType}", $"input not found ({node.XPath})");
+                    if (intended > 0) return FormFailure(logger, command, $"verify {resourceType}", $"input not found ({by})");
                     continue;
                 }
 
@@ -256,8 +271,9 @@ namespace MainCore.Commands.Features.SendResource
             var xNode = SendResourceParser.GetXInput(browser.Html);
             if (xNode is null) return FormFailure(logger, command, "coordinates", "X input not in page");
 
-            var xElement = await FindElement(browser, xNode.XPath, ElementWaitSeconds, requireInteractable: true, cancellationToken);
-            if (xElement is null) return FormFailure(logger, command, "coordinates", $"X input not usable ({xNode.XPath})");
+            var xBy = InputByName(browser.Html, "x");
+            var xElement = await FindElement(browser, xBy, ElementWaitSeconds, requireInteractable: true, cancellationToken);
+            if (xElement is null) return FormFailure(logger, command, "coordinates", $"X input not usable ({xBy})");
 
             var result = await browser.Input(xElement, $"{x}", cancellationToken);
             if (result.IsFailed) return FormFailure(logger, command, "coordinates", "typing X failed");
@@ -265,8 +281,9 @@ namespace MainCore.Commands.Features.SendResource
             var yNode = SendResourceParser.GetYInput(browser.Html);
             if (yNode is null) return FormFailure(logger, command, "coordinates", "Y input not in page");
 
-            var yElement = await FindElement(browser, yNode.XPath, ElementWaitSeconds, requireInteractable: true, cancellationToken);
-            if (yElement is null) return FormFailure(logger, command, "coordinates", $"Y input not usable ({yNode.XPath})");
+            var yBy = InputByName(browser.Html, "y");
+            var yElement = await FindElement(browser, yBy, ElementWaitSeconds, requireInteractable: true, cancellationToken);
+            if (yElement is null) return FormFailure(logger, command, "coordinates", $"Y input not usable ({yBy})");
 
             result = await browser.Input(yElement, $"{y}", cancellationToken);
             return result.IsFailed ? FormFailure(logger, command, "coordinates", "typing Y failed") : result;
@@ -279,8 +296,9 @@ namespace MainCore.Commands.Features.SendResource
             var node = SendResourceParser.GetResourceInput(browser.Html, resourceType);
             if (node is null) return FormFailure(logger, command, step, "input not in page");
 
-            var element = await FindElement(browser, node.XPath, ElementWaitSeconds, requireInteractable: true, cancellationToken);
-            if (element is null) return FormFailure(logger, command, step, $"input not displayed/enabled within {ElementWaitSeconds}s ({node.XPath})");
+            var by = ResourceInput(browser.Html, resourceType);
+            var element = await FindElement(browser, by, ElementWaitSeconds, requireInteractable: true, cancellationToken);
+            if (element is null) return FormFailure(logger, command, step, $"input not displayed/enabled within {ElementWaitSeconds}s ({by})");
 
             var result = await browser.Input(element, $"{amount}", cancellationToken);
             return result.IsFailed ? FormFailure(logger, command, step, "typing failed") : result;
@@ -311,12 +329,13 @@ namespace MainCore.Commands.Features.SendResource
             var node = SendResourceParser.GetSendButton(browser.Html);
             if (node is null) return FormFailure(logger, command, "click send", "send button not in page");
 
-            var element = await FindElement(browser, node.XPath, ElementWaitSeconds, requireInteractable: true, cancellationToken);
-            if (element is null) return FormFailure(logger, command, "click send", $"send button not usable ({node.XPath})");
+            var css = SendButtonCss(browser.Html);
+            var element = await FindElement(browser, By.CssSelector(css), ElementWaitSeconds, requireInteractable: true, cancellationToken);
+            if (element is null) return FormFailure(logger, command, "click send", $"send button not usable ({css})");
 
             // Bring the button to the middle of the viewport first so nothing (bottom bar, cookie
             // icon) overlaps it, then click.
-            await browser.ExecuteJsScript(ScrollIntoViewScript(node.XPath));
+            await browser.ExecuteJsScript(ScrollIntoViewScript(css));
             var result = await browser.Click(element, cancellationToken);
             return result.IsFailed ? FormFailure(logger, command, "click send", "click failed") : result;
         }
@@ -327,16 +346,17 @@ namespace MainCore.Commands.Features.SendResource
             var node = SendResourceParser.GetSendButton(browser.Html);
             if (node is null) return Skip.Error.WithError("Cannot find send button.");
 
-            var xpath = node.XPath.Replace("\\", "\\\\").Replace("\"", "\\\"");
+            var css = EscapeForScript(SendButtonCss(browser.Html));
             return await browser.ExecuteJsScript(
-                $"var el=document.evaluate(\"{xpath}\",document,null,XPathResult.FIRST_ORDERED_NODE_TYPE,null).singleNodeValue;" +
+                $"var el=document.querySelector(\"{css}\");" +
                 "if(el){el.scrollIntoView({block:'center'});el.click();}");
         }
 
-        private static string ScrollIntoViewScript(string xpathRaw)
+        private static string EscapeForScript(string value) => value.Replace("\\", "\\\\").Replace("\"", "\\\"");
+
+        private static string ScrollIntoViewScript(string css)
         {
-            var xpath = xpathRaw.Replace("\\", "\\\\").Replace("\"", "\\\"");
-            return $"var el=document.evaluate(\"{xpath}\",document,null,XPathResult.FIRST_ORDERED_NODE_TYPE,null).singleNodeValue;" +
+            return $"var el=document.querySelector(\"{EscapeForScript(css)}\");" +
                    "if(el){el.scrollIntoView({block:'center'});}";
         }
 
