@@ -169,6 +169,21 @@
                 }
             }
 
+            // 2026-11-24: Auto settle switched off = the village no longer asks siblings for resources. Reset its
+            // NeedExpansion* snapshot and drop the Supply-for-settle tasks already queued for it.
+            if (settings.TryGetValue(VillageSettingEnums.AutoSettleEnable, out var autoSettle) && autoSettle == 0)
+            {
+                SupplyForSettleTask.ClearNeed(context, villageId);
+                var queued = taskManager.GetTaskList(accountId)
+                    .OfType<SupplyForSettleTask.Task>()
+                    .Where(x => x.TargetVillageId == villageId)
+                    .ToList();
+                foreach (var supplyTask in queued)
+                {
+                    taskManager.Remove(accountId, supplyTask);
+                }
+            }
+
             if (settings.ContainsKey(VillageSettingEnums.AutoClaimQuestEnable))
             {
                 if (settings[VillageSettingEnums.AutoClaimQuestEnable] == 1)
