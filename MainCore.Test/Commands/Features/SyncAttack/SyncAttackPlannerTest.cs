@@ -1,5 +1,6 @@
 using MainCore.Commands.Features.SyncAttack;
 using MainCore.Enums;
+using MainCore.Entities;
 
 namespace MainCore.Test.Commands.Features.SyncAttack
 {

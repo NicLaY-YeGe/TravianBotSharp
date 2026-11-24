@@ -67,7 +67,7 @@ namespace MainCore.Commands.Navigate
                 }
             }
 
-            result = await browser.WaitPageChanged("build", cancellationToken);
+            result = await browser.WaitPageChanged(TravianUrl.IsBuilding, "building page", cancellationToken);
             if (result.IsFailed) return result;
 
             return Result.Ok();

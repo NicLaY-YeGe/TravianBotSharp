@@ -81,6 +81,13 @@ namespace MainCore.UI.ViewModels.Tabs.Villages
         [ReactiveCommand]
         public async Task JobsModified(JobsModified notification)
         {
+            // 2026-11-23: the build list changed (a job deleted, added, moved, imported). The memory-only cost of "the next building" and
+            // the "construction first" hold were read from the OLD first job and would keep troop training's reserve at that cost for up to
+            // 6 h (live: Hospital 20 deleted, the village still reserved 27225/23820/35730/30625 until the bot was restarted). Forget them;
+            // the Upgrade building run queued below reads the real first job and sets them again.
+            MainCore.Commands.Features.Scheduling.ConstructionNeed.Clear(notification.VillageId);
+            MainCore.Commands.Features.Scheduling.ConstructionHold.Clear(notification.VillageId);
+
             _taskManager.AddOrUpdate(new UpgradeBuildingTask.Task(AccountId, notification.VillageId));
 
             if (!IsActive) return;
@@ -458,7 +465,7 @@ namespace MainCore.UI.ViewModels.Tabs.Villages
                 return;
             }
 
-            var confirm = await _dialogService.ConfirmBox.Handle(new MessageBoxData("Warning", "TBS will remove resource field build job if its position doesn't match with current village."));
+            var confirm = await _dialogService.ConfirmBox.Handle(new MessageBoxData("Warning", "TBS pairs the resource field jobs with this village's fields by resource type (it does not matter which slot the list used). A job is left out only when the village has fewer fields of that type than the list uses."));
             if (!confirm) return;
 
             var shuffle = await _dialogService.ConfirmBox.Handle(new MessageBoxData("Warning", "Do you want to random building location?"));
