@@ -24,6 +24,12 @@ namespace MainCore.UI.ViewModels.Tabs
         // Repeat wave: the SAME small composition sent WaveCount times, GapSeconds apart.
         public ObservableCollection<SyncAttackTroopSlotItem> RepeatWaveSlots { get; } = new();
 
+        // 2026-11-08: catapult target for every wave of the plan (see WaveAttackPlan.CatapultTarget).
+        public List<CatapultTargetItem> CatapultTargets { get; } = CatapultTargetItem.All();
+
+        [Reactive]
+        private CatapultTargetItem _selectedCatapultTarget = null!;
+
         [Reactive]
         private WaveAttackVillageItem? _selectedVillage;
 
@@ -54,6 +60,7 @@ namespace MainCore.UI.ViewModels.Tabs
             _dialogService = dialogService;
             _serviceScopeFactory = serviceScopeFactory;
             _taskManager = taskManager;
+            SelectedCatapultTarget = CatapultTargets[0];
 
             LoadVillagesCommand.Subscribe(items =>
             {
@@ -159,7 +166,8 @@ namespace MainCore.UI.ViewModels.Tabs
                 MainWaveIncludeHero,
                 repeatAmounts,
                 waveCount,
-                gapSeconds);
+                gapSeconds,
+                (int)SelectedCatapultTarget.Target);
 
             var task = new WaveAttackPlanTask.Task(AccountId, SelectedVillage.VillageId, plan);
             _taskManager.Add(task, first: true);
