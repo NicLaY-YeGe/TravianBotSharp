@@ -1,3 +1,4 @@
+using MainCore.Commands.Features.Scheduling;
 using MainCore.Commands.Features.SendResource;
 using MainCore.Tasks.Base;
 
@@ -37,8 +38,9 @@ namespace MainCore.Tasks
                 if (source is null || hammer is null) return true; // unknown state: let the task look
                 var sourcePercent = context.ByName(VillageId, VillageSettingEnums.OverflowToHammerPercent);
                 var hammerCeiling = GetHammerCeilingPercent(context, hammerVillageId.Value);
+                var floor = GetOwnFloor(source, VillageId);
                 return overflowing.Any(r =>
-                    Math.Min(GetOverflowAmount(source, r, sourcePercent), ReceiveRoomRules.Room(GetCapacity(hammer, r), GetAmount(hammer, r), hammerCeiling))
+                    Math.Min(GetOverflowAmount(source, r, sourcePercent, floor), ReceiveRoomRules.Room(GetCapacity(hammer, r), GetAmount(hammer, r), hammerCeiling))
                     >= MerchantAmountRules.LoadPerMerchant);
             }
         }
@@ -105,10 +107,15 @@ namespace MainCore.Tasks
         // resources, and the hard cap on how much of it makes sense to send. 2026-11-17: the task still STARTS at the
         // overflow percent, but it drains DOWN TO `OverflowDrainRules.DrainMarginPercent` points below it (it used to send
         // only what stood above the threshold, so the village crossed it again within ~19 minutes).
-        private static long GetOverflowAmount(Storage storage, string resourceType, int overflowPercent)
+        // 2026-11-25: never into the cost of the village's own waiting build job (OutgoingFloorRules).
+        private static long GetOverflowAmount(Storage storage, string resourceType, int overflowPercent, long[] floor)
         {
-            return OverflowDrainRules.SendableAmount(GetCapacity(storage, resourceType), GetAmount(storage, resourceType), overflowPercent);
+            var surplus = OverflowDrainRules.SendableAmount(GetCapacity(storage, resourceType), GetAmount(storage, resourceType), overflowPercent);
+            return OutgoingFloorRules.Sendable(surplus, GetAmount(storage, resourceType), OutgoingFloorRules.FloorOf(floor, resourceType));
         }
+
+        private static long[] GetOwnFloor(Storage storage, VillageId villageId)
+            => OutgoingFloorRules.Floor(storage.Warehouse, storage.Granary, ConstructionNeed.GetWaiting(villageId));
 
         // 2026-10-25, user request: shipments are multiples of one merchant's load (750), rounded
         // DOWN (this is a surplus send - never more than asked). Was: nearest 100 with +/-3% jitter.
@@ -195,19 +202,25 @@ namespace MainCore.Tasks
             var sourceStorage = context.Storages.FirstOrDefault(x => x.VillageId == task.VillageId.Value);
             var hammerStorage = context.Storages.FirstOrDefault(x => x.VillageId == hammerVillage.Id);
             var hammerCeilingPercent = GetHammerCeilingPercent(context, hammerVillageId.Value);
+            var ownFloor = sourceStorage is null ? new long[4] : GetOwnFloor(sourceStorage, task.VillageId);
 
             var weights = new Dictionary<string, long>();
             var maxPerResource = new Dictionary<string, long>();
             foreach (var resource in overflowing)
             {
                 var room = hammerStorage is null ? long.MaxValue : ReceiveRoomRules.Room(GetCapacity(hammerStorage, resource), GetAmount(hammerStorage, resource), hammerCeilingPercent);
-                var overflowAmount = sourceStorage is null ? 0 : GetOverflowAmount(sourceStorage, resource, overflowPercent);
+                var overflowAmount = sourceStorage is null ? 0 : GetOverflowAmount(sourceStorage, resource, overflowPercent, ownFloor);
 
                 weights[resource] = overflowAmount;
                 maxPerResource[resource] = Math.Min(room, overflowAmount);
             }
 
             logger.Information("Overflow to hammer in {VillageId}: {Resources} at or above {Percent} %, draining down to {Target} %.", task.VillageId, string.Join("/", overflowing), overflowPercent, OverflowDrainRules.DrainTargetPercent(overflowPercent));
+
+            if (ownFloor.Any(x => x > 0))
+            {
+                logger.Information("Overflow to hammer in {VillageId}: keeping {Floor} (wood/clay/iron/crop) for the build job that waits for resources.", task.VillageId, string.Join("/", ownFloor));
+            }
 
             var amounts = DistributeProportionally(overflowing, weights, maxPerResource, totalToSend);
             if (amounts.Values.Sum() <= 0)

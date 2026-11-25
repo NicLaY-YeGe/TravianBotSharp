@@ -122,6 +122,7 @@ namespace MainCore.Tasks
 
                 logger.Information("Build {Type} to level {Level} at location {Location}", plan.Type, plan.Level, plan.Location);
                 ConstructionNeed.ClearSlotBusy(task.VillageId);
+                if (!isBypass) ConstructionNeed.ClearWaiting(task.VillageId);
 
                 // 2026-11-21: a plan taken from behind the first job did not pass GetBuildPlanCommand, which is what brings the browser to
                 // the village page. The browser still stood on the first job's build page, ToBuildingByLocation found no link for the
@@ -237,6 +238,15 @@ namespace MainCore.Tasks
                         // "Construction first" village setting: troops of this village wait until then - not for a
                         // crop-blocked plan, which resources cannot unblock.
                         if (!cropBlocked) ConstructionHold.Set(task.VillageId, task.ExecuteAt);
+
+                        // 2026-11-25: remember what the FIRST job is waiting for, so Overflow to hammer / Balance do not ship it away
+                        // (live log 2026-11-25: village 33411 exported 44k wood while its job waited 5 h for 16870 wood). Not for an
+                        // out-of-order candidate (its cost is not the waiting job's), not for a crop-blocked plan.
+                        if (!cropBlocked && !isBypass)
+                        {
+                            var waitingCost = ConstructionNeed.GetCost(task.VillageId);
+                            if (waitingCost is not null) ConstructionNeed.SetWaiting(task.VillageId, waitingCost, task.ExecuteAt);
+                        }
 
                         // 2026-11-22: a known shortage with a set next look is a planned wait (TimerManager logs it as Information
                         // "Task X waits: ..."). A crop-blocked plan keeps the Warning path above.

@@ -1,3 +1,4 @@
+using MainCore.Commands.Features.Scheduling;
 using MainCore.Commands.Features.SendResource;
 using MainCore.Commands.UI.Misc;
 using MainCore.Tasks.Base;
@@ -53,14 +54,15 @@ namespace MainCore.Tasks
         // How much of this resource is spare to send away, i.e. the amount above the
         // "drain down to X%" level - NOT the whole warehouse. This is what stops the bot
         // from emptying the source village completely.
-        private static long GetSourceSurplus(Storage storage, string resourceType, int targetPercent)
+        // 2026-11-25: and never into the cost of the village's own waiting build job (OutgoingFloorRules).
+        private static long GetSourceSurplus(Storage storage, string resourceType, int targetPercent, long[] floor)
         {
             var capacity = GetCapacity(storage, resourceType);
             if (capacity <= 0) return 0;
 
             var downTo = capacity * targetPercent / 100;
             var current = GetAmount(storage, resourceType);
-            return Math.Max(0, current - downTo);
+            return OutgoingFloorRules.Sendable(Math.Max(0, current - downTo), current, OutgoingFloorRules.FloorOf(floor, resourceType));
         }
 
         // Resource types currently at/above the overflow threshold, most-full first.
@@ -235,12 +237,20 @@ namespace MainCore.Tasks
             var targetPercent = context.ByName(task.VillageId, VillageSettingEnums.AutoBalanceTargetPercent);
             var receiverCeilingPercent = GetReceiverCeilingPercent(context, task.AccountId, targetId.Value);
 
+            var ownFloor = sourceStorage is null
+                ? new long[4]
+                : OutgoingFloorRules.Floor(sourceStorage.Warehouse, sourceStorage.Granary, ConstructionNeed.GetWaiting(task.VillageId));
+            if (ownFloor.Any(x => x > 0))
+            {
+                logger.Information("Balance resources in {VillageId}: keeping {Floor} (wood/clay/iron/crop) for the build job that waits for resources.", task.VillageId, string.Join("/", ownFloor));
+            }
+
             var weights = new Dictionary<string, long>();
             var maxPerResource = new Dictionary<string, long>();
             foreach (var resource in overflowing)
             {
                 var room = targetStorage is null ? long.MaxValue : ReceiveRoomRules.Room(GetCapacity(targetStorage, resource), GetAmount(targetStorage, resource), receiverCeilingPercent);
-                var surplus = sourceStorage is null ? 0 : GetSourceSurplus(sourceStorage, resource, targetPercent);
+                var surplus = sourceStorage is null ? 0 : GetSourceSurplus(sourceStorage, resource, targetPercent, ownFloor);
 
                 weights[resource] = surplus;
                 maxPerResource[resource] = Math.Min(room, surplus);

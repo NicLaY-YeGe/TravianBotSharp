@@ -31,6 +31,33 @@ namespace MainCore.Commands.Features.Scheduling
             return entry.Cost;
         }
 
+        // 2026-11-25: the cost of the job UpgradeBuildingTask is WAITING for (resources missing), valid until the planned
+        // next look plus a grace period. Unlike GetCost it is not set for a job that was just built, so a shipping task
+        // (Overflow to hammer, Balance) can keep exactly this much without a stale floor. Self-expiring.
+        public const int WaitingGraceMinutes = 20;
+
+        private sealed record WaitEntry(long[] Cost, DateTime Until);
+
+        private static readonly ConcurrentDictionary<int, WaitEntry> Waiting = new();
+
+        public static void SetWaiting(VillageId villageId, long[] cost, DateTime nextLook)
+        {
+            if (cost is null || cost.Length < 4 || !cost.Take(4).Any(x => x > 0)) return;
+            Waiting[villageId.Value] = new WaitEntry([cost[0], cost[1], cost[2], cost[3]], nextLook.AddMinutes(WaitingGraceMinutes));
+        }
+
+        public static long[]? GetWaiting(VillageId villageId)
+        {
+            if (!Waiting.TryGetValue(villageId.Value, out var entry)) return null;
+            if (entry.Until < DateTime.Now) return null;
+            return entry.Cost;
+        }
+
+        public static void ClearWaiting(VillageId villageId)
+        {
+            Waiting.TryRemove(villageId.Value, out _);
+        }
+
         public static void SetSlotBusyUntil(VillageId villageId, DateTime until)
         {
             BusyUntil[villageId.Value] = until;
@@ -53,6 +80,7 @@ namespace MainCore.Commands.Features.Scheduling
         {
             Costs.TryRemove(villageId.Value, out _);
             BusyUntil.TryRemove(villageId.Value, out _);
+            Waiting.TryRemove(villageId.Value, out _);
         }
     }
 }

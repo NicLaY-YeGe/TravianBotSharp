@@ -111,3 +111,5 @@ MainCore.Test/Commands/Features/UpgradeBuilding/ResourceFieldMapRulesTest.cs
 MainCore.Test/Commands/Features/UpgradeBuilding/FlexibleBuildRulesTest.cs
 MainCore/Commands/Features/UpgradeBuilding/TemplateApplyRules.cs
 MainCore.Test/Commands/Features/UpgradeBuilding/TemplateApplyRulesTest.cs
+MainCore/Commands/Features/SendResource/OutgoingFloorRules.cs
+MainCore.Test/Commands/Features/SendResource/OutgoingFloorRulesTest.cs
