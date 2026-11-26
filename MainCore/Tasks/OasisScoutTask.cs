@@ -114,8 +114,24 @@ namespace MainCore.Tasks
             var coordinates = SurroundingReportParser.GetUniqueOasisCoordinates(browser.Html, maxDistance);
             if (coordinates.Count == 0)
             {
-                logger.Information("Oasis scout: no oasis reports within {MaxDistance} fields of village {VillageId}.", maxDistance, villageId);
+                // 2026-11-25: say WHY it is empty. The parser used to skip every row on the newer servers
+                // (links are /map?x=..&y=.., not karte.php) and the log only said "no oasis reports" for days.
+                var pageRows = SurroundingReportParser.GetRows(browser.Html);
+                var oasisEvents = pageRows.Count(SurroundingReportParser.IsOasisRow);
+                var readable = SurroundingReportParser.GetOasisReportRows(browser.Html);
+                var nearest = readable.Count > 0 ? readable.Min(r => r.Distance).ToString("0.##") : "-";
+                logger.Information(
+                    "Oasis scout: no oasis reports within {MaxDistance} fields of village {VillageId} (the page held {Rows} row(s), {OasisEvents} oasis event(s), {Readable} with a readable coordinate, nearest {Nearest} fields).",
+                    maxDistance, villageId, pageRows.Count, oasisEvents, readable.Count, nearest);
+
+                // Oasis events on the page but none readable = the markup changed again: keep the evidence (once per village per app run).
+                if (oasisEvents > readable.Count && DumpedVillages.TryAdd(villageId.Value, 0))
+                {
+                    await PageDump.SaveAsync(browser, logger, $"surrounding-unreadable-{villageId.Value}");
+                }
+
                 await nextExecuteOasisScoutTaskCommand.HandleAsync(new(task), cancellationToken);
+                task.ExecuteAt = OasisScoutRules.ParkEmptyRun(DateTime.Now, task.ExecuteAt, Random.Shared.Next(0, OasisScoutRules.EmptyRunJitterMaxMinutes + 1));
                 return Result.Ok();
             }
 
@@ -296,6 +312,8 @@ namespace MainCore.Tasks
             await nextExecuteOasisScoutTaskCommand.HandleAsync(new(task), cancellationToken);
             return Result.Ok();
         }
+
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<int, byte> DumpedVillages = new();
 
         private const string HeroUnavailableText = "hero not available";
 
