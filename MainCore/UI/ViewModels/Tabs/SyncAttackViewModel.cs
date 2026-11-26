@@ -17,6 +17,12 @@ namespace MainCore.UI.ViewModels.Tabs
 
         public ObservableCollection<SyncAttackVillageRowItem> Villages { get; } = new();
 
+        // 2026-11-08: catapult target for the whole plan (see SyncAttackPlan.CatapultTarget).
+        public List<CatapultTargetItem> CatapultTargets { get; } = CatapultTargetItem.All();
+
+        [Reactive]
+        private CatapultTargetItem _selectedCatapultTarget = null!;
+
         [Reactive]
         private string _targetX = "";
 
@@ -61,6 +67,7 @@ namespace MainCore.UI.ViewModels.Tabs
             _dialogService = dialogService;
             _serviceScopeFactory = serviceScopeFactory;
             _taskManager = taskManager;
+            SelectedCatapultTarget = CatapultTargets[0];
 
             // LoadVillagesCommand's DB work runs on whatever thread Execute() is invoked from
             // (here: RxApp.TaskpoolScheduler, see AccountTabViewModelBase), but its *output* is
@@ -163,7 +170,8 @@ namespace MainCore.UI.ViewModels.Tabs
                 ArrivalMode,
                 desiredArrival,
                 selected.Select(v => new SyncAttackVillageOrder(v.VillageId, v.GetTroopAmounts(), v.IncludeHero)).ToList(),
-                wake);
+                wake,
+                (int)SelectedCatapultTarget.Target);
 
             var task = new SyncAttackPlanTask.Task(AccountId, plan);
             _taskManager.Add(task, first: true);

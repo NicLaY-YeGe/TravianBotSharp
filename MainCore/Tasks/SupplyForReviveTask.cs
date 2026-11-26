@@ -68,6 +68,9 @@ namespace MainCore.Tasks
             var needed = GetNeeded(context, villageId);
             if (needed.Count == 0) return;
 
+            // 2026-11-26: nothing is shipped into a village that is under attack (AttackedReceiverGuard).
+            if (AttackedReceiverGuard.IsUnderAttack(context, villageId)) return;
+
             var candidates = context.Villages
                 .Where(x => x.AccountId == accountId.Value)
                 .Where(x => x.Id != villageId.Value)
@@ -111,6 +114,12 @@ namespace MainCore.Tasks
             ILogger logger,
             CancellationToken cancellationToken)
         {
+            if (AttackedReceiverGuard.IsUnderAttack(context, task.TargetVillageId))
+            {
+                logger.Information("Supply for hero revive: {Target} is under attack, nothing is shipped into it.", task.TargetVillageId);
+                return Skip.Error;
+            }
+
             var needed = GetNeeded(context, task.TargetVillageId);
             if (needed.Count == 0)
             {
@@ -160,8 +169,8 @@ namespace MainCore.Tasks
                 var raw = Math.Min(Math.Min(requested, spare), totalCapacity);
                 if (raw <= 0) continue;
 
-                var jitter = 1 + ((Random.Shared.NextDouble() * 0.06) - 0.03);
-                var amount = (long)Math.Round((raw * jitter) / 100.0) * 100;
+                // 2026-10-25: full merchant loads (multiples of 750), rounded UP while the source can spare it.
+                var amount = MerchantAmountRules.RoundUpWithin(raw, Math.Min(spare, totalCapacity));
                 if (amount > 0) amounts[resourceType] = amount;
             }
 

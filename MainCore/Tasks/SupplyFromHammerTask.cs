@@ -1,3 +1,4 @@
+using MainCore.Commands.Features.Scheduling;
 using MainCore.Commands.Features.SendResource;
 using MainCore.Tasks.Base;
 
@@ -83,6 +84,9 @@ namespace MainCore.Tasks
             var enabled = context.BooleanByName(villageId, VillageSettingEnums.SupplyFromHammerEnable);
             if (!enabled) return;
 
+            // 2026-11-26: nothing is shipped into a village that is under attack (AttackedReceiverGuard).
+            if (AttackedReceiverGuard.IsUnderAttack(context, villageId)) return;
+
             var missing = GetMissingAmounts(context, villageId);
             if (missing.Count == 0) return;
 
@@ -95,6 +99,9 @@ namespace MainCore.Tasks
 
             foreach (var sourceVillageId in sources)
             {
+                // 2026-11-02: this source just said it has nothing spare for this village - do not ask again yet.
+                if (SupplyBackoff.IsBlocked(sourceVillageId, villageId, DateTime.Now)) continue;
+
                 var task = new Task(accountId, sourceVillageId, villageId);
                 if (!taskManager.IsExist<Task>(accountId, sourceVillageId))
                 {
@@ -158,6 +165,13 @@ namespace MainCore.Tasks
             ILogger logger,
             CancellationToken cancellationToken)
         {
+            // The queue never re-checks CanStart: the target may have been flagged since the request was queued.
+            if (AttackedReceiverGuard.IsUnderAttack(context, task.TargetVillageId))
+            {
+                logger.Information("Supply from hammer: {Target} is under attack, nothing is shipped into it.", task.TargetVillageId);
+                return Skip.Error;
+            }
+
             var missing = GetMissingAmounts(context, task.TargetVillageId);
             if (missing.Count == 0)
             {
@@ -212,15 +226,16 @@ namespace MainCore.Tasks
                 var raw = Math.Min(Math.Min(requested, spare), totalCapacity);
                 if (raw <= 0) continue;
 
-                // Small human-like jitter, rounded to the nearest 100.
-                var jitter = 1 + ((Random.Shared.NextDouble() * 0.06) - 0.03);
-                var amount = (long)Math.Round((raw * jitter) / 100.0) * 100;
+                // 2026-10-25: full merchant loads (multiples of 750), rounded UP while the source can spare it.
+                var amount = MerchantAmountRules.RoundUpWithin(raw, Math.Min(spare, totalCapacity));
                 if (amount > 0) amounts[resourceType] = amount;
             }
 
             if (amounts.Count == 0 || amounts.Values.Sum() == 0)
             {
-                logger.Information("{VillageId} has nothing spare to send {Target} right now (reserve protected).", task.VillageId, task.TargetVillageId);
+                var backoffUntil = DateTime.Now.AddSeconds(SupplyBackoff.Seconds(Random.Shared));
+                SupplyBackoff.Block(task.VillageId, task.TargetVillageId, backoffUntil);
+                logger.Information("{VillageId} has nothing spare to send {Target} right now (reserve protected), not asked again before {Time:HH:mm:ss}.", task.VillageId, task.TargetVillageId, backoffUntil);
                 return Result.Ok();
             }
 

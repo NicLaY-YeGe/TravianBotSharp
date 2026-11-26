@@ -1,3 +1,4 @@
+using MainCore.Commands.Features.Scheduling;
 using MainCore.Commands.Features.SendResource;
 using MainCore.Tasks.Base;
 
@@ -26,7 +27,24 @@ namespace MainCore.Tasks
                 var hammerVillageId = GetHammerVillageId(context, AccountId, VillageId);
                 if (hammerVillageId is null) return false;
 
-                return GetOverflowingResources(context, VillageId).Count > 0;
+                // 2026-11-26: a hammer under attack gets nothing (AttackedReceiverGuard).
+                if (AttackedReceiverGuard.IsUnderAttack(context, hammerVillageId.Value)) return false;
+
+                var overflowing = GetOverflowingResources(context, VillageId);
+                if (overflowing.Count == 0) return false;
+
+                // 2026-11-15: only queue the task when the hammer can really take a merchant load of an overflowing
+                // resource (up to its own overflow percent). Before, a full hammer still cost a Marketplace visit per
+                // storage update (22 runs in 11 h, most of them "nothing worth sending").
+                var source = context.Storages.FirstOrDefault(x => x.VillageId == VillageId.Value);
+                var hammer = context.Storages.FirstOrDefault(x => x.VillageId == hammerVillageId.Value.Value);
+                if (source is null || hammer is null) return true; // unknown state: let the task look
+                var sourcePercent = context.ByName(VillageId, VillageSettingEnums.OverflowToHammerPercent);
+                var hammerCeiling = GetHammerCeilingPercent(context, hammerVillageId.Value);
+                var floor = GetOwnFloor(source, VillageId);
+                return overflowing.Any(r =>
+                    Math.Min(GetOverflowAmount(source, r, sourcePercent, floor), ReceiveRoomRules.Room(GetCapacity(hammer, r), GetAmount(hammer, r), hammerCeiling))
+                    >= MerchantAmountRules.LoadPerMerchant);
             }
         }
 
@@ -53,6 +71,25 @@ namespace MainCore.Tasks
             return hammerVillage is null ? null : new VillageId(hammerVillage.Id);
         }
 
+        // 2026-11-15: the hammer village is a RECEIVER here; if it has Auto balance on it ships resources away above its
+        // own Auto balance overflow percent, so this task must not fill it past that (the log showed 20-33k crop going
+        // back and forth between the hammer and a side village). Without Auto balance there is no limit but capacity.
+        private static int GetHammerCeilingPercent(AppDbContext context, VillageId hammerId)
+            => ReceiveRoomRules.CeilingPercent(
+                context.BooleanByName(hammerId, VillageSettingEnums.AutoBalanceEnable),
+                context.ByName(hammerId, VillageSettingEnums.AutoBalanceOverflowPercent),
+                false,
+                0);
+
+        // 2026-11-15: every early exit used to be a silent Skip.Error with ExecuteAt unchanged ("Task failed / Bot skip
+        // this task", 4x in the 2026-11-15 log, no reason). Say why and move the task out (same pattern as Balance resources).
+        private static Result Defer(Task task, ILogger logger, string reason)
+        {
+            task.ExecuteAt = DateTime.Now.AddMinutes(Random.Shared.Next(20, 31));
+            logger.Information("Overflow to hammer in {VillageId}: nothing to send ({Reason}), next look at {Time:HH:mm}.", task.VillageId, reason, task.ExecuteAt);
+            return Result.Ok();
+        }
+
         // Resource types currently at/above the chosen overflow threshold, most-full first.
         private static List<string> GetOverflowingResources(AppDbContext context, VillageId villageId)
         {
@@ -69,28 +106,25 @@ namespace MainCore.Tasks
                 .ToList();
         }
 
-        // How much of this resource sits above the overflow threshold - this is both the
-        // weight used to split merchants across resources, and the hard cap on how much of
-        // it makes sense to send (never more than what's actually "extra").
-        private static long GetOverflowAmount(Storage storage, string resourceType, int overflowPercent)
+        // How much of this resource the village may send - this is both the weight used to split merchants across
+        // resources, and the hard cap on how much of it makes sense to send. 2026-11-17: the task still STARTS at the
+        // overflow percent, but it drains DOWN TO `OverflowDrainRules.DrainMarginPercent` points below it (it used to send
+        // only what stood above the threshold, so the village crossed it again within ~19 minutes).
+        // 2026-11-25: never into the cost of the village's own waiting build job (OutgoingFloorRules).
+        private static long GetOverflowAmount(Storage storage, string resourceType, int overflowPercent, long[] floor)
         {
-            var capacity = GetCapacity(storage, resourceType);
-            if (capacity <= 0) return 0;
-
-            var thresholdAmount = capacity * overflowPercent / 100;
-            var current = GetAmount(storage, resourceType);
-            return Math.Max(0, current - thresholdAmount);
+            var surplus = OverflowDrainRules.SendableAmount(GetCapacity(storage, resourceType), GetAmount(storage, resourceType), overflowPercent);
+            return OutgoingFloorRules.Sendable(surplus, GetAmount(storage, resourceType), OutgoingFloorRules.FloorOf(floor, resourceType));
         }
 
-        // Rounds to the nearest 100 with a small random jitter (+/-3%) first, so shipment
-        // amounts don't look like they came out of exact machine math every single time.
+        private static long[] GetOwnFloor(Storage storage, VillageId villageId)
+            => OutgoingFloorRules.Floor(storage.Warehouse, storage.Granary, ConstructionNeed.GetWaiting(villageId));
+
+        // 2026-10-25, user request: shipments are multiples of one merchant's load (750), rounded
+        // DOWN (this is a surplus send - never more than asked). Was: nearest 100 with +/-3% jitter.
         private static long RoundHumanLike(double raw)
         {
-            if (raw <= 0) return 0;
-            var jitter = 1 + ((Random.Shared.NextDouble() * 0.06) - 0.03);
-            var jittered = raw * jitter;
-            var rounded = Math.Round(jittered / 100.0) * 100;
-            return (long)Math.Max(0, rounded);
+            return MerchantAmountRules.RoundDown(raw);
         }
 
         // Splits totalToSend across "resources" proportional to each one's weight (how much
@@ -132,13 +166,15 @@ namespace MainCore.Tasks
             CancellationToken cancellationToken)
         {
             var overflowing = GetOverflowingResources(context, task.VillageId);
-            if (overflowing.Count == 0) return Skip.Error;
+            if (overflowing.Count == 0) return Defer(task, logger, "no resource is above the overflow percent any more");
 
             var hammerVillageId = GetHammerVillageId(context, task.AccountId, task.VillageId);
-            if (hammerVillageId is null) return Skip.Error;
+            if (hammerVillageId is null) return Defer(task, logger, "no hammer village is set for this account");
 
-            var hammerVillage = context.Villages.FirstOrDefault(x => x.Id == hammerVillageId.Value.Value);
-            if (hammerVillage is null) return Skip.Error;
+            var hammerVillage = context.Villages.FirstOrDefault(x => x.Id == hammerVillageId.Value.Value && x.AccountId == task.AccountId.Value);
+            if (hammerVillage is null) return Defer(task, logger, "the hammer village was not found");
+            // The queue does not call CanStart again (CLAUDE.md rule 19/25): re-check the receiver here.
+            if (AttackedReceiverGuard.IsUnderAttack(context, hammerVillageId.Value)) return Defer(task, logger, "the hammer village is under attack - nothing is shipped into it");
 
             var pageResult = await toSendResourcePageCommand.HandleAsync(new(task.VillageId), cancellationToken);
             if (pageResult.IsFailed)
@@ -148,7 +184,12 @@ namespace MainCore.Tasks
                     logger.Warning("No marketplace in {VillageId}, cannot send overflow to hammer.", task.VillageId);
                     return Skip.Error.WithErrors(pageResult.Errors);
                 }
-                return Stop.Error.WithErrors(pageResult.Errors);
+                if (pageResult.HasError<Cancel>()) return pageResult;
+                // Secondary task: a page problem (e.g. "Found 0 tabs", live log 17:29) must not Stop/pause
+                // the account (CLAUDE.md rule 4). Skip, and try again in a few minutes.
+                task.ExecuteAt = DateTime.Now.AddMinutes(Random.Shared.Next(3, 6));
+                logger.Warning("Overflow to hammer in {VillageId}: could not open the send page, retrying at {Time:HH:mm}.", task.VillageId, task.ExecuteAt);
+                return Result.Ok();
             }
 
             var freeMerchants = SendResourceParser.GetFreeMerchants(browser.Html);
@@ -165,20 +206,40 @@ namespace MainCore.Tasks
             var overflowPercent = context.ByName(task.VillageId, VillageSettingEnums.OverflowToHammerPercent);
             var sourceStorage = context.Storages.FirstOrDefault(x => x.VillageId == task.VillageId.Value);
             var hammerStorage = context.Storages.FirstOrDefault(x => x.VillageId == hammerVillage.Id);
+            var hammerCeilingPercent = GetHammerCeilingPercent(context, hammerVillageId.Value);
+            var ownFloor = sourceStorage is null ? new long[4] : GetOwnFloor(sourceStorage, task.VillageId);
 
             var weights = new Dictionary<string, long>();
             var maxPerResource = new Dictionary<string, long>();
             foreach (var resource in overflowing)
             {
-                var room = hammerStorage is null ? long.MaxValue : Math.Max(0, GetCapacity(hammerStorage, resource) - GetAmount(hammerStorage, resource));
-                var overflowAmount = sourceStorage is null ? 0 : GetOverflowAmount(sourceStorage, resource, overflowPercent);
+                var room = hammerStorage is null ? long.MaxValue : ReceiveRoomRules.Room(GetCapacity(hammerStorage, resource), GetAmount(hammerStorage, resource), hammerCeilingPercent);
+                var overflowAmount = sourceStorage is null ? 0 : GetOverflowAmount(sourceStorage, resource, overflowPercent, ownFloor);
 
                 weights[resource] = overflowAmount;
                 maxPerResource[resource] = Math.Min(room, overflowAmount);
             }
 
+            logger.Information("Overflow to hammer in {VillageId}: {Resources} at or above {Percent} %, draining down to {Target} %.", task.VillageId, string.Join("/", overflowing), overflowPercent, OverflowDrainRules.DrainTargetPercent(overflowPercent));
+
+            if (ownFloor.Any(x => x > 0))
+            {
+                logger.Information("Overflow to hammer in {VillageId}: keeping {Floor} (wood/clay/iron/crop) for the build job that waits for resources.", task.VillageId, string.Join("/", ownFloor));
+            }
+
             var amounts = DistributeProportionally(overflowing, weights, maxPerResource, totalToSend);
-            if (amounts.Values.Sum() <= 0) return Skip.Error;
+            if (amounts.Values.Sum() <= 0)
+            {
+                // 2026-10-25 (live log): this was a silent Skip.Error, and UpdateStorageCommand re-adds the
+                // task after every storage update, so a village whose surplus (or the hammer's free room)
+                // is below one 750 merchant load visited the Marketplace every ~80 s for nothing.
+                // Say why, and move the task out so the re-add finds it already queued.
+                task.ExecuteAt = DateTime.Now.AddMinutes(Random.Shared.Next(20, 31));
+                logger.Information(
+                    "Overflow to hammer in {VillageId}: nothing worth sending (surplus or the hammer's free room - up to its own overflow percent - is below one merchant load), next look at {Time:HH:mm}.",
+                    task.VillageId, task.ExecuteAt);
+                return Result.Ok();
+            }
 
             var sendResult = await sendResourceCommand.HandleAsync(new(task.VillageId, hammerVillageId.Value, amounts), cancellationToken);
             // SendResourceCommand already classifies its failures (Skip for form problems, Cancel for

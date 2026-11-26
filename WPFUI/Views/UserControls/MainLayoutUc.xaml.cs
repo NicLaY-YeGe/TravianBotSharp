@@ -42,6 +42,7 @@ namespace WPFUI.Views.UserControls
                 this.OneWayBind(ViewModel, vm => vm.AccountTabStore.AddAccountsViewModel, v => v.AddAccounts.ViewModel).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.AccountTabStore.AccountSettingViewModel, v => v.AccountSetting.ViewModel).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.AccountTabStore.VillageViewModel, v => v.Village.ViewModel).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.AccountTabStore.VillageOverviewViewModel, v => v.VillageOverview.ViewModel).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.AccountTabStore.EditAccountViewModel, v => v.EditAccount.ViewModel).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.AccountTabStore.FarmingViewModel, v => v.Farming.ViewModel).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.AccountTabStore.SyncAttackViewModel, v => v.SyncAttack.ViewModel).DisposeWith(d);
@@ -56,6 +57,7 @@ namespace WPFUI.Views.UserControls
                 this.OneWayBind(ViewModel, vm => vm.AccountTabStore.IsAddAccountsTabVisible, v => v.AddAccountsTab.Visibility).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.AccountTabStore.IsNormalTabVisible, v => v.AccountSettingTab.Visibility).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.AccountTabStore.IsNormalTabVisible, v => v.VillageTab.Visibility).DisposeWith(d);
+                this.OneWayBind(ViewModel, vm => vm.AccountTabStore.IsNormalTabVisible, v => v.VillageOverviewTab.Visibility).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.AccountTabStore.IsNormalTabVisible, v => v.EditAccountTab.Visibility).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.AccountTabStore.IsNormalTabVisible, v => v.FarmingTab.Visibility).DisposeWith(d);
                 this.OneWayBind(ViewModel, vm => vm.AccountTabStore.IsNormalTabVisible, v => v.SyncAttackTab.Visibility).DisposeWith(d);
@@ -70,6 +72,7 @@ namespace WPFUI.Views.UserControls
                 this.Bind(ViewModel, vm => vm.AccountTabStore.AddAccountsViewModel.IsActive, v => v.AddAccountsTab.IsSelected).DisposeWith(d);
                 this.Bind(ViewModel, vm => vm.AccountTabStore.AccountSettingViewModel.IsActive, v => v.AccountSettingTab.IsSelected).DisposeWith(d);
                 this.Bind(ViewModel, vm => vm.AccountTabStore.VillageViewModel.IsActive, v => v.VillageTab.IsSelected).DisposeWith(d);
+                this.Bind(ViewModel, vm => vm.AccountTabStore.VillageOverviewViewModel.IsActive, v => v.VillageOverviewTab.IsSelected).DisposeWith(d);
                 this.Bind(ViewModel, vm => vm.AccountTabStore.EditAccountViewModel.IsActive, v => v.EditAccountTab.IsSelected).DisposeWith(d);
                 this.Bind(ViewModel, vm => vm.AccountTabStore.FarmingViewModel.IsActive, v => v.FarmingTab.IsSelected).DisposeWith(d);
                 this.Bind(ViewModel, vm => vm.AccountTabStore.SyncAttackViewModel.IsActive, v => v.SyncAttackTab.IsSelected).DisposeWith(d);

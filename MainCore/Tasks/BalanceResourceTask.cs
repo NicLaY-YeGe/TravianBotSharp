@@ -1,3 +1,4 @@
+using MainCore.Commands.Features.Scheduling;
 using MainCore.Commands.Features.SendResource;
 using MainCore.Commands.UI.Misc;
 using MainCore.Tasks.Base;
@@ -53,14 +54,15 @@ namespace MainCore.Tasks
         // How much of this resource is spare to send away, i.e. the amount above the
         // "drain down to X%" level - NOT the whole warehouse. This is what stops the bot
         // from emptying the source village completely.
-        private static long GetSourceSurplus(Storage storage, string resourceType, int targetPercent)
+        // 2026-11-25: and never into the cost of the village's own waiting build job (OutgoingFloorRules).
+        private static long GetSourceSurplus(Storage storage, string resourceType, int targetPercent, long[] floor)
         {
             var capacity = GetCapacity(storage, resourceType);
             if (capacity <= 0) return 0;
 
             var downTo = capacity * targetPercent / 100;
             var current = GetAmount(storage, resourceType);
-            return Math.Max(0, current - downTo);
+            return OutgoingFloorRules.Sendable(Math.Max(0, current - downTo), current, OutgoingFloorRules.FloorOf(floor, resourceType));
         }
 
         // Resource types currently at/above the overflow threshold, most-full first.
@@ -79,13 +81,34 @@ namespace MainCore.Tasks
                 .ToList();
         }
 
+        // 2026-11-15: the percent at which the RECEIVER would start sending resources away itself (its own
+        // Auto balance overflow percent and, unless it is the hammer village, its Overflow to hammer percent).
+        // A shipment must stop below it, otherwise the receiver ships the load straight back (live log 2026-11-15:
+        // ~20 shipments of 20-33k crop between two villages). See ReceiveRoomRules.
+        private static int GetReceiverCeilingPercent(AppDbContext context, AccountId accountId, VillageId receiverId)
+        {
+            var hammerId = context.ByName(accountId, AccountSettingEnums.HammerVillageId);
+            var sendsToHammer = hammerId > 0
+                && hammerId != receiverId.Value
+                && context.BooleanByName(receiverId, VillageSettingEnums.OverflowToHammerEnable);
+
+            return ReceiveRoomRules.CeilingPercent(
+                context.BooleanByName(receiverId, VillageSettingEnums.AutoBalanceEnable),
+                context.ByName(receiverId, VillageSettingEnums.AutoBalanceOverflowPercent),
+                sendsToHammer,
+                context.ByName(receiverId, VillageSettingEnums.OverflowToHammerPercent));
+        }
+
         // The AutoBalanceEnable village (other than the source) with the most combined free
-        // room across the resources we're trying to offload.
+        // room across the resources we're trying to offload. "Room" stops below the receiver's own
+        // outgoing threshold (2026-11-15), not at its full capacity.
         private static VillageId? GetBestTarget(AppDbContext context, AccountId accountId, VillageId sourceVillageId, List<string> resources)
         {
             var candidates = context.Villages
                 .Where(x => x.AccountId == accountId.Value)
                 .Where(x => x.Id != sourceVillageId.Value)
+                // 2026-11-26: never ship into a village that is about to be attacked (AttackedReceiverGuard).
+                .Where(x => !x.IsUnderAttack)
                 .Select(x => x.Id)
                 .AsEnumerable()
                 .Select(id => new VillageId(id))
@@ -100,7 +123,8 @@ namespace MainCore.Tasks
                 var storage = context.Storages.FirstOrDefault(s => s.VillageId == id.Value);
                 if (storage is null) continue;
 
-                var room = resources.Sum(r => Math.Max(0, GetCapacity(storage, r) - GetAmount(storage, r)));
+                var ceilingPercent = GetReceiverCeilingPercent(context, accountId, id);
+                var room = resources.Sum(r => ReceiveRoomRules.Room(GetCapacity(storage, r), GetAmount(storage, r), ceilingPercent));
                 if (room <= 0) continue;
 
                 if (bestId is null || room > bestRoom)
@@ -113,15 +137,11 @@ namespace MainCore.Tasks
             return bestId;
         }
 
-        // Rounds to the nearest 100 with a small random jitter (+/-3%) first, so shipment
-        // amounts don't look like they came out of exact machine math every single time.
+        // 2026-10-25, user request: shipments are multiples of one merchant's load (750), rounded
+        // DOWN (this is a surplus send - never more than asked). Was: nearest 100 with +/-3% jitter.
         private static long RoundHumanLike(double raw)
         {
-            if (raw <= 0) return 0;
-            var jitter = 1 + ((Random.Shared.NextDouble() * 0.06) - 0.03);
-            var jittered = raw * jitter;
-            var rounded = Math.Round(jittered / 100.0) * 100;
-            return (long)Math.Max(0, rounded);
+            return MerchantAmountRules.RoundDown(raw);
         }
 
         // Splits totalToSend across "resources" proportional to each one's weight (how much
@@ -154,6 +174,13 @@ namespace MainCore.Tasks
             return result;
         }
 
+        private static Result Defer(Task task, ILogger logger, string reason)
+        {
+            task.ExecuteAt = DateTime.Now.AddMinutes(Random.Shared.Next(20, 31));
+            logger.Information("Balance resources in {VillageId}: nothing to send ({Reason}), next look at {Time:HH:mm}.", task.VillageId, reason, task.ExecuteAt);
+            return Result.Ok();
+        }
+
         private static async ValueTask<Result> HandleAsync(
             Task task,
             AppDbContext context,
@@ -165,13 +192,16 @@ namespace MainCore.Tasks
             CancellationToken cancellationToken)
         {
             var overflowing = GetOverflowingResources(context, task.VillageId);
-            if (overflowing.Count == 0) return Skip.Error;
+            // 2026-10-26 (live log 2026-10-26: 9 silent "failed / Bot skip" in TS-3202): these early exits were
+            // Skip.Error with ExecuteAt unchanged and UpdateStorageCommand re-adds the task after every
+            // storage update. Now they say why and move the task out (same pattern as Overflow to hammer).
+            if (overflowing.Count == 0) return Defer(task, logger, "no resource is above the overflow percent");
 
             var targetId = GetBestTarget(context, task.AccountId, task.VillageId, overflowing);
-            if (targetId is null) return Skip.Error;
+            if (targetId is null) return Defer(task, logger, "no village has room for the surplus");
 
             var targetVillage = context.Villages.FirstOrDefault(x => x.Id == targetId.Value.Value);
-            if (targetVillage is null) return Skip.Error;
+            if (targetVillage is null) return Defer(task, logger, "the target village was not found");
 
             var pageResult = await toSendResourcePageCommand.HandleAsync(new(task.VillageId), cancellationToken);
             if (pageResult.IsFailed)
@@ -185,7 +215,11 @@ namespace MainCore.Tasks
                     logger.Warning("No marketplace in this village, disabling auto balance.");
                     return Skip.Error.WithErrors(pageResult.Errors);
                 }
-                return Stop.Error.WithErrors(pageResult.Errors);
+                if (pageResult.HasError<Cancel>()) return pageResult;
+                // Secondary task: a page problem must not Stop/pause the account (CLAUDE.md rule 4).
+                task.ExecuteAt = DateTime.Now.AddMinutes(Random.Shared.Next(3, 6));
+                logger.Warning("Balance resources in {VillageId}: could not open the send page, retrying at {Time:HH:mm}.", task.VillageId, task.ExecuteAt);
+                return Result.Ok();
             }
 
             var freeMerchants = SendResourceParser.GetFreeMerchants(browser.Html);
@@ -203,20 +237,29 @@ namespace MainCore.Tasks
             var targetStorage = context.Storages.FirstOrDefault(x => x.VillageId == targetVillage.Id);
             var sourceStorage = context.Storages.FirstOrDefault(x => x.VillageId == task.VillageId.Value);
             var targetPercent = context.ByName(task.VillageId, VillageSettingEnums.AutoBalanceTargetPercent);
+            var receiverCeilingPercent = GetReceiverCeilingPercent(context, task.AccountId, targetId.Value);
+
+            var ownFloor = sourceStorage is null
+                ? new long[4]
+                : OutgoingFloorRules.Floor(sourceStorage.Warehouse, sourceStorage.Granary, ConstructionNeed.GetWaiting(task.VillageId));
+            if (ownFloor.Any(x => x > 0))
+            {
+                logger.Information("Balance resources in {VillageId}: keeping {Floor} (wood/clay/iron/crop) for the build job that waits for resources.", task.VillageId, string.Join("/", ownFloor));
+            }
 
             var weights = new Dictionary<string, long>();
             var maxPerResource = new Dictionary<string, long>();
             foreach (var resource in overflowing)
             {
-                var room = targetStorage is null ? long.MaxValue : Math.Max(0, GetCapacity(targetStorage, resource) - GetAmount(targetStorage, resource));
-                var surplus = sourceStorage is null ? 0 : GetSourceSurplus(sourceStorage, resource, targetPercent);
+                var room = targetStorage is null ? long.MaxValue : ReceiveRoomRules.Room(GetCapacity(targetStorage, resource), GetAmount(targetStorage, resource), receiverCeilingPercent);
+                var surplus = sourceStorage is null ? 0 : GetSourceSurplus(sourceStorage, resource, targetPercent, ownFloor);
 
                 weights[resource] = surplus;
                 maxPerResource[resource] = Math.Min(room, surplus);
             }
 
             var amounts = DistributeProportionally(overflowing, weights, maxPerResource, totalToSend);
-            if (amounts.Values.Sum() <= 0) return Skip.Error;
+            if (amounts.Values.Sum() <= 0) return Defer(task, logger, "the surplus or the target's free room (up to its own overflow percent) is below one merchant load");
 
             var sendResult = await sendResourceCommand.HandleAsync(new(task.VillageId, targetId.Value, amounts), cancellationToken);
             // SendResourceCommand already classifies its failures (Skip for form problems, Cancel for

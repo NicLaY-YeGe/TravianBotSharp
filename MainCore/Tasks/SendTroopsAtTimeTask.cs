@@ -25,6 +25,9 @@ namespace MainCore.Tasks
             public IReadOnlyDictionary<int, long> TroopAmounts { get; }
             public bool IncludeHero { get; }
 
+            // 2026-11-08: CatapultTargetEnums value, 0 = leave the game's default (see SendTroopsCommand).
+            public int CatapultTarget { get; }
+
             // 2026-10-03: optional wake window (see WakeWindowRules). Fixed at creation by
             // SyncAttackPlanTask (random picks are made once, not per tick). Null = ordinary
             // send that obeys the offline-hours/sleep rules like every other task.
@@ -44,7 +47,8 @@ namespace MainCore.Tasks
                 IReadOnlyDictionary<int, long> troopAmounts,
                 bool includeHero = false,
                 DateTime? wakeFrom = null,
-                DateTime? wakeUntil = null)
+                DateTime? wakeUntil = null,
+                int catapultTarget = 0)
                 : base(accountId, villageId)
             {
                 WakeFrom = wakeFrom;
@@ -54,6 +58,7 @@ namespace MainCore.Tasks
                 EventType = eventType;
                 TroopAmounts = troopAmounts;
                 IncludeHero = includeHero;
+                CatapultTarget = catapultTarget;
             }
 
             protected override string TaskName => $"Synchronized send to ({TargetX}|{TargetY})";
@@ -78,7 +83,7 @@ namespace MainCore.Tasks
             if (toPageResult.IsFailed) return toPageResult;
 
             var sendResult = await sendTroopsCommand.HandleAsync(
-                new(task.VillageId, task.TargetX, task.TargetY, task.EventType, task.TroopAmounts, Confirm: true, IncludeHero: task.IncludeHero),
+                new(task.VillageId, task.TargetX, task.TargetY, task.EventType, task.TroopAmounts, Confirm: true, IncludeHero: task.IncludeHero, CatapultTarget: task.CatapultTarget),
                 cancellationToken);
             if (sendResult.IsFailed) return Result.Fail(sendResult.Errors);
 
