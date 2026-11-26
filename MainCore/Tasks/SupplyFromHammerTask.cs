@@ -84,6 +84,9 @@ namespace MainCore.Tasks
             var enabled = context.BooleanByName(villageId, VillageSettingEnums.SupplyFromHammerEnable);
             if (!enabled) return;
 
+            // 2026-11-26: nothing is shipped into a village that is under attack (AttackedReceiverGuard).
+            if (AttackedReceiverGuard.IsUnderAttack(context, villageId)) return;
+
             var missing = GetMissingAmounts(context, villageId);
             if (missing.Count == 0) return;
 
@@ -162,6 +165,13 @@ namespace MainCore.Tasks
             ILogger logger,
             CancellationToken cancellationToken)
         {
+            // The queue never re-checks CanStart: the target may have been flagged since the request was queued.
+            if (AttackedReceiverGuard.IsUnderAttack(context, task.TargetVillageId))
+            {
+                logger.Information("Supply from hammer: {Target} is under attack, nothing is shipped into it.", task.TargetVillageId);
+                return Skip.Error;
+            }
+
             var missing = GetMissingAmounts(context, task.TargetVillageId);
             if (missing.Count == 0)
             {

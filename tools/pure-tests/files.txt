@@ -113,6 +113,8 @@ MainCore/Commands/Features/UpgradeBuilding/TemplateApplyRules.cs
 MainCore.Test/Commands/Features/UpgradeBuilding/TemplateApplyRulesTest.cs
 MainCore/Commands/Features/SendResource/OutgoingFloorRules.cs
 MainCore.Test/Commands/Features/SendResource/OutgoingFloorRulesTest.cs
+MainCore/Commands/Features/DefendDonate/DefendPassRules.cs
+MainCore.Test/Commands/Features/DefendDonate/DefendPassRulesTest.cs
 MainCore/Parsers/SurroundingReportParser.cs
 MainCore.Test/Parsers/SurroundingReportParserTest.cs
 MainCore/Commands/Features/OasisScout/OasisScoutRules.cs

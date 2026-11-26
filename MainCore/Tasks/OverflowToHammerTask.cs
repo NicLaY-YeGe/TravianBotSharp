@@ -27,6 +27,9 @@ namespace MainCore.Tasks
                 var hammerVillageId = GetHammerVillageId(context, AccountId, VillageId);
                 if (hammerVillageId is null) return false;
 
+                // 2026-11-26: a hammer under attack gets nothing (AttackedReceiverGuard).
+                if (AttackedReceiverGuard.IsUnderAttack(context, hammerVillageId.Value)) return false;
+
                 var overflowing = GetOverflowingResources(context, VillageId);
                 if (overflowing.Count == 0) return false;
 
@@ -170,6 +173,8 @@ namespace MainCore.Tasks
 
             var hammerVillage = context.Villages.FirstOrDefault(x => x.Id == hammerVillageId.Value.Value && x.AccountId == task.AccountId.Value);
             if (hammerVillage is null) return Defer(task, logger, "the hammer village was not found");
+            // The queue does not call CanStart again (CLAUDE.md rule 19/25): re-check the receiver here.
+            if (AttackedReceiverGuard.IsUnderAttack(context, hammerVillageId.Value)) return Defer(task, logger, "the hammer village is under attack - nothing is shipped into it");
 
             var pageResult = await toSendResourcePageCommand.HandleAsync(new(task.VillageId), cancellationToken);
             if (pageResult.IsFailed)

@@ -68,6 +68,9 @@ namespace MainCore.Tasks
             var needed = GetNeeded(context, villageId);
             if (needed.Count == 0) return;
 
+            // 2026-11-26: nothing is shipped into a village that is under attack (AttackedReceiverGuard).
+            if (AttackedReceiverGuard.IsUnderAttack(context, villageId)) return;
+
             var candidates = context.Villages
                 .Where(x => x.AccountId == accountId.Value)
                 .Where(x => x.Id != villageId.Value)
@@ -111,6 +114,12 @@ namespace MainCore.Tasks
             ILogger logger,
             CancellationToken cancellationToken)
         {
+            if (AttackedReceiverGuard.IsUnderAttack(context, task.TargetVillageId))
+            {
+                logger.Information("Supply for hero revive: {Target} is under attack, nothing is shipped into it.", task.TargetVillageId);
+                return Skip.Error;
+            }
+
             var needed = GetNeeded(context, task.TargetVillageId);
             if (needed.Count == 0)
             {

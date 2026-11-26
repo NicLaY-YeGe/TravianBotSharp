@@ -100,6 +100,9 @@ namespace MainCore.Tasks
                 return;
             }
 
+            // 2026-11-26: nothing is shipped into a village that is under attack (AttackedReceiverGuard).
+            if (AttackedReceiverGuard.IsUnderAttack(context, villageId)) return;
+
             var candidates = context.Villages
                 .Where(x => x.AccountId == accountId.Value)
                 .Where(x => x.Id != villageId.Value)
@@ -147,6 +150,12 @@ namespace MainCore.Tasks
             if (!IsTargetSettling(context, task.TargetVillageId))
             {
                 ClearNeed(context, task.TargetVillageId);
+                return Skip.Error;
+            }
+
+            if (AttackedReceiverGuard.IsUnderAttack(context, task.TargetVillageId))
+            {
+                logger.Information("Supply for settle: {Target} is under attack, nothing is shipped into it.", task.TargetVillageId);
                 return Skip.Error;
             }
 

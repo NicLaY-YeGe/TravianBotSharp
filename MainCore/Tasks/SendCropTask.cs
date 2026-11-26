@@ -51,6 +51,8 @@ namespace MainCore.Tasks
             var otherVillageIds = context.Villages
                 .Where(x => x.AccountId == accountId.Value)
                 .Where(x => x.Id != sourceVillageId.Value)
+                // 2026-11-26: never ship into a village that is about to be attacked (AttackedReceiverGuard).
+                .Where(x => !x.IsUnderAttack)
                 .Select(x => x.Id)
                 .AsEnumerable()
                 .Select(id => new VillageId(id))

@@ -38,11 +38,13 @@ namespace MainCore.Tasks
             // 2026-10-24: two passes per movement. Pass 1 runs when the movement is first seen (possibly
             // hours before impact); pass 2 is the SAME task instance rescheduled to SecondPassLeadSeconds
             // before impact (Dodge's self-reschedule pattern), so what was produced meanwhile is spent too.
+            // 2026-11-26: pass 3 = FINAL pass shortly before Dodge's send moment (DefendPassRules); it also runs when pass 2
+            // does not exist because the attack was seen less than 15 min before impact.
             public int Pass { get; private set; } = 1;
 
-            public void ScheduleSecondPass(DateTime executeAt)
+            public void SchedulePass(int pass, DateTime executeAt)
             {
-                Pass = 2;
+                Pass = pass;
                 ExecuteAt = executeAt;
             }
 
@@ -66,11 +68,7 @@ namespace MainCore.Tasks
         // The 2026-09-27 version hung 180 s here.
         private const int DonationTimeoutSeconds = 60;
 
-        // Pass 2 starts this long before impact (user decision 2026-10-24: 15 minutes).
-        private const int SecondPassLeadSeconds = 15 * 60;
-
-        // Pass 2 is only scheduled if it would start at least this long after pass 1 ends.
-        private const int SecondPassMinGapSeconds = 60;
+        // Pass timing (pass 2 = 15 min before impact, user decision 2026-10-24; pass 3 = final pass): DefendPassRules.
 
         // Unreadable-resource page dump: at most once per this long (the cause is not known yet).
         private static readonly TimeSpan UnreadableDumpInterval = TimeSpan.FromMinutes(60);
@@ -206,18 +204,18 @@ namespace MainCore.Tasks
             // A user pause must surface untouched.
             if (cancellationToken.IsCancellationRequested) return result;
 
-            // Pass 1 done (whatever its outcome): come back SecondPassLeadSeconds before impact. The task
-            // simply stays in the queue with a new ExecuteAt (same as Dodge's wait-for-send-moment).
-            if (task.Pass == 1)
+            // A pass is done (whatever its outcome): come back for the next one (DefendPassRules: 15 min before impact,
+            // then the final pass just before Dodge's send moment). The task simply stays in the queue with a new
+            // ExecuteAt (same as Dodge's wait-for-send-moment).
+            var dodgeLead = context.ByName(task.VillageId, VillageSettingEnums.DodgeSendSecondsBeforeImpact);
+            var next = DefendPassRules.Next(task.Pass, DateTime.Now, impactAt, DefendPassRules.FinalPassLeadSeconds(dodgeWillRun, dodgeLead));
+            if (next is not null)
             {
-                var secondAt = impactAt.AddSeconds(-SecondPassLeadSeconds);
-                if (secondAt > DateTime.Now.AddSeconds(SecondPassMinGapSeconds))
-                {
-                    task.ScheduleSecondPass(secondAt);
-                    logger.Information("Defend in {VillageId}: second pass (train + donate what was produced meanwhile) scheduled for {At:HH:mm:ss}, {Lead} min before impact.",
-                        task.VillageId, secondAt, SecondPassLeadSeconds / 60);
-                    return Result.Ok();
-                }
+                task.SchedulePass(next.Value.Pass, next.Value.At);
+                logger.Information("Defend in {VillageId}: pass {Pass} ({Kind}) scheduled for {At:HH:mm:ss}, {Lead}s before impact.",
+                    task.VillageId, next.Value.Pass, next.Value.Pass == 3 ? "final: train + donate what arrived meanwhile" : "train + donate what was produced meanwhile",
+                    next.Value.At, (int)(impactAt - next.Value.At).TotalSeconds);
+                return Result.Ok();
             }
 
             return result;
@@ -303,15 +301,24 @@ namespace MainCore.Tasks
             // 1) Train the cheapest troop with the whole stock. A failure here must NOT stop the
             //    donation below.
             var storage = context.Storages.FirstOrDefault(x => x.VillageId == task.VillageId.Value);
+            long[]? trainStock = storage is null ? null : new long[] { storage.Wood, storage.Clay, storage.Iron, storage.Crop };
+            if (task.Pass >= 2)
+            {
+                // Later passes: the database stock is the one pass 1 left behind (about empty after the donation), but
+                // shipments arrived since. The page we are on (Rally Point) shows the real stock.
+                var liveHtml = await ReadResourceBarAsync(browser, token);
+                var live = new long[] { StorageParser.GetWood(liveHtml), StorageParser.GetClay(liveHtml), StorageParser.GetIron(liveHtml), StorageParser.GetCrop(liveHtml) };
+                if (live.All(x => x >= 0)) trainStock = live;
+            }
             var trained = 0;
-            if (storage is null)
+            if (trainStock is null)
             {
                 logger.Warning("No known stock for {VillageId} yet, skipping the training step.", task.VillageId);
             }
             else
             {
                 var trainResult = await trainCheapestTroopCommand.HandleAsync(
-                    new(task.VillageId, storage.Wood, storage.Clay, storage.Iron, storage.Crop), token);
+                    new(task.VillageId, trainStock[0], trainStock[1], trainStock[2], trainStock[3]), token);
                 if (trainResult.IsFailed)
                 {
                     if (token.IsCancellationRequested) return Abort(pauseToken, trainResult.Errors, logger);
