@@ -62,6 +62,29 @@ namespace MainCore.Tasks
             return result;
         }
 
+        // 2026-11-24: a demand only counts while the TARGET village still has Auto settle ticked. The
+        // NeedExpansion* values are written by AutoSettleTask and used to survive unticking the box, so
+        // siblings kept shipping resources to a village that no longer settles ("Supply for settle in
+        // <source>" with Auto settle off). Single place for the check and for the reset.
+        public static bool IsTargetSettling(AppDbContext context, VillageId targetVillageId) =>
+            context.BooleanByName(targetVillageId, VillageSettingEnums.AutoSettleEnable);
+
+        public static void ClearNeed(AppDbContext context, VillageId villageId)
+        {
+            foreach (var setting in new[]
+            {
+                VillageSettingEnums.NeedExpansionWood,
+                VillageSettingEnums.NeedExpansionClay,
+                VillageSettingEnums.NeedExpansionIron,
+                VillageSettingEnums.NeedExpansionCrop,
+            })
+            {
+                context.VillagesSetting
+                    .Where(x => x.VillageId == villageId.Value && x.Setting == setting)
+                    .ExecuteUpdate(x => x.SetProperty(y => y.Value, 0));
+            }
+        }
+
         // Call whenever a village's NeedExpansion* settings might have changed (AutoSettleTask
         // calls this right after updating them). Queues one delivery task per sibling village
         // that currently has spare of at least one needed resource, above its own reserve.
@@ -69,6 +92,13 @@ namespace MainCore.Tasks
         {
             var needed = GetNeeded(context, villageId);
             if (needed.Count == 0) return;
+
+            if (!IsTargetSettling(context, villageId))
+            {
+                logger.Information("Village {VillageId} still holds an expansion need but Auto settle is off - clearing it, no supply requested.", villageId);
+                ClearNeed(context, villageId);
+                return;
+            }
 
             var candidates = context.Villages
                 .Where(x => x.AccountId == accountId.Value)
@@ -113,6 +143,13 @@ namespace MainCore.Tasks
             ILogger logger,
             CancellationToken cancellationToken)
         {
+            // The queue never re-checks CanStart (CLAUDE.md rules 19/25): re-check the target's switch here.
+            if (!IsTargetSettling(context, task.TargetVillageId))
+            {
+                ClearNeed(context, task.TargetVillageId);
+                return Skip.Error;
+            }
+
             var needed = GetNeeded(context, task.TargetVillageId);
             if (needed.Count == 0)
             {
@@ -162,8 +199,8 @@ namespace MainCore.Tasks
                 var raw = Math.Min(Math.Min(requested, spare), totalCapacity);
                 if (raw <= 0) continue;
 
-                var jitter = 1 + ((Random.Shared.NextDouble() * 0.06) - 0.03);
-                var amount = (long)Math.Round((raw * jitter) / 100.0) * 100;
+                // 2026-10-25: full merchant loads (multiples of 750), rounded UP while the source can spare it.
+                var amount = MerchantAmountRules.RoundUpWithin(raw, Math.Min(spare, totalCapacity));
                 if (amount > 0) amounts[resourceType] = amount;
             }
 

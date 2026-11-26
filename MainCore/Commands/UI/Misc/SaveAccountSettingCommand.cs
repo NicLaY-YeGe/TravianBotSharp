@@ -101,6 +101,23 @@
                     taskManager.Remove<ClaimDailyQuestRewardTask.Task>(accountId);
                 }
             }
+
+            // 2026-10-25: same toggle pattern for the attack check (see AttackCheckTask).
+            if (settings.ContainsKey(AccountSettingEnums.EnableAttackCheck))
+            {
+                if (settings[AccountSettingEnums.EnableAttackCheck] == 1)
+                {
+                    var task = new AttackCheckTask.Task(accountId);
+                    if (task.CanStart(context) && !taskManager.IsExist<AttackCheckTask.Task>(accountId))
+                    {
+                        taskManager.Add(task);
+                    }
+                }
+                else
+                {
+                    taskManager.Remove<AttackCheckTask.Task>(accountId);
+                }
+            }
         }
     }
 }

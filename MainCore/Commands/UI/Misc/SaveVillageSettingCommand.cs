@@ -74,6 +74,31 @@
                 }
             }
 
+            // 2026-11-13: mode switch old training <-> share training. The settings of the mode that is switched off stay
+            // untouched, only its queued task goes; the other one is queued when its CanStart passes.
+            if (settings.ContainsKey(VillageSettingEnums.TrainShareEnable))
+            {
+                if (settings[VillageSettingEnums.TrainShareEnable] == 1)
+                {
+                    taskManager.Remove<TrainTroopTask.Task>(accountId, villageId);
+                    MainCore.Commands.Features.ShareTrain.ShareTrainMemory.Clear(villageId.Value);
+                    var task = new ShareTrainTask.Task(accountId, villageId);
+                    if (task.CanStart(context) && !taskManager.IsExist<ShareTrainTask.Task>(accountId, villageId))
+                    {
+                        taskManager.Add(task);
+                    }
+                }
+                else
+                {
+                    taskManager.Remove<ShareTrainTask.Task>(accountId, villageId);
+                    var task = new TrainTroopTask.Task(accountId, villageId);
+                    if (task.CanStart(context) && !taskManager.IsExist<TrainTroopTask.Task>(accountId, villageId))
+                    {
+                        taskManager.Add(task);
+                    }
+                }
+            }
+
             if (settings.ContainsKey(VillageSettingEnums.AutoNPCEnable))
             {
                 if (settings[VillageSettingEnums.AutoNPCEnable] == 1)
@@ -87,6 +112,22 @@
                 else
                 {
                     taskManager.Remove<NpcTask.Task>(accountId, villageId);
+                }
+            }
+
+            if (settings.ContainsKey(VillageSettingEnums.BuyCropEnable))
+            {
+                if (settings[VillageSettingEnums.BuyCropEnable] == 1)
+                {
+                    var task = new BuyCropTask.Task(accountId, villageId);
+                    if (task.CanStart(context) && !taskManager.IsExist<BuyCropTask.Task>(accountId, villageId))
+                    {
+                        taskManager.Add(task);
+                    }
+                }
+                else
+                {
+                    taskManager.Remove<BuyCropTask.Task>(accountId, villageId);
                 }
             }
 
@@ -125,6 +166,21 @@
                 else
                 {
                     taskManager.Remove<CropOasisScanTask.Task>(accountId, villageId);
+                }
+            }
+
+            // 2026-11-24: Auto settle switched off = the village no longer asks siblings for resources. Reset its
+            // NeedExpansion* snapshot and drop the Supply-for-settle tasks already queued for it.
+            if (settings.TryGetValue(VillageSettingEnums.AutoSettleEnable, out var autoSettle) && autoSettle == 0)
+            {
+                SupplyForSettleTask.ClearNeed(context, villageId);
+                var queued = taskManager.GetTaskList(accountId)
+                    .OfType<SupplyForSettleTask.Task>()
+                    .Where(x => x.TargetVillageId == villageId)
+                    .ToList();
+                foreach (var supplyTask in queued)
+                {
+                    taskManager.Remove(accountId, supplyTask);
                 }
             }
 

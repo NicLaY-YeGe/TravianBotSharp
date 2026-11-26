@@ -1,4 +1,5 @@
 ﻿using System.Text.Json;
+using MainCore.Commands.Features.UpgradeBuilding;
 
 namespace MainCore.Commands.UI.Villages.BuildViewModel
 {
@@ -9,13 +10,96 @@ namespace MainCore.Commands.UI.Villages.BuildViewModel
 
         private static async ValueTask<List<JobDto>> HandleAsync(
             Command command,
-            GetLayoutBuildingsCommand.Handler getLayoutBuildingsQuery
+            GetLayoutBuildingsCommand.Handler getLayoutBuildingsQuery,
+            ILogger logger
             )
         {
             var (villageId, jobs, shuffle) = command;
             var buildings = await getLayoutBuildingsQuery.HandleAsync(new(villageId));
-            var modifiedJobs = GetModifiedJobs(buildings, jobs, shuffle);
-            return [.. modifiedJobs];
+
+            // 2026-11-19: resource-field plans are paired with this village's fields by TYPE and ordinal instead of being
+            // dropped when the slot of the list holds another resource (see ResourceFieldMapRules).
+            var fieldMap = BuildFieldMap(buildings, jobs);
+            LogFieldMap(logger, villageId, fieldMap);
+
+            var dropped = new List<(string Job, string Reason)>();
+            var layoutSummary = DescribeLayout(buildings);
+            var modifiedJobs = GetModifiedJobs(buildings, jobs, shuffle, fieldMap, dropped).ToList();
+
+            // 2026-11-20 diagnostics: a template applied to a new village once matched only the resource-field jobs (38/66) and the
+            // cause could not be found from the logs. Say WHY every job was left out, together with what the layout looked like.
+            if (dropped.Count > 0)
+            {
+                logger.Warning(
+                    "Build list for village {VillageId}: {Dropped} of {Total} jobs were left out. Layout seen: {Layout}. Left out: {Details}",
+                    villageId, dropped.Count, jobs.Count, layoutSummary,
+                    string.Join("; ", dropped.Select(x => $"{x.Job} ({x.Reason})")));
+            }
+            return modifiedJobs;
+        }
+
+        // Rows the layout has, e.g. "42 rows: 18 fields, 24 centre plots (22 empty); centre plots found: 19-40".
+        private static string DescribeLayout(List<BuildingItem> buildings)
+        {
+            var fields = buildings.Count(x => x.Location <= 18);
+            var centre = buildings.Where(x => x.Location > 18).ToList();
+            var empty = centre.Count(x => x.Type == BuildingEnums.Site);
+            var centreRange = centre.Count == 0 ? "none" : $"{centre.Min(x => x.Location)}-{centre.Max(x => x.Location)}";
+            var known = string.Join(",", centre.Where(x => x.Type != BuildingEnums.Site).OrderBy(x => x.Location).Select(x => $"{x.Location}:{x.Type}{x.Level}"));
+            return $"{buildings.Count} rows: {fields} field rows, {centre.Count} centre rows ({empty} empty), centre locations {centreRange}, built: [{known}]";
+        }
+
+        private static string DropReason(List<BuildingItem> buildings, NormalBuildPlan plan)
+        {
+            var building = buildings.Find(x => x.Location == plan.Location);
+            if (building is null) return $"no building row for location {plan.Location}";
+            if (building.Type != BuildingEnums.Site && building.Type != plan.Type) return $"location {plan.Location} holds {building.Type}";
+            if (building.Type != BuildingEnums.Site && building.Level >= plan.Level) return $"already level {building.Level}";
+            return "not valid";
+        }
+
+        private static Dictionary<(int Type, int Location), int> BuildFieldMap(List<BuildingItem> buildings, List<JobDto> jobs)
+        {
+            var listUses = new List<(int Type, int Location)>();
+            foreach (var job in jobs)
+            {
+                if (job.Type != JobTypeEnums.NormalBuild) continue;
+                NormalBuildPlan? plan;
+                try
+                {
+                    plan = JsonSerializer.Deserialize<NormalBuildPlan>(job.Content);
+                }
+                catch (JsonException)
+                {
+                    continue;
+                }
+                if (plan is null || !plan.Type.IsResourceField()) continue;
+                listUses.Add(((int)plan.Type, plan.Location));
+            }
+
+            var villageFields = buildings
+                .Where(x => x.Type.IsResourceField())
+                .Select(x => (x.Location, (int)x.Type));
+            return ResourceFieldMapRules.Build(listUses, villageFields);
+        }
+
+        private static void LogFieldMap(ILogger logger, VillageId villageId, Dictionary<(int Type, int Location), int> fieldMap)
+        {
+            var moved = fieldMap.Where(x => x.Value != ResourceFieldMapRules.NoField && x.Value != x.Key.Location).ToList();
+            if (moved.Count > 0)
+            {
+                logger.Information(
+                    "Build list for village {VillageId}: resource fields of the list were paired with this village's fields by type ({Pairs}).",
+                    villageId, string.Join(", ", moved.OrderBy(x => x.Key.Type).ThenBy(x => x.Key.Location).Select(x => $"{(BuildingEnums)x.Key.Type} {x.Key.Location} -> {x.Value}")));
+            }
+
+            var dropped = fieldMap.Where(x => x.Value == ResourceFieldMapRules.NoField).ToList();
+            if (dropped.Count > 0)
+            {
+                logger.Warning(
+                    "Build list for village {VillageId}: the village has fewer fields of some types than the list uses - jobs for {Fields} were left out.",
+                    villageId, string.Join(", ", dropped.OrderBy(x => x.Key.Type).ThenBy(x => x.Key.Location).Select(x => $"{(BuildingEnums)x.Key.Type} (list location {x.Key.Location})")));
+            }
         }
 
         private static readonly List<int> _excludedLocations = new() { 26, 39, 40 }; //main building, rallypoint and wall
@@ -35,7 +119,7 @@ namespace MainCore.Commands.UI.Villages.BuildViewModel
                 BuildingEnums.Cropland,}},
         };
 
-        private static IEnumerable<JobDto> GetModifiedJobs(List<BuildingItem> buildings, List<JobDto> jobs, bool shuffle)
+        private static IEnumerable<JobDto> GetModifiedJobs(List<BuildingItem> buildings, List<JobDto> jobs, bool shuffle, Dictionary<(int Type, int Location), int> fieldMap, List<(string Job, string Reason)> dropped)
         {
             var changedLocations = new Dictionary<int, int>();
             foreach (var job in jobs)
@@ -46,16 +130,29 @@ namespace MainCore.Commands.UI.Villages.BuildViewModel
                         {
                             var plan = JsonSerializer.Deserialize<NormalBuildPlan>(job.Content)!;
 
-                            Modify(buildings, plan, changedLocations, shuffle);
+                            if (plan.Type.IsResourceField())
+                            {
+                                // -1 (no counterpart) finds no building in IsValidPlan, so the job is left out.
+                                plan.Location = ResourceFieldMapRules.Resolve(fieldMap, (int)plan.Type, plan.Location);
+                            }
+                            else
+                            {
+                                Modify(buildings, plan, changedLocations, shuffle);
+                            }
                             job.Content = GetContent(plan);
 
+                            var reason = plan.Location == ResourceFieldMapRules.NoField && plan.Type.IsResourceField()
+                                ? "the village has no field of this type left to pair with"
+                                : DropReason(buildings, plan);
                             if (IsValidPlan(buildings, plan)) yield return job;
+                            else dropped.Add(($"{plan.Type} to {plan.Level}", reason));
                             continue;
                         }
                     case JobTypeEnums.ResourceBuild:
                         {
                             var plan = JsonSerializer.Deserialize<ResourceBuildPlan>(job.Content)!;
                             if (IsValidPlan(buildings, plan)) yield return job;
+                            else dropped.Add(($"resource fields ({plan.Plan}) to {plan.Level}", "all of those fields are already at that level"));
                             continue;
                         }
                     default:

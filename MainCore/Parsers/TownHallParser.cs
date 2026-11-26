@@ -41,10 +41,15 @@ namespace MainCore.Parsers
 
             var timer = table.Descendants("span")
                 .FirstOrDefault(x => x.GetAttributeValue("class", "") == "timer");
-            if (timer is null) return null;
+            if (timer is not null)
+            {
+                var seconds = timer.GetAttributeValue("data-value", "").ParseInt();
+                if (seconds > 0) return seconds;
+            }
 
-            var seconds = timer.GetAttributeValue("data-value", "").ParseInt();
-            return seconds > 0 ? seconds : null;
+            // 2026-10-25: same widening as SmithyParser.GetOngoingResearchSecondsRemaining - the
+            // capture-verified read stays first, the shared queue reader only adds markup variants.
+            return TrainQueueParser.GetSecondsRemaining(doc);
         }
     }
 }
